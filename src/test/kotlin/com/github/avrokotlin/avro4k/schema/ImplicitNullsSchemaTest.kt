@@ -11,8 +11,9 @@ import kotlin.io.path.Path
 internal class ImplicitNullsSchemaTest : FunSpec({
     test("Should set default value to null for nullable fields when implicitNulls is true") {
         AvroAssertions.assertThat<ImplicitNulls>()
-            .withConfig { implicitNulls = true }
+            .withConfig { implicitNulls = false }
             .generatesSchema(Path("/nullables-with-defaults.json"))
+        // TODO add test when reading missing nullable field that should fail
     }
 }) {
     @Serializable

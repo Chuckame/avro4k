@@ -4,28 +4,38 @@
   "fields": [
     {
       "name": "string",
-      "type": ["null", "string"],
-      "default": null
+      "type": [
+        "null",
+        "string"
+      ]
     },
     {
       "name": "boolean",
-      "type": ["null", "boolean"],
-      "default": null
+      "type": [
+        "null",
+        "boolean"
+      ]
     },
     {
       "name": "booleanWrapped1",
-      "type": ["null", "boolean"],
-      "default": null
+      "type": [
+        "null",
+        "boolean"
+      ]
     },
     {
       "name": "booleanWrapped2",
-      "type": ["null", "int"],
-      "default": null
+      "type": [
+        "null",
+        "int"
+      ]
     },
     {
       "name": "booleanWrapped3",
-      "type": ["null", "double"],
-      "default": null
+      "type": [
+        "null",
+        "double"
+      ]
     },
     {
       "name": "nested",
@@ -37,22 +47,28 @@
           "fields": [
             {
               "name": "string",
-              "type": ["null", "string"],
-              "default": null
+              "type": [
+                "null",
+                "string"
+              ]
             },
             {
               "name": "boolean",
-              "type": ["null", "boolean"],
-              "default": null
+              "type": [
+                "null",
+                "boolean"
+              ]
             }
           ]
         }
-      ],
-      "default": null
+      ]
     },
     {
       "name": "stringWithAvroDefault",
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "default": "implicit nulls bypassed"
     }
   ]

@@ -153,6 +153,12 @@ internal class ClassVisitor(
         if (defaultValue == null && context.avro.configuration.implicitNulls && fieldSchema.isNullable) {
             return JsonProperties.NULL_VALUE
         }
+        if (defaultValue == null && context.avro.configuration.implicitEmptyCollections && fieldSchema.type == Schema.Type.ARRAY) {
+            return emptyList<Any?>()
+        }
+        if (defaultValue == null && context.avro.configuration.implicitEmptyMaps && fieldSchema.type == Schema.Type.MAP) {
+            return emptyMap<String, Any?>()
+        }
         return defaultValue
     }
 }

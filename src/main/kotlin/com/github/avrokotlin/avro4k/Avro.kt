@@ -148,12 +148,21 @@ public fun Avro(
 public class AvroBuilder internal constructor(avro: Avro) {
     public var fieldNamingStrategy: FieldNamingStrategy = avro.configuration.fieldNamingStrategy
     public var implicitNulls: Boolean = avro.configuration.implicitNulls
+    public var implicitEmptyMaps: Boolean = avro.configuration.implicitEmptyMaps
+    public var implicitEmptyCollections: Boolean = avro.configuration.implicitEmptyCollections
+
+    /**
+     * When set, overrides [implicitNulls], [implicitEmptyMaps] and [implicitEmptyCollections] with the same value.
+     */
+    public var implicitDefaults: Boolean? = null
     public var serializersModule: SerializersModule = EmptySerializersModule()
 
     public fun build(): AvroConfiguration =
         AvroConfiguration(
             fieldNamingStrategy = fieldNamingStrategy,
-            implicitNulls = implicitNulls
+            implicitNulls = if (implicitDefaults != null) implicitDefaults!! else implicitNulls,
+            implicitEmptyMaps = if (implicitDefaults != null) implicitDefaults!! else implicitEmptyMaps,
+            implicitEmptyCollections = if (implicitDefaults != null) implicitDefaults!! else implicitEmptyCollections,
         )
 }
 
