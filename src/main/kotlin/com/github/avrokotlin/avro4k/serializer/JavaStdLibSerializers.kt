@@ -4,6 +4,8 @@ import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
+import com.github.avrokotlin.avro4k.ScalarSchemaType
+import com.github.avrokotlin.avro4k.SchemaGenerator
 import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.encodeResolving
 import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
@@ -84,7 +86,7 @@ public object UUIDSerializer : AvroSerializer<UUID>(UUID::class.qualifiedName!!)
 
 public object BigIntegerSerializer : AvroSerializer<BigInteger>(BigInteger::class.qualifiedName!!) {
     override fun getSchema(context: SchemaSupplierContext): Schema {
-        return Schema.create(Schema.Type.STRING)
+        return SchemaGenerator.scalar(ScalarSchemaType.STRING)
     }
 
     override fun serializeAvro(

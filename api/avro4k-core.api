@@ -1,5 +1,15 @@
+public abstract interface class com/github/avrokotlin/avro4k/AnySchemaGenerator : com/github/avrokotlin/avro4k/PropsSchemaGenerator {
+	public abstract fun logicalType (Ljava/lang/String;)V
+	public abstract fun logicalType (Lorg/apache/avro/LogicalType;)V
+	public abstract fun nullable ()V
+}
+
 public abstract interface class com/github/avrokotlin/avro4k/AnyValueDecoder {
 	public abstract fun decodeAny (Lcom/github/avrokotlin/avro4k/AvroDecoder;)Ljava/lang/Object;
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/ArraySchemaGenerator : com/github/avrokotlin/avro4k/AnySchemaGenerator {
+	public abstract fun items (Lkotlin/jvm/functions/Function1;)V
 }
 
 public abstract class com/github/avrokotlin/avro4k/Avro : kotlinx/serialization/BinaryFormat {
@@ -246,8 +256,22 @@ public abstract interface class com/github/avrokotlin/avro4k/CharValueDecoder {
 	public abstract fun decodeChar (Lcom/github/avrokotlin/avro4k/AvroDecoder;)C
 }
 
+public abstract interface class com/github/avrokotlin/avro4k/DocSchemaGenerator {
+	public abstract fun doc (Ljava/lang/String;)V
+}
+
 public abstract interface class com/github/avrokotlin/avro4k/DoubleValueDecoder {
 	public abstract fun decodeDouble (Lcom/github/avrokotlin/avro4k/AvroDecoder;)D
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/EnumSchemaGenerator : com/github/avrokotlin/avro4k/NamedSchemaGenerator {
+	public abstract fun defaultSymbol (Ljava/lang/String;)V
+	public abstract fun symbol (Ljava/lang/String;Z)V
+	public abstract fun symbols ([Ljava/lang/String;)V
+}
+
+public final class com/github/avrokotlin/avro4k/EnumSchemaGenerator$DefaultImpls {
+	public static synthetic fun symbol$default (Lcom/github/avrokotlin/avro4k/EnumSchemaGenerator;Ljava/lang/String;ZILjava/lang/Object;)V
 }
 
 public abstract interface class com/github/avrokotlin/avro4k/FieldNamingStrategy {
@@ -271,6 +295,15 @@ public final class com/github/avrokotlin/avro4k/FieldNamingStrategy$Builtins$Pas
 public final class com/github/avrokotlin/avro4k/FieldNamingStrategy$Builtins$SnakeCase : com/github/avrokotlin/avro4k/FieldNamingStrategy {
 	public static final field INSTANCE Lcom/github/avrokotlin/avro4k/FieldNamingStrategy$Builtins$SnakeCase;
 	public fun resolve (Lkotlinx/serialization/descriptors/SerialDescriptor;I)Ljava/lang/String;
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/FieldSchemaGenerator : com/github/avrokotlin/avro4k/DocSchemaGenerator, com/github/avrokotlin/avro4k/PropsSchemaGenerator {
+	public abstract fun aliases ([Ljava/lang/String;)V
+	public abstract fun defaultValue (Ljava/lang/Object;)V
+	public abstract fun type (Lkotlin/jvm/functions/Function1;)V
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/FixedSchemaGenerator : com/github/avrokotlin/avro4k/NamedSchemaGenerator {
 }
 
 public abstract interface class com/github/avrokotlin/avro4k/FloatValueDecoder {
@@ -300,7 +333,75 @@ public abstract interface class com/github/avrokotlin/avro4k/LongValueDecoder {
 	public abstract fun decodeLong (Lcom/github/avrokotlin/avro4k/AvroDecoder;)J
 }
 
+public abstract interface class com/github/avrokotlin/avro4k/MapSchemaGenerator : com/github/avrokotlin/avro4k/AnySchemaGenerator {
+	public abstract fun values (Lkotlin/jvm/functions/Function1;)V
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/NamedSchemaGenerator : com/github/avrokotlin/avro4k/AnySchemaGenerator, com/github/avrokotlin/avro4k/DocSchemaGenerator {
+	public abstract fun aliases ([Ljava/lang/String;Ljava/lang/String;)V
+	public abstract fun namespace (Ljava/lang/String;)V
+	public abstract fun removeNamespace ()V
+}
+
+public final class com/github/avrokotlin/avro4k/NamedSchemaGenerator$DefaultImpls {
+	public static synthetic fun aliases$default (Lcom/github/avrokotlin/avro4k/NamedSchemaGenerator;[Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)V
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/PropsSchemaGenerator {
+	public abstract fun props (Ljava/lang/String;Ljava/lang/String;)V
+	public abstract fun props (Ljava/util/Map;)V
+	public abstract fun props ([Lkotlin/Pair;)V
+}
+
 public abstract interface class com/github/avrokotlin/avro4k/Record : org/apache/avro/generic/GenericRecord, org/apache/avro/specific/SpecificRecord {
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/RecordSchemaGenerator : com/github/avrokotlin/avro4k/NamedSchemaGenerator {
+	public abstract fun field (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/ScalarSchemaGenerator : com/github/avrokotlin/avro4k/AnySchemaGenerator {
+}
+
+public final class com/github/avrokotlin/avro4k/ScalarSchemaType : java/lang/Enum {
+	public static final field BOOLEAN Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+	public static final field BYTES Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+	public static final field DOUBLE Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+	public static final field FLOAT Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+	public static final field INT Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+	public static final field LONG Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+	public static final field STRING Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+	public static fun values ()[Lcom/github/avrokotlin/avro4k/ScalarSchemaType;
+}
+
+public abstract interface class com/github/avrokotlin/avro4k/SchemaGenerator {
+	public static final field Companion Lcom/github/avrokotlin/avro4k/SchemaGenerator$Companion;
+	public abstract fun array (Lkotlin/jvm/functions/Function1;)V
+	public abstract fun enum (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public abstract fun fixed-OzbTU-A (ILjava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public abstract fun map (Lkotlin/jvm/functions/Function1;)V
+	public abstract fun record (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public abstract fun scalar (Lcom/github/avrokotlin/avro4k/ScalarSchemaType;Lkotlin/jvm/functions/Function1;)V
+	public abstract fun union (Lkotlin/jvm/functions/Function1;)V
+}
+
+public final class com/github/avrokotlin/avro4k/SchemaGenerator$Companion {
+	public final fun array (Lkotlin/jvm/functions/Function1;)Lorg/apache/avro/Schema;
+	public final fun enum (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Lorg/apache/avro/Schema;
+	public final fun fixed-OzbTU-A (ILjava/lang/String;Lkotlin/jvm/functions/Function1;)Lorg/apache/avro/Schema;
+	public static synthetic fun fixed-OzbTU-A$default (Lcom/github/avrokotlin/avro4k/SchemaGenerator$Companion;ILjava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lorg/apache/avro/Schema;
+	public final fun map (Lkotlin/jvm/functions/Function1;)Lorg/apache/avro/Schema;
+	public final fun record (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Lorg/apache/avro/Schema;
+	public final fun scalar (Lcom/github/avrokotlin/avro4k/ScalarSchemaType;Lkotlin/jvm/functions/Function1;)Lorg/apache/avro/Schema;
+	public static synthetic fun scalar$default (Lcom/github/avrokotlin/avro4k/SchemaGenerator$Companion;Lcom/github/avrokotlin/avro4k/ScalarSchemaType;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lorg/apache/avro/Schema;
+	public final fun union (Lkotlin/jvm/functions/Function1;)Lorg/apache/avro/Schema;
+}
+
+public final class com/github/avrokotlin/avro4k/SchemaGenerator$DefaultImpls {
+	public static synthetic fun fixed-OzbTU-A$default (Lcom/github/avrokotlin/avro4k/SchemaGenerator;ILjava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static synthetic fun scalar$default (Lcom/github/avrokotlin/avro4k/SchemaGenerator;Lcom/github/avrokotlin/avro4k/ScalarSchemaType;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 }
 
 public abstract interface class com/github/avrokotlin/avro4k/ShortValueDecoder {

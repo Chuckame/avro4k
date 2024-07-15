@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.serializer
 import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
+import com.github.avrokotlin.avro4k.SchemaGenerator
 import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.encodeResolving
 import com.github.avrokotlin.avro4k.internal.BadEncodedValueError
@@ -12,7 +13,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import org.apache.avro.LogicalType
 import org.apache.avro.Schema
 import org.intellij.lang.annotations.Language
 import java.nio.ByteBuffer
@@ -116,10 +116,10 @@ public class AvroDurationParseException(value: String) : SerializationException(
 internal object AvroDurationSerializer : AvroSerializer<AvroDuration>(AvroDuration::class.qualifiedName!!) {
     private const val LOGICAL_TYPE_NAME = "duration"
     private const val DURATION_BYTES = 12
-    internal val DURATION_SCHEMA =
-        Schema.createFixed("time.Duration", "A 12-byte byte array encoding a duration in months, days and milliseconds.", null, DURATION_BYTES).also {
-            LogicalType(LOGICAL_TYPE_NAME).addToSchema(it)
-        }
+    internal val DURATION_SCHEMA = SchemaGenerator.fixed(12u, "time.Duration") {
+        doc("A 12-byte byte array encoding a duration in months, days and milliseconds.")
+        logicalType(LOGICAL_TYPE_NAME)
+    }
 
     override fun getSchema(context: SchemaSupplierContext): Schema {
         return context.inlinedElements.firstNotNullOfOrNull {

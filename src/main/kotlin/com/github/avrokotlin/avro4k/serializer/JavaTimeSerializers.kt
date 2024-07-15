@@ -3,6 +3,8 @@ package com.github.avrokotlin.avro4k.serializer
 import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
+import com.github.avrokotlin.avro4k.ScalarSchemaType
+import com.github.avrokotlin.avro4k.SchemaGenerator
 import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.encodeResolving
 import com.github.avrokotlin.avro4k.internal.BadEncodedValueError
@@ -140,7 +142,7 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
     override fun getSchema(context: SchemaSupplierContext): Schema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.INT).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIME_MILLIS))
+        } ?: SchemaGenerator.scalar(ScalarSchemaType.INT) { logicalType(LOGICAL_TYPE_NAME_TIME_MILLIS) }
     }
 
     override fun serializeAvro(
@@ -250,7 +252,7 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
     override fun getSchema(context: SchemaSupplierContext): Schema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.LONG).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS))
+        } ?: SchemaGenerator.scalar(ScalarSchemaType.LONG) { logicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS) }
     }
 
     override fun serializeAvro(
@@ -328,7 +330,7 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
     override fun getSchema(context: SchemaSupplierContext): Schema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.LONG).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS))
+        } ?: SchemaGenerator.scalar(ScalarSchemaType.LONG) { logicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS) }
     }
 
     override fun serializeAvro(
@@ -405,7 +407,7 @@ public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.
     override fun getSchema(context: SchemaSupplierContext): Schema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.LONG).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MICROS))
+        } ?: SchemaGenerator.scalar(ScalarSchemaType.LONG) { logicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MICROS) }
     }
 
     override fun serializeAvro(
