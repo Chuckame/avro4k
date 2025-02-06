@@ -848,6 +848,17 @@ value class StringifiedPrice(
 > [!NOTE]
 > This impacts the schema generation, the serialization and the deserialization.
 
+## Decode & encode generic types
+
+```kotlin
+// To encode a generic record in bytes
+val bytes = Avro.encodeToByteArray(GenericData.Record(schema))
+// To decode a generic record
+val record = Avro.decodeFromByteArray<GenericData.Record>(bytes)
+// To decode a generic record, enum, array, fixed, or any type related to the avro schema
+val data = Avro.decodeFromByteArray<Any>(bytes)
+```
+
 # Nullable fields, optional fields and compatibility
 
 With avro, you can have nullable fields and optional fields, that are taken into account for compatibility checking when using the schema registry.
