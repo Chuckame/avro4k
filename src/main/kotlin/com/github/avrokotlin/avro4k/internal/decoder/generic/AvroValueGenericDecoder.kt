@@ -1,8 +1,7 @@
 package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.internal.DecodedNullError
-import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
+import com.github.avrokotlin.avro4k.IllegalIndexedAccessError
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.apache.avro.Schema
 

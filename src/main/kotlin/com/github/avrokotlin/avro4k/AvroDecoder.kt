@@ -321,11 +321,30 @@ internal inline fun <T : Any> AvroDecoder.findValueDecoder(
 }
 
 internal fun AvroDecoder.unsupportedWriterTypeError(
-    mainType: Schema.Type,
-    vararg fallbackTypes: Schema.Type,
-): Throwable {
-    val fallbacksStr = if (fallbackTypes.isNotEmpty()) ", and also not matching to any compatible type (one of ${fallbackTypes.joinToString()})." else ""
-    return SerializationException(
-        "Unsupported schema '${currentWriterSchema.fullName}' for decoded type of ${mainType.getName()}$fallbacksStr. Actual schema: $currentWriterSchema"
-    )
-}
+    actualReaderType: String,
+    vararg readerCompatibleTypes: Schema.Type,
+) = UnsupportedWriterTypeException(
+    currentWriterSchema,
+    actualReaderType,
+    readerCompatibleTypes.toList()
+)
+
+internal inline fun <reified T:Any> AvroDecoder.unsupportedWriterTypeError(
+    vararg readerCompatibleTypes: Schema.Type,
+) = UnsupportedWriterTypeException(
+    currentWriterSchema,
+    T::class.qualifiedName!!,
+    readerCompatibleTypes.toList()
+)
+
+/**
+ * Exception thrown when the writer schema is not supported by the reader schema.
+ */
+@ExperimentalSerializationApi
+public class UnsupportedWriterTypeException(
+    writerSchema: Schema,
+    readerActualType: String,
+    readerCompatibleTypes: List<Schema.Type>,
+) : SerializationException(
+    "Unsupported schema '${writerSchema.fullName}' for decoded type of $readerActualType. Expected type to be one of ${readerCompatibleTypes.joinToString()}. Actual schema: $writerSchema"
+)

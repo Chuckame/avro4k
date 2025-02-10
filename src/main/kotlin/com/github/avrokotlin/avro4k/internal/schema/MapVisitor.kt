@@ -1,6 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.schema
 
-import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
+import com.github.avrokotlin.avro4k.AvroSchemaGenerationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.apache.avro.Schema
 

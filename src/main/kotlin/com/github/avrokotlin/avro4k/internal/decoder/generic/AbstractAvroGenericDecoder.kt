@@ -2,7 +2,6 @@ package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
-import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toDoubleExact
@@ -27,6 +26,7 @@ import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.IndexedRecord
 import java.math.BigDecimal
 import java.nio.ByteBuffer
+import kotlin.reflect.KClass
 
 internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDecoder {
     internal abstract val avro: Avro
@@ -207,3 +207,42 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
         }
     }
 }
+
+private inline fun <reified ExpectedType> BadDecodedValueError(
+    value: Any?,
+    firstExpectedType: KClass<*>,
+    vararg expectedTypes: KClass<*>,
+): SerializationException {
+    val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
+    return if (value == null) {
+        SerializationException(
+            "Decoded null value for ${ExpectedType::class.qualifiedName} kind, expected one of [${allExpectedTypes.joinToString { it.qualifiedName!! }}]"
+        )
+    } else {
+        SerializationException(
+            "Decoded value '$value' of type ${value::class.qualifiedName} for " +
+                    "${ExpectedType::class.qualifiedName} kind, expected one of [${allExpectedTypes.joinToString { it.qualifiedName!! }}]"
+        )
+    }
+}
+
+private fun BadDecodedValueError(
+    value: Any?,
+    expectedKind: SerialKind,
+    firstExpectedType: KClass<*>,
+    vararg expectedTypes: KClass<*>,
+): SerializationException {
+    val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
+    return if (value == null) {
+        SerializationException(
+            "Decoded null value for $expectedKind kind, expected one of [${allExpectedTypes.joinToString { it.qualifiedName!! }}]"
+        )
+    } else {
+        SerializationException(
+            "Decoded value '$value' of type ${value::class.qualifiedName} for $expectedKind kind, expected one of [${allExpectedTypes.joinToString { it.qualifiedName!! }}]"
+        )
+    }
+}
+
+@Suppress("UnusedReceiverParameter")
+internal fun AbstractAvroGenericDecoder.DecodedNullError() = SerializationException("Decoded null value for non-nullable type")

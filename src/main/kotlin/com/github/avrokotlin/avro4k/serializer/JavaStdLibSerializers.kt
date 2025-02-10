@@ -5,8 +5,7 @@ import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.decodeResolvingAny
-import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
-import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
+import com.github.avrokotlin.avro4k.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.internal.copy
 import com.github.avrokotlin.avro4k.trySelectLogicalTypeFromUnion
 import com.github.avrokotlin.avro4k.trySelectSingleNonNullTypeFromUnion
@@ -29,7 +28,7 @@ import java.math.BigDecimal
 import java.math.BigInteger
 import java.net.URL
 import java.nio.ByteBuffer
-import java.util.UUID
+import java.util.*
 
 public val JavaStdLibSerializersModule: SerializersModule =
     SerializersModule {
@@ -120,8 +119,7 @@ public object BigIntegerSerializer : AvroSerializer<BigInteger>(BigInteger::clas
     override fun deserializeAvro(decoder: AvroDecoder): BigInteger {
         with(decoder) {
             return decodeResolvingAny({
-                UnexpectedDecodeSchemaError(
-                    "BigInteger",
+                unsupportedWriterTypeError<BigInteger>(
                     Schema.Type.STRING,
                     Schema.Type.INT,
                     Schema.Type.LONG,
@@ -227,8 +225,7 @@ public object BigDecimalSerializer : AvroSerializer<BigDecimal>(BigDecimal::clas
     override fun deserializeAvro(decoder: AvroDecoder): BigDecimal {
         with(decoder) {
             return decodeResolvingAny({
-                UnexpectedDecodeSchemaError(
-                    "BigDecimal",
+                unsupportedWriterTypeError<BigDecimal>(
                     Schema.Type.STRING,
                     Schema.Type.BYTES,
                     Schema.Type.FIXED

@@ -4,7 +4,6 @@ import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.decodeResolvingAny
-import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.copy
 import com.github.avrokotlin.avro4k.logicalTypeMismatchError
 import com.github.avrokotlin.avro4k.trySelectSingleNonNullTypeFromUnion
@@ -82,7 +81,7 @@ public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.q
     override fun deserializeAvro(decoder: AvroDecoder): LocalDate {
         with(decoder) {
             return decoder.decodeResolvingAny({
-                UnexpectedDecodeSchemaError("LocalDate", Schema.Type.INT, Schema.Type.LONG)
+                unsupportedWriterTypeError<LocalDate>(Schema.Type.INT, Schema.Type.LONG)
             }) {
                 when (it.type) {
                     Schema.Type.INT -> {
@@ -172,8 +171,7 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
     override fun deserializeAvro(decoder: AvroDecoder): LocalTime {
         with(decoder) {
             return decodeResolvingAny({
-                UnexpectedDecodeSchemaError(
-                    "LocalTime",
+                unsupportedWriterTypeError<LocalTime>(
                     Schema.Type.INT,
                     Schema.Type.LONG,
                     Schema.Type.STRING
@@ -258,7 +256,7 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
 
     override fun deserializeAvro(decoder: AvroDecoder): LocalDateTime {
         return with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", Schema.Type.LONG) }) {
+            decodeResolvingAny({ unsupportedWriterTypeError<Instant>(Schema.Type.LONG) }) {
                 when (it.type) {
                     Schema.Type.LONG ->
                         when (it.logicalType?.name) {
@@ -327,7 +325,7 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
 
     override fun deserializeAvro(decoder: AvroDecoder): Instant =
         with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", Schema.Type.LONG) }) {
+            decodeResolvingAny({ unsupportedWriterTypeError<Instant>(Schema.Type.LONG) }) {
                 when (it.type) {
                     Schema.Type.LONG ->
                         when (it.logicalType?.name) {
@@ -395,7 +393,7 @@ public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.
 
     override fun deserializeAvro(decoder: AvroDecoder): Instant {
         with(decoder) {
-            return decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", Schema.Type.LONG, Schema.Type.STRING) }) {
+            return decodeResolvingAny({ unsupportedWriterTypeError<Instant>(Schema.Type.LONG, Schema.Type.STRING) }) {
                 when (it.type) {
                     Schema.Type.LONG ->
                         when (it.logicalType?.name) {
@@ -463,7 +461,7 @@ public object JavaDurationSerializer : AvroSerializer<Duration>(Duration::class.
 
     private fun AvroDuration.toJavaDuration(): Duration {
         if (months != 0u) {
-            throw SerializationException("java.time.Duration cannot contains months")
+            throw SerializationException("${Duration::class.qualifiedName} cannot contains months")
         }
         return Duration.ofMillis(days.toLong() * MILLIS_PER_DAY + millis.toLong())
     }

@@ -1,7 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
@@ -24,7 +23,7 @@ internal class RecordGenericDecoder(
     override fun decodeNotNullMark() = decodeNullableValue() != null
 
     override fun decodeValue(): Any {
-        return decodeNullableValue() ?: throw DecodedNullError(descriptor, currentElement.elementIndex)
+        return decodeNullableValue() ?: throw DecodedNullError()
     }
 
     private fun decodeNullableValue(): Any? {

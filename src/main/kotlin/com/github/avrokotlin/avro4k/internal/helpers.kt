@@ -7,6 +7,7 @@ import com.github.avrokotlin.avro4k.AvroAlias
 import com.github.avrokotlin.avro4k.AvroProp
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.InternalSerializationApi
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PolymorphicKind
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.SerialKind
@@ -64,8 +65,8 @@ internal fun Schema.isFullNameOrAliasMatch(
 
 internal fun Schema.isFullNameMatch(fullNameToMatch: String): Boolean {
     return fullName == fullNameToMatch ||
-        (type == Schema.Type.RECORD || type == Schema.Type.ENUM || type == Schema.Type.FIXED) &&
-        aliases.any { it == fullNameToMatch }
+            (type == Schema.Type.RECORD || type == Schema.Type.ENUM || type == Schema.Type.FIXED) &&
+            aliases.any { it == fullNameToMatch }
 }
 
 internal val SerialDescriptor.aliases: Set<String>
@@ -108,7 +109,7 @@ internal fun Schema.copy(
         Schema.Type.DOUBLE,
         Schema.Type.BOOLEAN,
         Schema.Type.NULL,
-        -> Schema.create(type)
+            -> Schema.create(type)
     }
         .also { newSchema ->
             objectProps.forEach { (key, value) -> newSchema.addProp(key, value) }
@@ -156,10 +157,10 @@ internal fun SerialDescriptor.possibleSerializationSubclasses(serializersModule:
 }
 
 @OptIn(InternalSerializationApi::class)
-internal fun SerialDescriptor.getNonNullContextualDescriptor(serializersModule: SerializersModule) =
-    requireNotNull(serializersModule.getContextualDescriptor(this) ?: this.capturedKClass?.serializerOrNull()?.descriptor) {
-        "No descriptor found in serialization context for $this"
-    }
+internal fun SerialDescriptor.getNonNullContextualDescriptor(serializersModule: SerializersModule): SerialDescriptor =
+    serializersModule.getContextualDescriptor(this)
+        ?: this.capturedKClass?.serializerOrNull()?.descriptor
+        ?: throw SerializationException("No descriptor found in serialization context for $this")
 
 /**
  * Returns true if the given content is starting with `"`, {`, `[`, a digit or equals to `null`.

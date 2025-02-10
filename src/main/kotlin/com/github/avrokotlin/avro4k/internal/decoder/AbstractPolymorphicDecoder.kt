@@ -1,7 +1,7 @@
 package com.github.avrokotlin.avro4k.internal.decoder
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
+import com.github.avrokotlin.avro4k.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.isNamedSchema
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationException

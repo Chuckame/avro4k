@@ -56,7 +56,7 @@ internal abstract class AbstractAvroDirectDecoder(
                             avro,
                             binaryDecoder
                         )
-                    else -> throw unsupportedWriterTypeError(Schema.Type.ARRAY)
+                    else -> throw unsupportedWriterTypeError(descriptor.serialName, Schema.Type.ARRAY)
                 }
 
             StructureKind.MAP ->
@@ -69,13 +69,13 @@ internal abstract class AbstractAvroDirectDecoder(
                             avro,
                             binaryDecoder
                         )
-                    else -> throw unsupportedWriterTypeError(Schema.Type.MAP)
+                    else -> throw unsupportedWriterTypeError(descriptor.serialName, Schema.Type.MAP)
                 }
 
             StructureKind.CLASS, StructureKind.OBJECT ->
                 when (currentWriterSchema.type) {
                     Schema.Type.RECORD -> RecordDirectDecoder(currentWriterSchema, descriptor, avro, binaryDecoder)
-                    else -> throw unsupportedWriterTypeError(Schema.Type.RECORD)
+                    else -> throw unsupportedWriterTypeError(descriptor.serialName, Schema.Type.RECORD)
                 }
 
             is PolymorphicKind -> PolymorphicDecoder(avro, descriptor, currentWriterSchema, binaryDecoder)
@@ -99,7 +99,7 @@ internal abstract class AbstractAvroDirectDecoder(
         decodeAndResolveUnion()
 
         if (currentWriterSchema.type != Schema.Type.NULL) {
-            throw unsupportedWriterTypeError(Schema.Type.NULL)
+            throw unsupportedWriterTypeError("null", Schema.Type.NULL)
         }
         binaryDecoder.readNull()
         return null
@@ -111,7 +111,7 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (currentWriterSchema.type) {
             Schema.Type.BOOLEAN -> binaryDecoder.readBoolean()
             Schema.Type.STRING -> binaryDecoder.readString().toBooleanStrict()
-            else -> throw unsupportedWriterTypeError(Schema.Type.BOOLEAN, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError<Boolean>(Schema.Type.BOOLEAN, Schema.Type.STRING)
         }
     }
 
@@ -130,7 +130,7 @@ internal abstract class AbstractAvroDirectDecoder(
             Schema.Type.INT -> binaryDecoder.readInt()
             Schema.Type.LONG -> binaryDecoder.readLong().toIntExact()
             Schema.Type.STRING -> binaryDecoder.readString().toInt()
-            else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.LONG, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError<Int>(Schema.Type.INT, Schema.Type.LONG, Schema.Type.STRING)
         }
     }
 
@@ -141,7 +141,7 @@ internal abstract class AbstractAvroDirectDecoder(
             Schema.Type.LONG -> binaryDecoder.readLong()
             Schema.Type.INT -> binaryDecoder.readInt().toLong()
             Schema.Type.STRING -> binaryDecoder.readString().toLong()
-            else -> throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.INT, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError<Long>(Schema.Type.LONG, Schema.Type.INT, Schema.Type.STRING)
         }
     }
 
@@ -152,7 +152,7 @@ internal abstract class AbstractAvroDirectDecoder(
             Schema.Type.FLOAT -> binaryDecoder.readFloat()
             Schema.Type.DOUBLE -> binaryDecoder.readDouble().toFloatExact()
             Schema.Type.STRING -> binaryDecoder.readString().toFloat()
-            else -> throw unsupportedWriterTypeError(Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError<Float>(Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING)
         }
     }
 
@@ -163,7 +163,7 @@ internal abstract class AbstractAvroDirectDecoder(
             Schema.Type.FLOAT -> binaryDecoder.readFloat().toDouble()
             Schema.Type.DOUBLE -> binaryDecoder.readDouble()
             Schema.Type.STRING -> binaryDecoder.readString().toDouble()
-            else -> throw unsupportedWriterTypeError(Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError<Double>(Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.STRING)
         }
     }
 
@@ -173,7 +173,7 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (currentWriterSchema.type) {
             Schema.Type.INT -> binaryDecoder.readInt().toChar()
             Schema.Type.STRING -> binaryDecoder.readString(null).single()
-            else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError<Char>(Schema.Type.INT, Schema.Type.STRING)
         }
     }
 
@@ -190,7 +190,7 @@ internal abstract class AbstractAvroDirectDecoder(
             Schema.Type.FLOAT -> binaryDecoder.readFloat().toString()
             Schema.Type.DOUBLE -> binaryDecoder.readDouble().toString()
             Schema.Type.ENUM -> currentWriterSchema.enumSymbols[binaryDecoder.readEnum()]
-            else -> throw unsupportedWriterTypeError(
+            else -> throw unsupportedWriterTypeError<String>(
                 Schema.Type.STRING,
                 Schema.Type.BYTES,
                 Schema.Type.FIXED,
@@ -213,7 +213,7 @@ internal abstract class AbstractAvroDirectDecoder(
                     val enumSymbol = currentWriterSchema.enumSymbols[binaryDecoder.readEnum()]
                     enumDescriptor.getEnumIndex(enumSymbol)
                 } else {
-                    throw unsupportedWriterTypeError(Schema.Type.ENUM, Schema.Type.STRING)
+                    throw unsupportedWriterTypeError(enumDescriptor.serialName, Schema.Type.ENUM, Schema.Type.STRING)
                 }
             }
 
@@ -222,7 +222,7 @@ internal abstract class AbstractAvroDirectDecoder(
                 enumDescriptor.getEnumIndex(enumSymbol)
             }
 
-            else -> throw unsupportedWriterTypeError(Schema.Type.ENUM, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError(enumDescriptor.serialName, Schema.Type.ENUM, Schema.Type.STRING)
         }
     }
 
@@ -243,7 +243,7 @@ internal abstract class AbstractAvroDirectDecoder(
             Schema.Type.BYTES -> binaryDecoder.readBytes()
             Schema.Type.FIXED -> binaryDecoder.readFixedBytes(currentWriterSchema.fixedSize)
             Schema.Type.STRING -> binaryDecoder.readString(null).bytes
-            else -> throw unsupportedWriterTypeError(Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError<ByteArray>(Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.STRING)
         }
     }
 
@@ -254,7 +254,7 @@ internal abstract class AbstractAvroDirectDecoder(
             Schema.Type.BYTES -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readBytes())
             Schema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readFixedBytes(currentWriterSchema.fixedSize))
             Schema.Type.STRING -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readString(null).bytes)
-            else -> throw unsupportedWriterTypeError(Schema.Type.FIXED, Schema.Type.BYTES, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError<GenericFixed>(Schema.Type.FIXED, Schema.Type.BYTES, Schema.Type.STRING)
         }
     }
 }

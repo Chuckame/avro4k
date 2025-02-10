@@ -6,7 +6,6 @@ import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.ensureFixedSize
 import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
-import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.trySelectLogicalTypeFromUnion
 import com.github.avrokotlin.avro4k.trySelectNamedSchema
@@ -162,7 +161,7 @@ internal object AvroDurationSerializer : AvroSerializer<AvroDuration>(AvroDurati
 
     override fun deserializeAvro(decoder: AvroDecoder): AvroDuration {
         return with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError(AvroDuration::class.qualifiedName!!, Schema.Type.FIXED, Schema.Type.STRING) }) {
+            decodeResolvingAny({ unsupportedWriterTypeError<AvroDuration>(Schema.Type.FIXED, Schema.Type.STRING) }) {
                 when (it.type) {
                     Schema.Type.FIXED -> {
                         if (it.logicalType?.name == LOGICAL_TYPE_NAME && it.fixedSize == DURATION_BYTES) {
@@ -176,7 +175,7 @@ internal object AvroDurationSerializer : AvroSerializer<AvroDuration>(AvroDurati
                         AnyValueDecoder { AvroDuration.parse(decodeString()) }
                     }
 
-                    else -> throw SerializationException("Expected duration fixed or string type")
+                    else -> null
                 }
             }
         }
