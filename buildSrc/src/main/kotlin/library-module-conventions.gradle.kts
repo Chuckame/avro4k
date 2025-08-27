@@ -1,3 +1,4 @@
+
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -13,7 +14,12 @@ apiValidation {
     nonPublicMarkers += "com.github.avrokotlin.avro4k.InternalAvro4kApi"
 }
 
+val javaTarget = JavaVersion.VERSION_1_8
+
 java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
     withSourcesJar()
