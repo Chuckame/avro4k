@@ -211,7 +211,9 @@ public class KotlinGenerator(
             is TypeSafeSchema.NamedSchema.RecordSchema -> {
                 val recordTypeName = schema.asClassName()
                 if (recordTypeName !in generatedRecords) {
-                    val recordType = generateRecordClass(schema)
+                    val recordType =
+                        generateRecordClass(schema)
+                            .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
                     // generate nested types
                     listOf(recordType.toFileSpec(schema.space)) +
                         schema.fields.flatMap { field ->
@@ -228,7 +230,12 @@ public class KotlinGenerator(
                 }
             }
 
-            is TypeSafeSchema.NamedSchema.EnumSchema -> listOf(generateEnumClass(schema).toFileSpec(schema.space))
+            is TypeSafeSchema.NamedSchema.EnumSchema ->
+                listOf(
+                    generateEnumClass(schema)
+                        .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
+                        .toFileSpec(schema.space)
+                )
 
             is TypeSafeSchema.UnionSchema -> {
                 val unionType =
@@ -237,6 +244,7 @@ public class KotlinGenerator(
                         unionNameFormatter(potentialAnonymousBaseName),
                         potentialAnonymousBaseName
                     )
+                        .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
                 listOf(unionType.toFileSpec(null)) +
                     schema.types.flatMap { subType -> generateNestedKotlinClasses(subType, potentialAnonymousBaseName, generatedRecords) }
             }
@@ -395,6 +403,7 @@ public class KotlinGenerator(
             .addAnnotation(Serializable::class)
             .addAnnotations(buildAvroPropAnnotations(schema))
             .addAnnotationIfNotNull(buildAvroDocAnnotation(schema))
+            .addKDocIfNotNull(schema.doc)
             .addAnnotationIfNotNull(buildAvroAliasAnnotation(schema))
             .apply {
                 schema.symbols.forEach { enumSymbol ->
@@ -418,6 +427,7 @@ public class KotlinGenerator(
             .addAnnotation(Serializable::class)
             .addAnnotations(buildAvroPropAnnotations(schema))
             .addAnnotationIfNotNull(buildAvroDocAnnotation(schema))
+            .addKDocIfNotNull(schema.doc)
             .addAnnotationIfNotNull(buildAvroAliasAnnotation(schema))
             .let {
                 schema.fields.fold(it) { builder, field ->
@@ -428,6 +438,20 @@ public class KotlinGenerator(
                             .initializer(field.name)
                             .addAnnotations(buildAvroPropAnnotations(field))
                             .addAnnotationIfNotNull(buildAvroDocAnnotation(field))
+                            .addKDocIfNotNull(field.doc)
+                            .apply {
+                                if (field.hasDefaultValue()) {
+                                    if (kdoc.isNotEmpty()) {
+                                        addKdoc("\n\n")
+                                    }
+                                    val defaultStr =
+                                        when (val default = field.defaultValue) {
+                                            is ByteArray -> default.contentToString()
+                                            else -> default.toString()
+                                        }
+                                    addKdoc("Default value: $defaultStr")
+                                }
+                            }
                             .addAnnotationIfNotNull(buildAvroAliasAnnotation(field))
                             .addAnnotationIfNotNull(buildAvroDecimalAnnotation(field.schema))
                             .addAnnotationIfNotNull(buildAvroFixedAnnotation(field.schema))
