@@ -8,6 +8,7 @@ import com.github.avrokotlin.avro4k.AvroProp
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.`internal`.AvroGenerated
+import kotlin.Double
 import kotlin.Int
 import kotlin.OptIn
 import kotlin.collections.Map
@@ -21,5 +22,23 @@ import kotlinx.serialization.Serializable
 public value class TestSchema(
     @AvroProp("java-key-class", "java.lang.Integer")
     @AvroDefault("{}")
-    public val `value`: Map<Int, TestSchemaMapUnion?> = emptyMap(),
-)
+    public val `value`: Map<Int, ValueUnion?> = emptyMap(),
+) {
+    @Serializable
+    @AvroGenerated("""["double","int"]""")
+    public sealed interface ValueUnion {
+        @JvmInline
+        @Serializable
+        @AvroGenerated(""""double"""")
+        public value class ForDouble(
+            public val `value`: Double,
+        ) : ValueUnion
+
+        @JvmInline
+        @Serializable
+        @AvroGenerated(""""int"""")
+        public value class ForInt(
+            public val `value`: Int,
+        ) : ValueUnion
+    }
+}

@@ -27,8 +27,6 @@ import org.apache.avro.Schema
 public class KotlinGenerator(
     private val avro: Avro = Avro,
     private val unionNameFormatter: (String) -> String = { "${it}Union" },
-    private val mapNameFormatter: (String) -> String = { "${it}Map" },
-    private val arrayNameFormatter: (String) -> String = { "${it}Array" },
     private val unionSubTypeNameFormatter: (String) -> String = { "For$it" },
     logicalTypes: List<LogicalTypeDescriptor> = emptyList(),
 ) {
@@ -130,21 +128,19 @@ public class KotlinGenerator(
                 val unionType =
                     generateSealedInterface(
                         schema,
-                        potentialAnonymousClassName,
                         potentialAnonymousClassName
                     )
-                        .withAnnotation(buildAvroGeneratedAnnotation(schemaStr))
                         .toFileSpec(null)
 
                 listOf(unionType) + schema.types.flatMap { subType -> generateNestedKotlinClasses(subType, potentialAnonymousClassName, emptyMap()) }
             }
 
             is TypeSafeSchema.CollectionSchema.ArraySchema -> {
-                val valueClass = generateRootValueClass(schema, schemaStr, potentialAnonymousClassName, getTypeName(schema, potentialAnonymousClassName))
+                val valueClass = generateRootValueClass(schema, schemaStr, potentialAnonymousClassName, getTypeName(schema, "Value"))
                 listOf(valueClass.toFileSpec(null)) +
                     (
                         schema.actualElementClass?.let { emptyList() }
-                            ?: generateNestedKotlinClasses(schema.elementSchema, arrayNameFormatter(potentialAnonymousClassName), emptyMap())
+                            ?: generateNestedKotlinClasses(schema.elementSchema, potentialAnonymousClassName, emptyMap())
                     )
             }
 
@@ -154,11 +150,11 @@ public class KotlinGenerator(
                         schema,
                         schemaStr,
                         potentialAnonymousClassName,
-                        getTypeName(schema, potentialAnonymousClassName)
+                        getTypeName(schema, "Value")
                     )
                 listOf(
                     mapType.toFileSpec(null)
-                ) + generateNestedKotlinClasses(schema.valueSchema, mapNameFormatter(potentialAnonymousClassName), emptyMap())
+                ) + generateNestedKotlinClasses(schema.valueSchema, potentialAnonymousClassName, emptyMap())
             }
 
             is TypeSafeSchema.NamedSchema.FixedSchema,
@@ -191,6 +187,14 @@ public class KotlinGenerator(
                 defaultValue = buildImplicitAvroDefaultCodeBlock(schema, avro.configuration)
             )
             .addAnnotation(buildAvroGeneratedAnnotation(schemaStr))
+            .let { builder ->
+                schema.nestedUnionIfAny()?.let { nestedUnion ->
+                    builder.addType(
+                        // generate unions as nested types rather than top level types to avoid name clashes
+                        generateSealedInterface(nestedUnion, unionNameFormatter("Value"))
+                    )
+                } ?: builder
+            }
             .build()
     }
 
@@ -210,55 +214,55 @@ public class KotlinGenerator(
         return when (schema) {
             is TypeSafeSchema.NamedSchema.RecordSchema -> {
                 val recordTypeName = schema.asClassName()
-                if (recordTypeName !in generatedRecords) {
+                if (recordTypeName in generatedRecords) {
+                    // recursive schema
+                    emptyList()
+                } else {
                     val recordType =
                         generateRecordClass(schema)
                             .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
                     // generate nested types
                     listOf(recordType.toFileSpec(schema.space)) +
                         schema.fields.flatMap { field ->
-                            // the union schema is already generated as a subtype of the record, no need to generate it again. However, we need to generate the types used in the union
-                            if (field.schema is TypeSafeSchema.UnionSchema) {
-                                field.schema.types.flatMap { generateNestedKotlinClasses(it, potentialAnonymousBaseName, generatedRecords) }
-                            } else {
-                                generateNestedKotlinClasses(field.schema, field.name.toPascalCase(), generatedRecords + (schema.asClassName() to recordType))
-                            }
+                            // the union schema is already generated as a subtype of the record,
+                            // no need to generate it again. However, we need to generate the types used in the union
+
+                            field.schema.nestedUnionIfAny()
+                                ?.let { it.types.flatMap { generateNestedKotlinClasses(it, potentialAnonymousBaseName, generatedRecords) } }
+                                ?: generateNestedKotlinClasses(field.schema, field.name.toPascalCase(), generatedRecords + (recordTypeName to recordType))
                         }
-                } else {
-                    // recursive schema
-                    emptyList()
                 }
             }
 
             is TypeSafeSchema.NamedSchema.EnumSchema ->
-                listOf(
-                    generateEnumClass(schema)
-                        .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
-                        .toFileSpec(schema.space)
-                )
+                generateEnumClass(schema)
+                    .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
+                    .toFileSpec(schema.space)
+                    .let { listOf(it) }
 
             is TypeSafeSchema.UnionSchema -> {
-                val unionType =
-                    generateSealedInterface(
-                        schema,
-                        unionNameFormatter(potentialAnonymousBaseName),
-                        potentialAnonymousBaseName
-                    )
-                        .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
-                listOf(unionType.toFileSpec(null)) +
-                    schema.types.flatMap { subType -> generateNestedKotlinClasses(subType, potentialAnonymousBaseName, generatedRecords) }
+//                val unionType =
+//                    generateSealedInterface(
+//                        schema,
+//                        unionNameFormatter(potentialAnonymousBaseName),
+//                        potentialAnonymousBaseName
+//                    )
+//                        .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
+//                listOf(unionType.toFileSpec(null)) +
+                schema.types.flatMap { subType -> generateNestedKotlinClasses(subType, potentialAnonymousBaseName, generatedRecords) }
             }
 
             is TypeSafeSchema.CollectionSchema.ArraySchema -> {
-                // assuming the class already exists, nothing to generate
-                (
-                    schema.actualElementClass?.let { emptyList() }
-                        ?: generateNestedKotlinClasses(schema.elementSchema, arrayNameFormatter(potentialAnonymousBaseName), generatedRecords)
-                )
+                if (schema.actualElementClass != null) {
+                    // assuming the class already exists, nothing to generate
+                    emptyList()
+                } else {
+                    generateNestedKotlinClasses(schema.elementSchema, potentialAnonymousBaseName, generatedRecords)
+                }
             }
 
             is TypeSafeSchema.CollectionSchema.MapSchema -> {
-                generateNestedKotlinClasses(schema.valueSchema, mapNameFormatter(potentialAnonymousBaseName), generatedRecords)
+                generateNestedKotlinClasses(schema.valueSchema, potentialAnonymousBaseName, generatedRecords)
             }
 
             // fixed type is for now set as ByteArray, so nothing to generate
@@ -300,7 +304,7 @@ public class KotlinGenerator(
             is TypeSafeSchema.CollectionSchema.ArraySchema -> {
                 val itemType: SerializableTypeName =
                     schema.actualElementClass?.let { parseJavaClassName(it).nullableIf(schema.elementSchema.isNullable) }
-                        ?: getTypeName(schema.elementSchema, arrayNameFormatter(potentialAnonymousBaseName))
+                        ?: getTypeName(schema.elementSchema, potentialAnonymousBaseName)
 
                 val wrapperType = List::class.asClassName().parameterizedBy(itemType.typeName)
                 if (!itemType.isNativelySerializable()) {
@@ -315,7 +319,7 @@ public class KotlinGenerator(
                 val keyType =
                     schema.actualKeyClass?.let { parseJavaClassName(it) }
                         ?: String::class.asClassName().nativelySerializable()
-                val valueType = getTypeName(schema.valueSchema, mapNameFormatter(potentialAnonymousBaseName))
+                val valueType = getTypeName(schema.valueSchema, potentialAnonymousBaseName)
 
                 val wrappedType =
                     Map::class.asClassName().parameterizedBy(
@@ -353,7 +357,6 @@ public class KotlinGenerator(
     private fun generateSealedInterface(
         schema: TypeSafeSchema.UnionSchema,
         className: String,
-        potentialAnonymousBaseName: String,
     ): TypeSpec {
         return TypeSpec.interfaceBuilder(className)
             .addModifiers(KModifier.SEALED)
@@ -362,7 +365,7 @@ public class KotlinGenerator(
                 run {
                     val hasSimilarNames = schema.types.groupBy { it.name }.any { it.value.size > 1 }
                     schema.types.map { subSchema ->
-                        val typeName = getTypeName(subSchema, potentialAnonymousBaseName)
+                        val typeName = getTypeName(subSchema, "Value")
                         TypeSpec.classBuilder(unionSubTypeNameFormatter(if (hasSimilarNames) subSchema.fullName else subSchema.name.toPascalCase()))
                             .addSuperinterface(ClassName("", className))
                             .addModifiers(KModifier.VALUE)
@@ -375,10 +378,20 @@ public class KotlinGenerator(
                                     .addSerializableAnnotation(typeName)
                                     .build()
                             )
+                            .let { builder ->
+                                subSchema.nestedUnionIfAny()?.let { nestedUnion ->
+                                    builder.addType(
+                                        // generate unions as nested types rather than top level types to avoid name clashes
+                                        generateSealedInterface(nestedUnion, unionNameFormatter("Value"))
+                                    )
+                                } ?: builder
+                            }
+                            .addAnnotation(buildAvroGeneratedAnnotation(subSchema.originalSchema.toString()))
                             .build()
                     }
                 }
             )
+            .addAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
             .build()
     }
 
@@ -430,6 +443,7 @@ public class KotlinGenerator(
             .addKDocIfNotNull(schema.doc)
             .addAnnotationIfNotNull(buildAvroAliasAnnotation(schema))
             .let {
+                // generate record's fields
                 schema.fields.fold(it) { builder, field ->
                     val typeName = getTypeName(field.schema, field.name.uppercaseFirstChar())
 
@@ -474,12 +488,10 @@ public class KotlinGenerator(
                 }
             }
             .addTypes(
+                // generate fields' unions as nested types rather than top level types to avoid name clashes
                 schema.fields.mapNotNull { field ->
-                    if (field.schema is TypeSafeSchema.UnionSchema) {
-                        generateSealedInterface(field.schema, unionNameFormatter(field.name.uppercaseFirstChar()), field.name.uppercaseFirstChar())
-                    } else {
-                        null
-                    }
+                    val nestedUnion = field.schema.nestedUnionIfAny() ?: return@mapNotNull null
+                    generateSealedInterface(nestedUnion, unionNameFormatter(field.name.uppercaseFirstChar()))
                 }
             )
             .addEqualsHashCode(schema.asClassName())
@@ -573,4 +585,17 @@ private fun TypeSafeSchema.NamedSchema.asClassName() = ClassName(space ?: "", na
 
 private fun parseJavaClassName(className: String): SerializableTypeName {
     return getKotlinClassReplacement(className)?.nativelySerializable() ?: ClassName.bestGuess(className).contextual()
+}
+
+/**
+ * Returns this schema as a [TypeSafeSchema.UnionSchema] if it is a union, or if it is a collection (array or map) whose element/value schema is or contains a union.
+ */
+private fun TypeSafeSchema.nestedUnionIfAny(): TypeSafeSchema.UnionSchema? {
+    if (actualJavaClassName != null) return null
+    return when (this) {
+        is TypeSafeSchema.UnionSchema -> this
+        is TypeSafeSchema.CollectionSchema.ArraySchema if actualElementClass == null -> elementSchema.nestedUnionIfAny()
+        is TypeSafeSchema.CollectionSchema.MapSchema -> valueSchema.nestedUnionIfAny()
+        else -> null
+    }
 }

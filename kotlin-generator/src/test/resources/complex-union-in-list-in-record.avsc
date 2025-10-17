@@ -1,0 +1,39 @@
+{
+    "type": "record",
+    "name": "ComplexUnionInListInRecord",
+    "fields": [
+        {
+            "name": "theListField",
+            "type": {
+                "type": "array",
+                "items": [
+                    "null",
+                    {
+                        "type": "record",
+                        "name": "NestedRecord",
+                        "fields": [
+                            {
+                                "name": "id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "value",
+                                "type": "int"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "enum",
+                        "name": "Status",
+                        "symbols": ["ACTIVE", "INACTIVE", "PENDING"]
+                    },
+                    {
+                        "type": "array",
+                        "items": "string"
+                    }
+                ]
+            },
+            "default": []
+        }
+    ]
+}

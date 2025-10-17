@@ -18,34 +18,39 @@ import kotlin.jvm.JvmInline
 import kotlinx.serialization.Serializable
 
 @Serializable
-@AvroGenerated("""["null","string","int",{"type":"record","name":"NestedRecord","fields":[{"name":"field","type":"string","doc":"field doc"}]},{"type":"enum","name":"AnEnum","symbols":["A","B","C"]},{"type":"fixed","name":"AFixed","size":5},{"type":"array","items":"int"},{"type":"map","values":["null","double"]}]""")
+@AvroGenerated("""["string","int",{"type":"record","name":"NestedRecord","fields":[{"name":"field","type":"string","doc":"field doc"}]},{"type":"enum","name":"AnEnum","symbols":["A","B","C"]},{"type":"fixed","name":"AFixed","size":5},{"type":"array","items":"int"},{"type":"map","values":["null","double"]}]""")
 public sealed interface TestSchema {
     @JvmInline
     @Serializable
+    @AvroGenerated(""""string"""")
     public value class ForString(
         public val `value`: String,
     ) : TestSchema
 
     @JvmInline
     @Serializable
+    @AvroGenerated(""""int"""")
     public value class ForInt(
         public val `value`: Int,
     ) : TestSchema
 
     @JvmInline
     @Serializable
+    @AvroGenerated("""{"type":"record","name":"NestedRecord","fields":[{"name":"field","type":"string","doc":"field doc"}]}""")
     public value class ForNestedRecord(
         public val `value`: NestedRecord,
     ) : TestSchema
 
     @JvmInline
     @Serializable
+    @AvroGenerated("""{"type":"enum","name":"AnEnum","symbols":["A","B","C"]}""")
     public value class ForAnEnum(
         public val `value`: AnEnum,
     ) : TestSchema
 
     @JvmInline
     @Serializable
+    @AvroGenerated("""{"type":"fixed","name":"AFixed","size":5}""")
     public value class ForAFixed(
         @AvroFixed(size = 5)
         public val `value`: ByteArray,
@@ -53,12 +58,14 @@ public sealed interface TestSchema {
 
     @JvmInline
     @Serializable
+    @AvroGenerated("""{"type":"array","items":"int"}""")
     public value class ForArray(
         public val `value`: List<Int>,
     ) : TestSchema
 
     @JvmInline
     @Serializable
+    @AvroGenerated("""{"type":"map","values":["null","double"]}""")
     public value class ForMap(
         public val `value`: Map<String, Double?>,
     ) : TestSchema
