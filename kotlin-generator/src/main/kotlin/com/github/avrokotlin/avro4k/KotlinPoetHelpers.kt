@@ -86,10 +86,8 @@ internal fun TypeSpec.Builder.addEqualsHashCode(className: ClassName): TypeSpec.
     return this
 }
 
-internal fun TypeSpec.withAnnotation(annotation: AnnotationSpec): TypeSpec {
-    return toBuilder()
-        .addAnnotation(annotation)
-        .build()
+internal fun TypeSpec.Builder.addTypeIfNotNull(type: TypeSpec?): TypeSpec.Builder {
+    return type?.let { addType(it) } ?: this
 }
 
 internal fun <T : Annotatable.Builder<T>> T.addAnnotationIfNotNull(annotation: AnnotationSpec?): T {
