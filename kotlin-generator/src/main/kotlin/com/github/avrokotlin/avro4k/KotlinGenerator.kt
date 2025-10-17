@@ -14,7 +14,6 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asClassName
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
-import org.apache.avro.Schema
 
 /**
  * Generates Kotlin classes from Avro schemas, fully compatible with avro4k.
@@ -72,7 +71,7 @@ public class KotlinGenerator(
      * @param rootAnonymousSchemaName The base name to use for the root schema if it does not have a name (any schema except record, enum or fixed).
      */
     public fun generateKotlinClasses(schema: String, rootAnonymousSchemaName: String): List<FileSpec> {
-        return generateRootKotlinClasses(TypeSafeSchema.from(schema), Schema.Parser().parse(schema).toString(false), rootAnonymousSchemaName.toPascalCase())
+        return generateRootKotlinClasses(TypeSafeSchema.from(schema), rootAnonymousSchemaName.toPascalCase())
     }
 
     private fun TypeSpec.toFileSpec(namespace: String? = null): FileSpec {
@@ -91,20 +90,18 @@ public class KotlinGenerator(
 
     private fun generateRootKotlinClasses(
         schema: TypeSafeSchema,
-        schemaStr: String,
         potentialAnonymousClassName: String,
     ): List<FileSpec> {
         schema.actualJavaClassName?.let {
-            return listOf(generateRootValueClass(schema, schemaStr, potentialAnonymousClassName, parseJavaClassName(it).nullableIf(schema.isNullable)).toFileSpec(null))
+            return listOf(generateRootValueClass(schema, potentialAnonymousClassName, parseJavaClassName(it).nullableIf(schema.isNullable)).toFileSpec(null))
         }
         schema.getLogicalTypeName()?.let {
-            return listOf(generateRootValueClass(schema, schemaStr, potentialAnonymousClassName, it).toFileSpec(null))
+            return listOf(generateRootValueClass(schema, potentialAnonymousClassName, it).toFileSpec(null))
         }
         return when (schema) {
             is TypeSafeSchema.NamedSchema.RecordSchema -> {
                 val recordType =
                     generateRecordClass(schema)
-                        .withAnnotation(buildAvroGeneratedAnnotation(schemaStr))
                 listOf(recordType.toFileSpec(schema.space)) +
                     // generate nested types
                     schema.fields.flatMap { field ->
@@ -120,7 +117,6 @@ public class KotlinGenerator(
             is TypeSafeSchema.NamedSchema.EnumSchema ->
                 listOf(
                     generateEnumClass(schema)
-                        .withAnnotation(buildAvroGeneratedAnnotation(schemaStr))
                         .toFileSpec(schema.space)
                 )
 
@@ -136,7 +132,7 @@ public class KotlinGenerator(
             }
 
             is TypeSafeSchema.CollectionSchema.ArraySchema -> {
-                val valueClass = generateRootValueClass(schema, schemaStr, potentialAnonymousClassName, getTypeName(schema, "Value"))
+                val valueClass = generateRootValueClass(schema, potentialAnonymousClassName, getTypeName(schema, "Value"))
                 listOf(valueClass.toFileSpec(null)) +
                     (
                         schema.actualElementClass?.let { emptyList() }
@@ -148,7 +144,6 @@ public class KotlinGenerator(
                 val mapType =
                     generateRootValueClass(
                         schema,
-                        schemaStr,
                         potentialAnonymousClassName,
                         getTypeName(schema, "Value")
                     )
@@ -163,7 +158,6 @@ public class KotlinGenerator(
                 listOf(
                     generateRootValueClass(
                         schema,
-                        schemaStr,
                         potentialAnonymousClassName,
                         getTypeName(schema, "<primitive does not have nested type>")
                     ).toFileSpec(null)
@@ -171,7 +165,7 @@ public class KotlinGenerator(
         }
     }
 
-    private fun generateRootValueClass(schema: TypeSafeSchema, schemaStr: String, className: String, wrappedType: SerializableTypeName): TypeSpec {
+    private fun generateRootValueClass(schema: TypeSafeSchema, className: String, wrappedType: SerializableTypeName): TypeSpec {
         return TypeSpec.classBuilder(className)
             .addModifiers(KModifier.VALUE)
             .addAnnotation(JvmInline::class)
@@ -186,7 +180,7 @@ public class KotlinGenerator(
                     .build(),
                 defaultValue = buildImplicitAvroDefaultCodeBlock(schema, avro.configuration)
             )
-            .addAnnotation(buildAvroGeneratedAnnotation(schemaStr))
+            .addAnnotation(buildAvroGeneratedAnnotation(schema))
             .let { builder ->
                 schema.nestedUnionIfAny()?.let { nestedUnion ->
                     builder.addType(
@@ -220,7 +214,6 @@ public class KotlinGenerator(
                 } else {
                     val recordType =
                         generateRecordClass(schema)
-                            .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
                     // generate nested types
                     listOf(recordType.toFileSpec(schema.space)) +
                         schema.fields.flatMap { field ->
@@ -236,7 +229,6 @@ public class KotlinGenerator(
 
             is TypeSafeSchema.NamedSchema.EnumSchema ->
                 generateEnumClass(schema)
-                    .withAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
                     .toFileSpec(schema.space)
                     .let { listOf(it) }
 
@@ -386,12 +378,12 @@ public class KotlinGenerator(
                                     )
                                 } ?: builder
                             }
-                            .addAnnotation(buildAvroGeneratedAnnotation(subSchema.originalSchema.toString()))
+                            .addAnnotation(buildAvroGeneratedAnnotation(subSchema))
                             .build()
                     }
                 }
             )
-            .addAnnotation(buildAvroGeneratedAnnotation(schema.originalSchema.toString()))
+            .addAnnotation(buildAvroGeneratedAnnotation(schema))
             .build()
     }
 
@@ -418,6 +410,7 @@ public class KotlinGenerator(
             .addAnnotationIfNotNull(buildAvroDocAnnotation(schema))
             .addKDocIfNotNull(schema.doc)
             .addAnnotationIfNotNull(buildAvroAliasAnnotation(schema))
+            .addAnnotation(buildAvroGeneratedAnnotation(schema))
             .apply {
                 schema.symbols.forEach { enumSymbol ->
                     addEnumConstant(
@@ -442,6 +435,7 @@ public class KotlinGenerator(
             .addAnnotationIfNotNull(buildAvroDocAnnotation(schema))
             .addKDocIfNotNull(schema.doc)
             .addAnnotationIfNotNull(buildAvroAliasAnnotation(schema))
+            .addAnnotation(buildAvroGeneratedAnnotation(schema))
             .let {
                 // generate record's fields
                 schema.fields.fold(it) { builder, field ->

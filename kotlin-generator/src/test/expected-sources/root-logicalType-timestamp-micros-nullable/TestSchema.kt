@@ -16,7 +16,7 @@ import kotlinx.serialization.Serializable
 
 @JvmInline
 @Serializable
-@AvroGenerated("""[{"type":"long","logicalType":"timestamp-micros"},"null"]""")
+@AvroGenerated("""{"type":"long","logicalType":"timestamp-micros"}""")
 public value class TestSchema(
     @AvroProp("logicalType", "timestamp-micros")
     @AvroDefault("null")

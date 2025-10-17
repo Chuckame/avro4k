@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
 
 @JvmInline
 @Serializable
-@AvroGenerated("""["long","null"]""")
+@AvroGenerated(""""long"""")
 public value class TestSchema(
     @AvroDefault("null")
     public val `value`: Long? = null,

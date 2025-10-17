@@ -54,9 +54,9 @@ internal fun buildAvroDecimalAnnotation(schema: TypeSafeSchema): AnnotationSpec?
         .build()
 }
 
-internal fun buildAvroGeneratedAnnotation(schemaStr: String): AnnotationSpec {
+internal fun buildAvroGeneratedAnnotation(schema: TypeSafeSchema): AnnotationSpec {
     return AnnotationSpec.builder(AvroGenerated::class.asClassName())
-        .addMember("%P", schemaStr)
+        .addMember("%P", schema.originalSchema.toString(false))
         .build()
 }
 
