@@ -116,6 +116,7 @@ public class KotlinGenerator(
             .addAnnotation(JvmInline::class)
             .addAnnotation(Serializable::class)
             .addPrimaryProperty(
+                // TODO we may have nullable primitive, but we have a non-null original schema in buildAvroGeneratedAnnotation
                 PropertySpec.builder("value", wrappedType.typeName)
                     .addAnnotationIfNotNull(buildAvroDecimalAnnotation(schema))
                     .addAnnotationIfNotNull(buildAvroFixedAnnotation(schema))
