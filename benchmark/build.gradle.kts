@@ -22,6 +22,9 @@ benchmark {
         named("main") {
             reportFormat = "text"
         }
+        register("avro4k-primitives") {
+            include("^com.github.avrokotlin.benchmark.Primitive\\w+Avro4kBenchmark.+$")
+        }
         register("simple-read") {
             include("^com.github.avrokotlin.benchmark.simple.+.read$")
         }

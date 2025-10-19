@@ -3,12 +3,12 @@ package com.github.avrokotlin.benchmark.internal
 import org.apache.commons.lang3.RandomStringUtils
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.util.*
+import java.util.UUID
 import kotlin.math.abs
 import kotlin.random.Random
 import kotlin.random.asJavaRandom
 
-internal class RandomUtils {
+class RandomUtils {
     private val RANDOM: Random = Random(139793881379292435L)
 
     fun randomAlphabetic(count: Int): String {
@@ -16,7 +16,7 @@ internal class RandomUtils {
     }
 
     fun randomAlphanumeric(count: Int): String {
-        return random(count, true, true)
+        return random(count, letters = true, numbers = true)
     }
 
     fun randomNumeric(count: Int): String {
