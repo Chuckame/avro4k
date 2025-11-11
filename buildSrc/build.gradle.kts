@@ -27,3 +27,7 @@ dependencies {
     implementation("org.jetbrains.dokka:org.jetbrains.dokka.gradle.plugin:$dokkaVersion")
     implementation("org.jetbrains.dokka-javadoc:org.jetbrains.dokka-javadoc.gradle.plugin:$dokkaVersion")
 }
+
+kotlin {
+    jvmToolchain(21)
+}

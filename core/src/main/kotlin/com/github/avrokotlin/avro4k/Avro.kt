@@ -163,8 +163,8 @@ public sealed class Avro(
     }
 
     /**
-     * Decode the value from the given [bytes] to a value of type [T] assuming the data is respecting the given [writerSchema].
-     * If during the decoding, the written data does not match the [writerSchema], you may end up to unexpected results or an exception.
+     * Decode the value from the given [bytes] to a value of type [T] assuming the data is respecting the given schema generated from [T].
+     * If during the decoding, the written data does not match [T]'s schema, you may end up to unexpected results or an exception.
      *
      * You may prefer the other extension methods that infer the [serializer] based on a generic type [T].
      *
@@ -175,7 +175,7 @@ public sealed class Avro(
      * - FLOAT and DOUBLE types can be decoded into [Float] and [Double] (if the value fits in the type range)
      * - STRING can be decoded into any numerical type, as long as the string is parsable
      * - STRING can be decoded to [Char], as long as the string is a single character
-     * - RECORD can be decoded to classes and objects, taking into account both [AvroAlias] and the [writerSchema]'s aliases to maximize compatibility
+     * - RECORD can be decoded to classes and objects, taking into account both [AvroAlias] and the [T]'s schema aliases to maximize compatibility
      * - ENUM can be decoded to [String] or [Enum] types, as long as the enum value is present in the schema
      *
      * @param deserializer the deserialization strategy to use for decoding the value. You may prefer the other extension methods without the deserializer parameter for convenience.
