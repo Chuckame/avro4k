@@ -20,6 +20,13 @@ import kotlinx.serialization.json.long
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 
+/**
+ * Capacity of the per-[RecordResolver] inline cache. Sized to comfortably hold the record types of a deeply
+ * nested payload (the deepest nesting exercised by the benchmarks is 8) plus their collection wrappers, while
+ * staying small enough that a miss-free lookup is a handful of reference comparisons.
+ */
+private const val INLINE_CACHE_CAPACITY = 16
+
 internal class RecordResolver(
     private val avro: Avro,
 ) {
@@ -29,6 +36,39 @@ internal class RecordResolver(
      * Note: We use the descriptor in the key as we could have multiple descriptors for the same record schema, and multiple record schemas for the same descriptor.
      */
     private val fieldCache: Cache<Schema, Cache<SerialDescriptor, SerializationWorkflow>> = WeakKeyCache()
+
+    /**
+     * Inline (first-level) cache in front of [fieldCache], holding the last [INLINE_CACHE_CAPACITY] resolved
+     * `(writerSchema, classDescriptor)` pairs, matched by **identity**.
+     *
+     * [resolveFields] is called once per record *instance*, so decoding a 100k-element array of records used to
+     * perform 200k [WeakKeyCache.getOrPut] calls — each one a `ReferenceQueue.poll()`, a `Key.Lookup` allocation
+     * and a `ConcurrentHashMap` lookup — for a workflow that was already resolved for the first element.
+     * A homogeneous collection or a nested record tree only ever cycles through a handful of pairs, so a tiny
+     * identity-keyed cache turns almost all of those calls into a few reference comparisons and no allocation.
+     *
+     * Concurrency: the array is immutable once published, replaced wholesale by a copy-on-write assignment, and
+     * only ever *read* on the hot path, so there is no locking and no write contention between threads. The field
+     * is `@Volatile` for safe publication: array elements are not final fields, so a plain field would let a racing
+     * thread observe a partially-initialized [Memo]. Losing a concurrent update is harmless — it only costs the
+     * loser a future miss, which falls through to [fieldCache], the real cache.
+     *
+     * Note this pins up to [INLINE_CACHE_CAPACITY] schemas/descriptors strongly (per [Avro] instance), unlike
+     * [fieldCache] which references its keys weakly. That is a bounded, small amount of retention.
+     */
+    @Volatile
+    private var inlineCache: Array<Memo> = emptyArray()
+
+    /**
+     * Immutable holder: schema, descriptor and workflow are published together or not at all. Storing them in
+     * three separate fields could tear and hand back the workflow of another type, which would silently corrupt
+     * the encoded/decoded data.
+     */
+    private class Memo(
+        val writerSchema: Schema,
+        val classDescriptor: SerialDescriptor,
+        val workflow: SerializationWorkflow,
+    )
 
     /**
      * Maps the class fields to the schema fields.
@@ -46,11 +86,33 @@ internal class RecordResolver(
         writerSchema: Schema,
         classDescriptor: SerialDescriptor,
     ): SerializationWorkflow {
-        return fieldCache.getOrPut(writerSchema) {
-            WeakKeyCache()
-        }.getOrPut(classDescriptor) {
-            loadCache(classDescriptor, writerSchema)
+        val memos = inlineCache
+        for (index in memos.indices) {
+            val memo = memos[index]
+            // Identity is enough: the same instances always resolve to the same workflow. It also avoids
+            // Schema.equals(), which is a deep structural comparison.
+            if (memo.writerSchema === writerSchema && memo.classDescriptor === classDescriptor) {
+                return memo.workflow
+            }
         }
+        val workflow =
+            fieldCache.getOrPut(writerSchema) {
+                WeakKeyCache()
+            }.getOrPut(classDescriptor) {
+                loadCache(classDescriptor, writerSchema)
+            }
+        memoize(Memo(writerSchema, classDescriptor, workflow))
+        return workflow
+    }
+
+    /**
+     * Copy-on-write insertion of [memo] at the front of [inlineCache], dropping the oldest entry once
+     * [INLINE_CACHE_CAPACITY] is reached. Only runs on a miss, so the copy is off the hot path.
+     */
+    private fun memoize(memo: Memo) {
+        val current = inlineCache
+        val newSize = minOf(current.size + 1, INLINE_CACHE_CAPACITY)
+        inlineCache = Array(newSize) { if (it == 0) memo else current[it - 1] }
     }
 
     /**

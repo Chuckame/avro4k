@@ -18,6 +18,14 @@ public interface Cache<K : Any, V : Any> {
 /**
  * Cache for associating derived data with objects you don't own
  * without preventing their garbage collection.
+ *
+ * **Reclamation is lazy, and bounded rather than eager.** Entries whose key has been collected are only
+ * swept during the put path of [getOrPut] (see there for why). A cache that reaches a steady state and
+ * stops putting therefore keeps its already-stale entries — the dead [Key.Stored] wrapper *and* its value,
+ * which for a `SerializationWorkflow` is not tiny — until the next put, possibly forever. That retention is
+ * bounded by the number of puts ever made on the instance (one entry per distinct key ever inserted), which
+ * is why it is accepted here: the keys are schemas and serial descriptors, a small and effectively fixed set
+ * per application. The *keys* themselves are still only weakly referenced, so they stay collectable.
  */
 @InternalAvro4kApi
 public class WeakKeyCache<K : Any, V : Any> : Cache<K, V> {
@@ -25,13 +33,17 @@ public class WeakKeyCache<K : Any, V : Any> : Cache<K, V> {
     private val map = ConcurrentHashMap<Key<K>, V>()
 
     override fun getOrPut(key: K, compute: () -> V): V {
-        removeStaleEntries()
-
-        // "get" phase
+        // "get" phase. Stale entries are never matched here: a Stored key whose referent has been collected
+        // compares unequal to every Lookup and to every other Stored key, so skipping the purge on a hit is
+        // not observable.
         val hash = key.hashCode()
         map[Key.Lookup(hash, key)]?.let { return it }
 
-        // "put" phase
+        // "put" phase. The map can only ever grow here, so purging here keeps the growth bounded by the number
+        // of distinct keys ever inserted, while keeping the (overwhelmingly more frequent) hit path free of the
+        // synchronized ReferenceQueue.poll(). The trade-off is that entries that go stale after the last put are
+        // retained until the next one — see the class KDoc.
+        removeStaleEntries()
         return map.computeIfAbsent(Key.Stored(hash, key, queue)) { compute() }
     }
 
