@@ -1,6 +1,8 @@
 package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.Buffer
+import com.github.avrokotlin.avro4k.internal.Cache
+import com.github.avrokotlin.avro4k.internal.WeakKeyCache
 import kotlinx.io.Buffer
 import kotlinx.io.Sink
 import kotlinx.io.Source
@@ -39,7 +41,24 @@ public class AvroSingleObject(
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
 
-    private fun Schema.crc64avro(): ByteArray = SchemaNormalization.parsingFingerprint("CRC-64-AVRO", this)
+    /**
+     * Memoizes the CRC-64-AVRO fingerprints, as computing one requires canonicalizing the whole schema
+     * to its parsing form and hashing it, which is far more expensive than the payload encoding itself
+     * for the small records typical of single-object encoding.
+     *
+     * The cache is weak-keyed so that a long-lived [AvroSingleObject] never keeps a [Schema] alive, and
+     * per-instance so that its lifetime is bounded by this format instance rather than by the class loader.
+     *
+     * The cached values are mutable [ByteArray]s, but they never escape: [crc64avro] is private, and its
+     * only caller hands the array to [Sink.write], which copies the bytes out and neither retains nor
+     * mutates the array. No public API exposes the fingerprint bytes.
+     */
+    private val fingerprintCache: Cache<Schema, ByteArray> = WeakKeyCache()
+
+    private fun Schema.crc64avro(): ByteArray =
+        fingerprintCache.getOrPut(this) {
+            SchemaNormalization.parsingFingerprint("CRC-64-AVRO", this)
+        }
 
     @Deprecated("Use encodeToSink instead", ReplaceWith("encodeToSink(writerSchema, serializer, value, outputStream.asSink().buffered())"))
     public fun <T> encodeToStream(

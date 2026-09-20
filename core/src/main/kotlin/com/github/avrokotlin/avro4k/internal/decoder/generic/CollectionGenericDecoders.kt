@@ -9,34 +9,51 @@ import org.apache.avro.Schema
 
 internal class MapGenericDecoder(
     private val map: Map<CharSequence, Any?>,
-    private val writerSchema: Schema,
+    @Suppress("unused") private val writerSchema: Schema,
     override val avro: Avro,
 ) : AbstractAvroGenericDecoder() {
-    private val iterator = map.asSequence().flatMap { sequenceOf(true to it.key, true to it.value) }.iterator()
-    private lateinit var currentData: Pair<Boolean, Any?>
+    /**
+     * Walks the entries directly, alternating key then value, instead of flattening them through a
+     * `Sequence` of [Pair]s, which cost 2 pair allocations per entry plus the sequence pipeline.
+     */
+    private val entries = map.entries.iterator()
+    private lateinit var currentEntry: Map.Entry<CharSequence, Any?>
+    private var nextIsKey = true
+    private var currentData: Any? = null
     private var decodedNotNullMark = false
 
+    // NOTE: behaviour kept verbatim from the previous `Pair`-based implementation, which tagged BOTH the
+    // key and the value of each entry as "is a key" and therefore always reported the string schema; the
+    // `writerSchema.valueType` branch was dead. Fixing that is a behaviour change, tracked in
+    // docs/plans/notes/c9.md.
     override val currentWriterSchema: Schema
-        get() =
-            if (currentData.first) {
-                STRING_SCHEMA
+        get() = STRING_SCHEMA
+
+    private fun advance(): Any? {
+        currentData =
+            if (nextIsKey) {
+                currentEntry = entries.next()
+                nextIsKey = false
+                currentEntry.key
             } else {
-                writerSchema.valueType
+                nextIsKey = true
+                currentEntry.value
             }
+        return currentData
+    }
 
     override fun decodeNotNullMark(): Boolean {
         decodedNotNullMark = true
-        currentData = iterator.next()
-        return currentData.second != null
+        return advance() != null
     }
 
     override fun decodeValue(): Any {
         if (!decodedNotNullMark) {
-            currentData = iterator.next()
+            advance()
         } else {
             decodedNotNullMark = false
         }
-        return currentData.second ?: throw DecodedNullError()
+        return currentData ?: throw DecodedNullError()
     }
 
     @OptIn(ExperimentalSerializationApi::class)

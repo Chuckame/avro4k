@@ -13,7 +13,13 @@ internal class MapGenericEncoder(
     private val schema: Schema,
     private val onEncoded: (Map<String, Any?>) -> Unit,
 ) : AbstractAvroGenericEncoder() {
-    private val entries: MutableList<Pair<String, Any?>> = ArrayList(mapSize)
+    /**
+     * Entries are accumulated straight into the resulting [LinkedHashMap] instead of into an intermediate
+     * list of [Pair]s, which cost 2 allocations per entry (the pair built on insertion, and the pair
+     * rebuilt by `associate`). [LinkedHashMap] keeps the encounter order, and re-putting an already
+     * present key keeps its original position and overwrites its value, exactly like `associate` did.
+     */
+    private val entries: MutableMap<String, Any?> = LinkedHashMap(mapSize)
     private var currentKey: String? = null
 
     override lateinit var currentWriterSchema: Schema
@@ -34,7 +40,7 @@ internal class MapGenericEncoder(
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
-        onEncoded(entries.associate { it.first to it.second })
+        onEncoded(entries)
     }
 
     override fun encodeValue(value: Any) {
@@ -42,12 +48,12 @@ internal class MapGenericEncoder(
         if (key == null) {
             currentKey = value.toString()
         } else {
-            entries.add(key to value)
+            entries[key] = value
         }
     }
 
     override fun encodeNullUnchecked() {
         val key = currentKey ?: throw SerializationException("Map key cannot be null")
-        entries.add(key to null)
+        entries[key] = null
     }
 }
