@@ -66,15 +66,61 @@ internal object SerializerLocatorMiddleware {
     @OptIn(InternalSerializationApi::class)
     fun <T> apply(deserializer: DeserializationStrategy<T>): DeserializationStrategy<T> {
         (deserializer as? KSerializer<*>)?.let(serializers::get)?.let { return it as DeserializationStrategy<T> }
-        (deserializer as? AbstractCollectionSerializer<*, T, *>)?.let { return AvroCollectionSerializer(deserializer) }
+        (deserializer as? AbstractCollectionSerializer<*, T, *>)?.let { return wrapCollection(it) }
 
         return deserializer
+    }
+
+    /** Deliberately not `@Volatile`: see [wrapCollection]. */
+    private var cachedCollectionDeserializer: CachedCollectionDeserializer? = null
+
+    /**
+     * [AbstractAvroDirectDecoder.decodeSerializableValue] runs [apply] for every decoded value, so a collection used to
+     * allocate a brand new [AvroCollectionSerializer] every single time it was decoded. The wrapper only holds its
+     * `original` and keeps no decoding state (the state lives on the decoder), so one wrapper instance can safely be
+     * shared across calls and across threads: it is memoized here.
+     *
+     * The memoization is a **one-entry inline cache** on purpose:
+     * - A map keyed by the serializer instance would leak. Compiler-generated serializers are per-type singletons, but
+     *   `ListSerializer(elementSerializer)` / `MapSerializer(...)` hand out a *fresh* [AbstractCollectionSerializer]
+     *   on every call, so a global strong-keyed map would grow without bound in a long-running process.
+     * - A weak-keyed cache would be leak-free but re-introduces a per-call lookup that allocates, which is exactly
+     *   what this is trying to remove.
+     *
+     * Decoding is overwhelmingly repetitive - the same collection serializer comes back for every element of the
+     * enclosing collection - so a single entry captures nearly all of the wins while staying bounded.
+     *
+     * Thread safety: the cached key and value live in **one** immutable holder behind **one** non-volatile reference.
+     * A single reference read/write is atomic on every supported platform, so a racing thread either sees a fully
+     * consistent holder or a stale/null one and simply falls through to allocating a new wrapper - never a wrapper
+     * paired with the wrong `original`. Splitting the key and the value into two fields would allow exactly that torn
+     * read, which is why they are kept together.
+     */
+    @OptIn(InternalSerializationApi::class)
+    private fun <T> wrapCollection(deserializer: AbstractCollectionSerializer<*, T, *>): DeserializationStrategy<T> {
+        val cached = cachedCollectionDeserializer
+        if (cached != null && cached.original === deserializer) {
+            return cached.wrapped as DeserializationStrategy<T>
+        }
+        val wrapped = AvroCollectionSerializer(deserializer)
+        cachedCollectionDeserializer = CachedCollectionDeserializer(deserializer, wrapped)
+        return wrapped
     }
 
     fun apply(descriptor: SerialDescriptor): SerialDescriptor {
         return descriptors[descriptor] ?: descriptor
     }
 }
+
+/**
+ * Immutable (key, value) pair for the one-entry collection-wrapper cache of [SerializerLocatorMiddleware].
+ * Both fields must always be published together - see [SerializerLocatorMiddleware.wrapCollection].
+ */
+@OptIn(InternalSerializationApi::class)
+private class CachedCollectionDeserializer(
+    @JvmField val original: AbstractCollectionSerializer<*, *, *>,
+    @JvmField val wrapped: AvroCollectionSerializer<*>,
+)
 
 private val AvroStringSerialDescriptor: SerialDescriptor =
     SerialDescriptorWithAvroSchemaDelegate(String.serializer().descriptor) { context ->
