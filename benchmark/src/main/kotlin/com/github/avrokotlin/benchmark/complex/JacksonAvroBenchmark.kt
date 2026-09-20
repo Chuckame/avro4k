@@ -1,29 +1,41 @@
 package com.github.avrokotlin.benchmark.complex
 
-import com.fasterxml.jackson.databind.MapperFeature
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.databind.ObjectWriter
-import com.fasterxml.jackson.dataformat.avro.AvroMapper
 import com.fasterxml.jackson.dataformat.avro.AvroSchema
-import com.fasterxml.jackson.dataformat.avro.jsr310.AvroJavaTimeModule
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.encodeToByteArray
-import com.github.avrokotlin.benchmark.internal.Clients
+import com.github.avrokotlin.benchmark.internal.jackson.JacksonAvro
+import com.github.avrokotlin.benchmark.internal.jackson.toJackson
 import kotlinx.benchmark.Benchmark
 import java.io.OutputStream
+import com.github.avrokotlin.benchmark.internal.jackson.Clients as JacksonClients
 
 
 internal class JacksonAvroBenchmark : SerializationBenchmark() {
     lateinit var writer: ObjectWriter
     lateinit var reader: ObjectReader
 
+    /**
+     * Jackson's own model, converted once here so no measured method pays for it.
+     * See [com.github.avrokotlin.benchmark.internal.jackson.Clients] for why it exists.
+     */
+    lateinit var model: JacksonClients
+
     lateinit var data: ByteArray
 
+    /**
+     * Allocated once so that [write] only measures the encoding, not the sink construction.
+     * The mapper has `AUTO_CLOSE_TARGET` disabled so the stream stays usable across iterations.
+     */
+    lateinit var out: OutputStream
+
     override fun setup() {
-        writer = Clients::class.java.createWriter()
-        reader = Clients::class.java.createReader()
+        val mapper = JacksonAvro.mapper()
+        model = clients.toJackson()
+        writer = mapper.writer(AvroSchema(schema)).forType(JacksonClients::class.java)
+        reader = mapper.reader(AvroSchema(schema)).forType(JacksonClients::class.java)
+        out = OutputStream.nullOutputStream()
     }
 
     override fun prepareBinaryData() {
@@ -31,29 +43,10 @@ internal class JacksonAvroBenchmark : SerializationBenchmark() {
     }
 
     @Benchmark
-    fun read() {
-        reader.readValue<Clients>(data)
-    }
+    fun read(): JacksonClients = reader.readValue<JacksonClients>(data)
 
     @Benchmark
     fun write() {
-        writer.writeValue(OutputStream.nullOutputStream(), clients)
+        writer.writeValue(out, model)
     }
-
-    private fun <T> Class<T>.createWriter(): ObjectWriter {
-        val mapper = avroMapper()
-
-        return mapper.writer(AvroSchema(schema)).forType(this)
-    }
-
-    private fun <T> Class<T>.createReader(): ObjectReader {
-        val mapper = avroMapper()
-
-        return mapper.reader(AvroSchema(schema)).forType(this)
-    }
-
-    private fun avroMapper(): ObjectMapper = AvroMapper()
-        .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
-        .registerKotlinModule()
-        .registerModule(AvroJavaTimeModule())
 }

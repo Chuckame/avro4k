@@ -1,0 +1,46 @@
+{
+  "type" : "record",
+  "name" : "SimpleDatasClass",
+  "namespace" : "com.github.avrokotlin.benchmark.internal.specific",
+  "fields" : [ {
+    "name" : "data",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "type" : "record",
+        "name" : "SimpleDataClass",
+        "fields" : [ {
+          "name" : "bool",
+          "type" : "boolean"
+        }, {
+          "name" : "byte",
+          "type" : "int"
+        }, {
+          "name" : "short",
+          "type" : "int"
+        }, {
+          "name" : "int",
+          "type" : [ "null", "int" ],
+          "default" : null
+        }, {
+          "name" : "long",
+          "type" : "long"
+        }, {
+          "name" : "float",
+          "type" : "float"
+        }, {
+          "name" : "double",
+          "type" : "double"
+        }, {
+          "name" : "string",
+          "type" : [ "null", "string" ],
+          "default" : null
+        }, {
+          "name" : "bytes",
+          "type" : "bytes"
+        } ]
+      }
+    },
+    "default" : [ ]
+  } ]
+}

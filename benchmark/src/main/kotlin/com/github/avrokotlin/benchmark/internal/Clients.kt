@@ -1,15 +1,5 @@
 package com.github.avrokotlin.benchmark.internal
 
-import com.fasterxml.jackson.annotation.JsonFormat
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.JavaType
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize
-import com.fasterxml.jackson.databind.annotation.JsonSerialize
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.jsonFormatVisitors.JsonFormatVisitorWrapper
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import com.github.avrokotlin.avro4k.AvroStringable
 import com.github.avrokotlin.avro4k.serializer.InstantSerializer
 import com.github.avrokotlin.avro4k.serializer.LocalDateSerializer
@@ -19,26 +9,17 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/**
+ * The `complex` model, and the one under test: this is avro4k's, and `Avro.schema<Clients>()` is the
+ * canonical writer schema every other library is measured against. The other libraries keep their own
+ * copies under `internal/apache` and `internal/jackson`, shaped for what each of them can round-trip;
+ * nothing library-specific belongs here.
+ */
 @Serializable
 internal data class Clients(
     val clients: List<Client>
 )
 
-internal class CharJacksonSerializer : StdSerializer<Char>(Char::class.java) {
-    override fun serialize(value: Char?, gen: JsonGenerator, provider: SerializerProvider) {
-        value?.code?.let { gen.writeNumber(it) } ?: gen.writeNull()
-    }
-
-    override fun acceptJsonFormatVisitor(visitor: JsonFormatVisitorWrapper, typeHint: JavaType) {
-        visitor.expectIntegerFormat(typeHint).numberType(JsonParser.NumberType.INT)
-    }
-}
-
-internal class CharJacksonDeserializer : StdDeserializer<Char>(Char::class.java) {
-    override fun deserialize(p0: JsonParser, p1: com.fasterxml.jackson.databind.DeserializationContext): Char {
-        return p0.intValue.toChar()
-    }
-}
 
 @Serializable
 internal data class Client(
@@ -47,14 +28,11 @@ internal data class Client(
     val isActive: Boolean,
     @Contextual
     @AvroStringable
-    @JsonFormat(shape = JsonFormat.Shape.STRING)
     val balance: BigDecimal?,
     val picture: ByteArray?,
     val age: Int,
     val eyeColor: EyeColor?,
     val name: String?,
-    @JsonSerialize(using = CharJacksonSerializer::class)
-    @JsonDeserialize(using = CharJacksonDeserializer::class)
     val gender: Char?,
     val company: String?,
     val emails: Array<String>,

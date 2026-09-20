@@ -1,0 +1,41 @@
+{
+  "type" : "record",
+  "name" : "ListWrapperDatasClass",
+  "namespace" : "com.github.avrokotlin.benchmark.internal.specific",
+  "fields" : [ {
+    "name" : "data",
+    "type" : {
+      "type" : "array",
+      "items" : {
+        "type" : "record",
+        "name" : "ListWrapperDataClass",
+        "fields" : [ {
+          "name" : "index",
+          "type" : "int"
+        }, {
+          "name" : "entries",
+          "type" : {
+            "type" : "array",
+            "items" : {
+              "type" : "record",
+              "name" : "StatsEntry",
+              "fields" : [ {
+                "name" : "elementId",
+                "type" : "long"
+              }, {
+                "name" : "values",
+                "type" : {
+                  "type" : "array",
+                  "items" : "long"
+                },
+                "default" : [ ]
+              } ]
+            }
+          },
+          "default" : [ ]
+        } ]
+      }
+    },
+    "default" : [ ]
+  } ]
+}
