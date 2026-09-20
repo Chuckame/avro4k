@@ -209,6 +209,121 @@ What these say:
 > `beginStructure` call with no public seam, so the nested-record family measures their *sum*.
 > Attributing a win to one needs async-profiler (`-e alloc`) or a temporary counter inside `core`.
 
+## Results — M1 (C2 + C3 + C9 + the C5 `readBytes()` fix)
+
+2026-09-20, Apple M2 Pro, OpenJDK 21.0.11. Every number below is a **same-machine A/B**: the
+pre-M1 commit (`8bc9b40`) and the post-M1 tree were measured back to back, with identical harness
+settings, in a separate git worktree. The M0 baseline table above was *not* used as the "before"
+side — its rows were produced with different iteration settings and are not comparable at this
+resolution.
+
+### Two measurement findings that change how these numbers must be read
+
+**1. Escape analysis makes JVM `gc.alloc.rate.norm` useless as the acceptance metric here.**
+Post-M1, `writeRecords` reports 3,200,261 → **250 B/op** at 100,000 elements — a 12,800x collapse.
+It is an artifact. Re-run with `-XX:-DoEscapeAnalysis` and the same code allocates a flat
+**72 B/element** at *every* size. What changed is not how much the code allocates but whether the
+JIT can prove it does not escape: removing the `Key.Lookup` that escaped into `ConcurrentHashMap.get`
+unblocked EA on the *remaining* per-structure objects. The `@Param=1000` row, where EA does not fire,
+still shows the full 32 B/element and is the honest one.
+
+**This matters beyond benchmarking**: v3 targets JS and native, which have no escape analysis. The
+EA-on numbers describe the JVM only. The EA-off table below is what the other platforms will see, and
+it is the one to judge a platform-neutral change by. Run it with:
+
+```bash
+./gradlew :benchmark:benchmarkAlloc -Pbench='...' -PallocJmhArgs='-jvmArgsAppend -XX:-DoEscapeAnalysis'
+```
+
+**2. JMH's within-run error bars understate cross-invocation variance by roughly an order of
+magnitude.** `complex` write @200 measured 2,279 ± 41 ops/s in one invocation and 2,538 ± 38 ops/s in
+another — **11% apart on identical code**, with both intervals tight and non-overlapping. A
+single-invocation A/B at the few-percent level says nothing here, however confident its error bar
+looks. Anything below ~10% must be re-measured across separate invocations before it is believed. One
+"regression" in this milestone was found this way and withdrawn (see below).
+
+### Allocation, escape analysis disabled — the platform-neutral result
+
+This is the real, code-level win: **72 B per record structure** (per record instance, and per nesting
+level) and **88 B per collection**, eliminated.
+
+| Benchmark | param | B/op pre | B/op post | Δ |
+|---|---:|---:|---:|---:|
+| `readRecords` | 10 / 1k / 100k | 1,904 / 148,440 / 14,800,475 | 1,096 / 76,352 / 7,600,379 | **−42% / −49% / −49%** |
+| `writeRecords` | 10 / 1k / 100k | 1,784 / 144,344 / 14,400,378 | 992 / 72,272 / 7,200,298 | **−44% / −50% / −50%** |
+| `NestedRecord.read` | depth 1 / 3 / 8 | 264 / 536 / 1,216 | 192 / 320 / 640 | **−27% / −40% / −47%** |
+| `NestedRecord.write` | depth 1 / 3 / 8 | 280 / 568 / 1,288 | 208 / 352 / 712 | **−26% / −38% / −45%** |
+| `readLongs` | 10 / 1k / 100k | 704 / 28,440 / 2,800,454 | 616 / 28,352 / 2,800,366 | −88 B **flat** |
+| `writeLongs` | 10 / 1k / 100k | 344 / 344 / 355 | 272 / 272 / 283 | −72 B **flat** |
+
+The shape of those deltas is the attribution, and it is clean:
+
+- **−72 B scales with the number of record structures** (once per record, once per nesting level) —
+  that is C2 removing two `WeakKeyCache.getOrPut` calls, each allocating a `Key.Lookup`, from every
+  `RecordDirectDecoder`/`RecordDirectEncoder` construction.
+- **−88 B is flat regardless of collection size** — once per collection, not per element. That is C3
+  removing the `AvroCollectionSerializer` wrapper allocation, exactly as predicted before measuring.
+- `readLongs`/`writeLongs` have no record structures, so they get the flat collection win and nothing
+  else. That is the negative control, and it behaves.
+
+### Micro throughput (escape analysis on, i.e. the JVM)
+
+| Benchmark | param | pre ops/s | post ops/s | Δ |
+|---|---:|---:|---:|---:|
+| `NestedRecord.read` | depth 1 / 3 / 8 | 31.1M / 12.9M / 4.73M | 41.8M / 17.5M / 7.06M | +34% / +36% / +49% |
+| `NestedRecord.write` | depth 1 / 3 / 8 | 29.4M / 9.74M / 4.53M | 39.9M / 14.9M / 7.48M | +36% / +53% / +65% |
+| `readRecords` | 10 / 1k / 100k | 1.60M / 18.4k / 201 | 1.99M / 25.5k / 254 | +25% / +39% / +27% |
+| `writeRecords` | 10 / 1k / 100k | 1.57M / 23.5k / 239 | 2.38M / 34.0k / 375 | +52% / +45% / +57% |
+| `readLongs` | 10 / 1k / 100k | 3.39M / 58.3k / 499 | 3.84M / 58.7k / 478 | +13% / +0.6% / −4.1% |
+| `writeLongs` | 10 / 1k / 100k | 4.82M / 77.0k / 605 | 5.43M / 77.2k / 622 | +13% / +0.2% / +2.8% |
+
+`readLongs` @100k is the only negative row (−4.1%, overlapping intervals). Per finding 2 it is below
+the resolution of a single-invocation comparison and is **not** established as a regression; it is
+recorded so a later run can check whether it persists.
+
+### End-to-end — much smaller than the micro-benchmarks suggest
+
+The micro numbers above are attribution instruments, not user-visible speedups. On the end-to-end
+suite, only `simple` moves clearly:
+
+| Benchmark | param | pre ops/s | post ops/s | Δ | verdict |
+|---|---:|---:|---:|---:|---|
+| `simple` write | 1 | 4,722,206 | 5,703,037 | **+20.8%** | real |
+| `simple` write | 25 | 286,019 | 307,834 | **+7.6%** | real |
+| `simple` write | 500 | 13,564 | 14,673 | **+8.2%** | real |
+| `simple` read | 25 | 213,401 | 227,432 | **+6.6%** | real |
+| `complex` read/write | 1 / 15 / 200 | — | — | ±0…6% | not established |
+| `lists` read/write | 100 / 10000 | — | — | ±0…5% | not established |
+
+`complex` write @200 first measured **−6.5% with non-overlapping error bars** and was reported as a
+regression. Re-measured across 5 forks on both trees it is **2,532 ± 57 → 2,539 ± 38 ops/s, i.e.
+unchanged**, and its allocation is flat too (350,177 → 344,497 B/op, within error). The regression
+was cross-invocation variance. It is written down here rather than deleted, because the failure mode
+— a tight, confident, wrong error bar — will recur.
+
+**Why the gap between micro and end-to-end?** The per-structure cost C2 removes is a fixed ~72 B and
+a few cache lookups per record. In `simple` (one tiny flat record per op) that is a large share of
+the work. In `complex` and `lists` the payload work — string encoding, collection traversal, actual
+bytes — dominates, so halving a fixed per-structure overhead moves the total very little. This is
+consistent with A8's finding that the read gap to Apache is flat across sizes: the remaining cost is
+elsewhere, and C1/C4 in M5 are where it lives.
+
+### Known gap in this measurement
+
+Nothing in C9 is covered by any benchmark — no benchmark touches `AvroSingleObject`, the enum-default
+path, or the generic tree — and the `readBytes()` fix in C5 is a correctness change measured only by
+its tests. Those two units are justified by inspection, not by the numbers above.
+
+> [!WARNING]
+> **`benchmarkAlloc` can report `BUILD SUCCESSFUL` for a run that measured nothing.** While capturing
+> the pre-M1 baseline, the Gradle build cache restored a `mainBenchmarkJar` without the benchmark
+> classes; every JMH fork died with `ClassNotFoundException`, JMH printed an empty result table, and
+> the task still succeeded. The output file looked plausible at a glance. Until the task asserts that
+> its report contains result rows, **check that the report actually has rows before trusting it** —
+> `grep -c '^<Family>MicroBenchmark' build/reports/benchmarks/alloc/main-alloc.txt` — and pass
+> `--no-build-cache` when benchmarking a worktree. Tracked as a backlog item in
+> `docs/plans/PROGRESS.md`.
+
 ## Run the benchmark locally
 
 Just execute the benchmark:
