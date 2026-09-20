@@ -261,11 +261,17 @@ private fun org.apache.avro.io.Decoder.readFixedBytes(size: Int): ByteArray {
     return ByteArray(size).also { buf -> readFixed(buf) }
 }
 
+/**
+ * Reads the next `bytes` value as an exclusively owned [ByteArray].
+ *
+ * The returned buffer of [org.apache.avro.io.Decoder.readBytes] is only guaranteed to expose its content between
+ * `position()` and `limit()`, so [java.nio.ByteBuffer.array] may be larger than — or offset from — the value.
+ * It may also be a view onto memory owned by someone else (e.g. `DirectBinaryDecoder` over a
+ * `ByteBufferInputStream` hands back the caller's own buffer, and `KotlinxIoDecoder` wraps a recyclable segment),
+ * so the bytes must always be copied out before being handed to the deserialized value.
+ */
 private fun org.apache.avro.io.Decoder.readBytes(): ByteArray {
     val buffer = readBytes(null)
-    if (buffer.hasArray()) {
-        return buffer.array()
-    }
     return ByteArray(buffer.remaining())
         .apply { buffer.get(this) }
 }

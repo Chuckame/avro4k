@@ -61,14 +61,16 @@ internal class KotlinxIoDecoder(
         source.require(length.toLong())
         if (old != null && length <= old.capacity()) {
             old.clear().limit(length)
-            source.readAtMostTo(old)
+            source.readFully(old)
+            old.flip()
             return old
         } else {
             UnsafeBufferOperations.forEachSegment(source.buffer) { ctx, segment ->
                 if (length >= segment.size) {
                     // the bytes can be split across segments.
                     val buffer = ByteBuffer.allocate(length)
-                    source.readAtMostTo(buffer)
+                    source.readFully(buffer)
+                    buffer.flip()
                     return buffer
                 }
                 ctx.withData(segment) { bytes, offset, _ ->
@@ -289,3 +291,17 @@ private inline fun decodeVarLong2(lo: Long, readByte: () -> Byte): Long {
 private fun decodeZigZag(varint: Int): Int = (varint ushr 1) xor (-(varint and 1))
 
 private fun decodeZigZag(varint: Long): Long = (varint ushr 1) xor (-(varint and 1))
+
+/**
+ * Fills the remaining space of [sink], leaving its position at its limit.
+ *
+ * [kotlinx.io.readAtMostTo] only reads from the source's head segment, so a single call may fill only a part of
+ * [sink] when the requested bytes span multiple segments.
+ */
+private fun Source.readFully(sink: ByteBuffer) {
+    while (sink.hasRemaining()) {
+        if (readAtMostTo(sink) < 0) {
+            throw SerializationException("Unexpected end of source: missing ${sink.remaining()} bytes")
+        }
+    }
+}
