@@ -26,6 +26,31 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
  * stale entries, and only grows if the live ones still need the room. Retention is therefore bounded by the table's
  * capacity, without any sweep on the read path. As with any weak-keyed map, a value that strongly references its own
  * key keeps that key alive forever.
+ *
+ * **Only for a bounded set of long-lived keys.** Because a put is O(capacity), a cache fed an unbounded stream of new
+ * keys degrades to quadratic inserts. Schemas and generated serial descriptors are fine; a key created per call is not
+ * (e.g. `serializer<List<Foo>>().descriptor` is a fresh instance on every call — see `docs/plans/notes/b6.md`).
+ *
+ * ## Why a hand-written table, and why one for both platforms
+ *
+ * - **Nothing to reuse under the project's dependency policy** (official Kotlin/JetBrains libraries or pure Kotlin
+ *   only). Neither the stdlib nor any kotlinx library has a common concurrent map (tracked by
+ *   [KT-78661](https://youtrack.jetbrains.com/issue/KT-78661)), let alone a weak or identity-keyed one; the common
+ *   stdlib only offers the atomics used here. Third-party multiplatform maps are excluded by that policy, and the ones
+ *   that exist are equality-keyed without weak keys anyway.
+ * - **Not `ConcurrentHashMap` on the JVM.** It compares keys with `equals`, so an identity lookup needs a wrapper
+ *   object per call (the previous `kmp`-branch design): an allocation on every cache *hit*, which the M1 measurements
+ *   showed is real once escape analysis is not there to remove it — and native and JS have no escape analysis. Its
+ *   `ReferenceQueue` would also need polling. A JVM-only `ConcurrentHashMap` actual would additionally make the two
+ *   platforms behave differently (compute-once vs may-recompute, eager vs deferred sweeping) under the same tests.
+ * - **One implementation for JVM and native** (the `jvmAndNative` source set): the concurrency argument above is
+ *   reviewed once. Only [WeakRef] and [identityHashCode] are per platform.
+ * - **Deliberately far simpler than a general concurrent hash table.** A published table is never mutated: no in-place
+ *   insertion, no cooperative resizing, no tree bins, no locks. All the concurrency is the single compare-and-set in
+ *   [getOrPut]. The costs of that simplicity are the O(capacity) put, a possible duplicate computation on a lost race
+ *   (allowed by the [Cache] contract) and the deferred reclamation above — all acceptable for write-once, read-mostly
+ *   caches, and the reason for the restriction above.
+ * - **Revisit** if KT-78661 (or a successor) brings a common concurrent map that can do identity and weak keys.
  */
 @InternalAvro4kApi
 @OptIn(ExperimentalAtomicApi::class)
