@@ -35,7 +35,8 @@ private fun from(schema: Schema, seenNamedTypes: MutableMap<String, NamedSchema>
 
     return when (schema.type) {
         Schema.Type.RECORD -> {
-            val fields = mutableListOf<RecordSchema.Field>()
+            // the record is registered before converting its fields, so they can reference it (recursive records)
+            val fields = LockableList<RecordSchema.Field>()
             val recordSchema =
                 RecordSchema(
                     name = Name(schema.name, schema.namespace),
@@ -57,23 +58,24 @@ private fun from(schema: Schema, seenNamedTypes: MutableMap<String, NamedSchema>
                         },
                     doc = field.doc(),
                     aliases = field.aliases(),
-                    props = field.objectProps.toJsonElementMap()
+                    props = field.propsWithOrder()
                 )
             }.forEach { fields += it }
+            fields.lock()
             recordSchema
         }
 
         Schema.Type.ENUM ->
             EnumSchema(
                 name = Name(schema.name, schema.namespace),
-                symbols = schema.enumSymbols.toSet(),
+                symbols = schema.enumSymbols,
                 defaultSymbol = schema.enumDefault,
                 doc = schema.doc,
                 aliases = schema.aliasesWithSpace,
                 props = schema.objectProps.toJsonElementMap()
             ).also { seenNamedTypes[schema.fullName] = it }
 
-        Schema.Type.UNION -> UnionSchema(schema.types.map { from(it, seenNamedTypes) })
+        Schema.Type.UNION -> UnionSchema(schema.types.map { from(it, seenNamedTypes) as ResolvedSchema })
 
         Schema.Type.FIXED ->
             FixedSchema(
@@ -131,4 +133,14 @@ private fun toJsonElement(value: Any?): JsonElement =
     }
 
 private val Schema.aliasesWithSpace: Set<Name>
-    get() = aliases.map { Name(it).withSpaceIfMissing(namespace) }.toSet()
+    get() = aliases.map { Name(it, namespace) }.toSet()
+
+/**
+ * The field order is not a prop in Apache Avro, but it is one in [AvroSchema], as in the schema's json.
+ * Like Apache Avro, it is only written when not the default one (ascending).
+ */
+private fun Schema.Field.propsWithOrder(): Map<String, JsonElement> {
+    val props = objectProps.toJsonElementMap()
+    if (order() == Schema.Field.Order.ASCENDING) return props
+    return props + ("order" to JsonPrimitive(order().name.lowercase()))
+}

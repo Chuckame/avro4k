@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithSimulatorTests
 import org.jetbrains.kotlin.konan.target.Family
 import org.jetbrains.kotlin.konan.target.HostManager
@@ -47,15 +46,15 @@ kotlin {
             dependencies {
                 api(libs.kotlinx.serialization.core)
                 api(libs.kotlinx.io)
-                implementation(libs.kotlinx.serialization.json)
+                // api: AvroSchema exposes JsonElement (props, field default values, JSON conversions)
+                api(libs.kotlinx.serialization.json)
             }
         }
 
         commonTest {
             dependencies {
                 implementation(kotlin("test"))
-                // kotest-assertions-core is not here yet: 6.2.0 publishes no androidNativeArm32 variant, so it cannot be a
-                // commonTest dependency while that target is in the matrix. To be settled by B1 (see docs/plans/notes/b0.md).
+                implementation(libs.kotest.core)
             }
         }
 
@@ -69,7 +68,6 @@ kotlin {
         jvmTest {
             dependencies {
                 implementation(libs.kotest.junit5)
-                implementation(libs.kotest.core)
                 implementation(libs.mockk)
                 implementation(kotlin("reflect"))
             }
@@ -108,26 +106,6 @@ run {
             tasks.named("${target.name}Test") {
                 onlyIf("No $family simulator runtime installed") { family in installedFamilies }
             }
-        }
-}
-
-// TEMPORARY (M2 B0 only, delete in B1): commonMain has no sources yet, so every native compilation is NO-SOURCE and
-// produces no .klib, and publishing a native target fails on the missing artifact. Skip the native publications until
-// the first sources land in commonMain; the check turns itself off as soon as `src/commonMain` exists.
-if (!layout.projectDirectory.dir("src/commonMain").asFile.exists()) {
-    val nativePublicationNames =
-        kotlin.targets
-            .withType<KotlinNativeTarget>()
-            .names
-            .map { it.replaceFirstChar(Char::uppercaseChar) }
-            .toSet()
-    tasks
-        .named { taskName ->
-            nativePublicationNames.any { target ->
-                taskName == "generateMetadataFileFor${target}Publication" || taskName.startsWith("publish${target}PublicationTo")
-            }
-        }.configureEach {
-            enabled = false
         }
 }
 

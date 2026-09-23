@@ -24,6 +24,8 @@ internal fun buildAvroFixedAnnotation(schema: AvroSchema): AnnotationSpec? {
 internal fun buildAvroPropAnnotations(carrier: WithProps): List<AnnotationSpec> {
     return buildList {
         carrier.props.forEach { (key, value) ->
+            // A field's sort order is a prop in AvroSchema, but a reserved one in Apache Avro (setting it as a prop fails), and avro4k does not support it.
+            if (carrier is AvroSchema.RecordSchema.Field && key == "order") return@forEach
             add(
                 AnnotationSpec.builder(AvroProp::class.asClassName())
                     .addMember(CodeBlock.of("%S, %S", key, value.contentUnquoted))
@@ -75,7 +77,7 @@ internal fun buildAvroDefaultAnnotation(field: AvroSchema.RecordSchema.Field): A
         return null
     }
     return AnnotationSpec.builder(AvroDefault::class.asClassName())
-        .addMember("%S", field.defaultValue.contentUnquoted)
+        .addMember("%S", field.defaultValue!!.contentUnquoted)
         .build()
 }
 

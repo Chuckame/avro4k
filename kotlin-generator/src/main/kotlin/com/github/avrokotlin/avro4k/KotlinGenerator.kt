@@ -18,6 +18,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
@@ -28,6 +29,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.apache.avro.ParseContext
 import org.apache.avro.Schema
+import org.apache.avro.specific.SpecificData
 import java.io.File
 
 /**
@@ -131,21 +133,21 @@ public class KotlinGenerator(
                     schema.fields.flatMap { field ->
                         // the union schema, and union in a map/array schema, is already generated as a subtype of the record, no need to generate it again. However, we need to generate the types used in the union
                         val currentRecord = schema.asClassName() to recordType
-                        when (field.schema) {
+                        when (val fieldSchema = field.schema) {
                             is AvroSchema.UnionSchema -> {
-                                field.schema.types.flatMap {
+                                fieldSchema.types.flatMap {
                                     generateNestedKotlinClasses(it, potentialAnonymousClassName, mapOf(currentRecord))
                                 }
                             }
 
-                            is AvroSchema.ArraySchema if field.schema.elementSchema is AvroSchema.UnionSchema -> {
-                                field.schema.elementSchema.types.flatMap {
+                            is AvroSchema.ArraySchema if fieldSchema.elementSchema is AvroSchema.UnionSchema -> {
+                                (fieldSchema.elementSchema as AvroSchema.UnionSchema).types.flatMap {
                                     generateNestedKotlinClasses(it, potentialAnonymousClassName, mapOf(currentRecord))
                                 }
                             }
 
-                            is AvroSchema.MapSchema if field.schema.valueSchema is AvroSchema.UnionSchema -> {
-                                field.schema.valueSchema.types.flatMap {
+                            is AvroSchema.MapSchema if fieldSchema.valueSchema is AvroSchema.UnionSchema -> {
+                                (fieldSchema.valueSchema as AvroSchema.UnionSchema).types.flatMap {
                                     generateNestedKotlinClasses(it, potentialAnonymousClassName, mapOf(currentRecord))
                                 }
                             }
@@ -247,21 +249,21 @@ public class KotlinGenerator(
                         schema.fields.flatMap { field ->
                             // the union schema, and union in a map/array schema, is already generated as a subtype of the record, no need to generate it again. However, we need to generate the types used in the union
                             val currentRecord = schema.asClassName() to recordType
-                            when (field.schema) {
+                            when (val fieldSchema = field.schema) {
                                 is AvroSchema.UnionSchema -> {
-                                    field.schema.types.flatMap {
+                                    fieldSchema.types.flatMap {
                                         generateNestedKotlinClasses(it, potentialAnonymousBaseName, generatedRecords + currentRecord)
                                     }
                                 }
 
-                                is AvroSchema.ArraySchema if field.schema.elementSchema is AvroSchema.UnionSchema -> {
-                                    field.schema.elementSchema.types.flatMap {
+                                is AvroSchema.ArraySchema if fieldSchema.elementSchema is AvroSchema.UnionSchema -> {
+                                    (fieldSchema.elementSchema as AvroSchema.UnionSchema).types.flatMap {
                                         generateNestedKotlinClasses(it, potentialAnonymousBaseName, generatedRecords + currentRecord)
                                     }
                                 }
 
-                                is AvroSchema.MapSchema if field.schema.valueSchema is AvroSchema.UnionSchema -> {
-                                    field.schema.valueSchema.types.flatMap {
+                                is AvroSchema.MapSchema if fieldSchema.valueSchema is AvroSchema.UnionSchema -> {
+                                    (fieldSchema.valueSchema as AvroSchema.UnionSchema).types.flatMap {
                                         generateNestedKotlinClasses(it, potentialAnonymousBaseName, generatedRecords + currentRecord)
                                     }
                                 }
@@ -311,7 +313,7 @@ public class KotlinGenerator(
 
     private fun AvroSchema.typeNameFromMetadata(): TypeName? {
         return actualJavaClassName?.let { parseJavaClassName(it) }
-            ?: logicalTypeName?.let { logicalTypes[it] }
+            ?: (this as? ResolvedSchema)?.logicalTypeName?.let { logicalTypes[it] }
     }
 
     private fun getTypeName(schema: AvroSchema, potentialAnonymousBaseName: String): TypeName {
@@ -486,10 +488,10 @@ public class KotlinGenerator(
                                         when {
                                             field.schema is AvroSchema.BytesSchema ||
                                                 field.schema is AvroSchema.FixedSchema ->
-                                                field.defaultValue.jsonPrimitive.content.toByteArray(Charsets.ISO_8859_1).toList()
+                                                field.defaultValue!!.jsonPrimitive.content.toByteArray(Charsets.ISO_8859_1).toList()
 
                                             field.defaultValue is JsonPrimitive ->
-                                                field.defaultValue.jsonPrimitive.content
+                                                field.defaultValue!!.jsonPrimitive.content
 
                                             else -> field.defaultValue.toString()
                                         }
@@ -514,7 +516,7 @@ public class KotlinGenerator(
                             if (field.defaultValue != null) {
                                 if (typeName.isNativelySerializable()) {
                                     // TODO recursive types needs to have a default value, or it's not possible to instantiate them
-                                    getRecordFieldDefault(field.schema, field.defaultValue)
+                                    getRecordFieldDefault(field.schema, field.defaultValue!!)
                                 } else {
                                     // Non-natively serializable types are from user code, so they also need custom code to instantiate them
                                     null
@@ -528,17 +530,17 @@ public class KotlinGenerator(
             .addTypes(
                 schema.fields.mapNotNull { field ->
                     val unionBaseName = field.name.toPascalCase()
-                    when (field.schema) {
-                        is AvroSchema.ArraySchema if field.schema.elementSchema is AvroSchema.UnionSchema && !field.schema.elementSchema.isSimpleNullableType -> {
-                            generateSealedInterface(field.schema.elementSchema, unionNameFormatter(arrayNameFormatter(unionBaseName)), unionBaseName)
+                    when (val fieldSchema = field.schema) {
+                        is AvroSchema.ArraySchema if (fieldSchema.elementSchema as? AvroSchema.UnionSchema)?.isSimpleNullableType == false -> {
+                            generateSealedInterface(fieldSchema.elementSchema as AvroSchema.UnionSchema, unionNameFormatter(arrayNameFormatter(unionBaseName)), unionBaseName)
                         }
 
-                        is AvroSchema.MapSchema if field.schema.valueSchema is AvroSchema.UnionSchema && !field.schema.valueSchema.isSimpleNullableType -> {
-                            generateSealedInterface(field.schema.valueSchema, unionNameFormatter(mapNameFormatter(unionBaseName)), unionBaseName)
+                        is AvroSchema.MapSchema if (fieldSchema.valueSchema as? AvroSchema.UnionSchema)?.isSimpleNullableType == false -> {
+                            generateSealedInterface(fieldSchema.valueSchema as AvroSchema.UnionSchema, unionNameFormatter(mapNameFormatter(unionBaseName)), unionBaseName)
                         }
 
-                        is AvroSchema.UnionSchema if !field.schema.isSimpleNullableType -> {
-                            generateSealedInterface(field.schema, unionNameFormatter(unionBaseName), unionBaseName)
+                        is AvroSchema.UnionSchema if !fieldSchema.isSimpleNullableType -> {
+                            generateSealedInterface(fieldSchema, unionNameFormatter(unionBaseName), unionBaseName)
                         }
 
                         else -> {
@@ -670,3 +672,12 @@ private val AvroSchema.UnionSchema.unwrapIfSimpleNullableType: AvroSchema?
         } else {
             null
         }
+
+private val AvroSchema.actualJavaClassName: String?
+    get() = (this as? WithProps)?.props[SpecificData.CLASS_PROP]?.jsonPrimitive?.contentOrNull
+
+private val AvroSchema.ArraySchema.actualElementClass: String?
+    get() = props[SpecificData.ELEMENT_PROP]?.jsonPrimitive?.contentOrNull
+
+private val AvroSchema.MapSchema.actualKeyClass: String?
+    get() = props[SpecificData.KEY_CLASS_PROP]?.jsonPrimitive?.contentOrNull

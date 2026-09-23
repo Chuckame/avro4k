@@ -6,6 +6,8 @@ tasks.register("actionsBeforeCommit") {
         // Kotlin Multiplatform modules have no `classes`/`testClasses`: compile their JVM target instead
         "jvmMainClasses",
         "jvmTestClasses",
+        // ... and their common sources alone, so a JVM-only API used in commonMain fails here instead of on another target
+        "compileCommonMainKotlinMetadata",
         "apiDump",
         "spotlessApply"
     )
