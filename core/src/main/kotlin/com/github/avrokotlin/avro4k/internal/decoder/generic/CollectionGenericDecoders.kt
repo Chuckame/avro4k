@@ -3,13 +3,15 @@ package com.github.avrokotlin.avro4k.internal.decoder.generic
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
 import org.apache.avro.Schema
 
 internal class MapGenericDecoder(
     private val map: Map<CharSequence, Any?>,
-    @Suppress("unused") private val writerSchema: Schema,
+    private val writerSchema: Schema,
     override val avro: Avro,
 ) : AbstractAvroGenericDecoder() {
     /**
@@ -22,14 +24,32 @@ internal class MapGenericDecoder(
     private var currentData: Any? = null
     private var decodedNotNullMark = false
 
-    // NOTE: behaviour kept verbatim from the previous `Pair`-based implementation, which tagged BOTH the
-    // key and the value of each entry as "is a key" and therefore always reported the string schema; the
-    // `writerSchema.valueType` branch was dead. Fixing that is a behaviour change, tracked in
-    // docs/plans/notes/c9.md.
+    /**
+     * Whether the element being decoded is an entry's key (even index) or its value (odd index).
+     *
+     * It is set by [decodeSerializableElement] and [decodeInlineElement] *before* the element is read, so
+     * that a serializer reading [currentWriterSchema] before decoding sees the right schema, and again by
+     * [advance] when the element is read, which covers the primitive `decode*Element` methods that
+     * [kotlinx.serialization.encoding.AbstractDecoder] does not let us intercept.
+     */
+    private var positionedOnKey = true
+
+    /**
+     * The generic tree decoder does not resolve unions, so a nullable map (a record field, a map value…)
+     * comes with its `["null", map]` union as writer schema: pick its map branch.
+     */
+    private val mapSchema: Schema =
+        if (writerSchema.isUnion) {
+            writerSchema.types.firstOrNull { it.type == Schema.Type.MAP } ?: writerSchema
+        } else {
+            writerSchema
+        }
+
     override val currentWriterSchema: Schema
-        get() = STRING_SCHEMA
+        get() = if (positionedOnKey) STRING_SCHEMA else mapSchema.valueType
 
     private fun advance(): Any? {
+        positionedOnKey = nextIsKey
         currentData =
             if (nextIsKey) {
                 currentEntry = entries.next()
@@ -40,6 +60,24 @@ internal class MapGenericDecoder(
                 currentEntry.value
             }
         return currentData
+    }
+
+    override fun <T> decodeSerializableElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+        deserializer: DeserializationStrategy<T>,
+        previousValue: T?,
+    ): T {
+        positionedOnKey = index % 2 == 0
+        return super.decodeSerializableElement(descriptor, index, deserializer, previousValue)
+    }
+
+    override fun decodeInlineElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+    ): Decoder {
+        positionedOnKey = index % 2 == 0
+        return super.decodeInlineElement(descriptor, index)
     }
 
     override fun decodeNotNullMark(): Boolean {
