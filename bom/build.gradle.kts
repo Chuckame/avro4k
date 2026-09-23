@@ -14,6 +14,7 @@ dependencies {
             }
         }
         api(project(":core"))
+        api(project(":apache-interop"))
         api(project(":kotlin-generator"))
         api(project(":confluent-kafka-serializer"))
     }

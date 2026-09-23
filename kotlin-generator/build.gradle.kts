@@ -50,8 +50,7 @@ dependencies {
     api(libs.kotlinpoet) {
         exclude(module = "kotlin-reflect")
     }
-    implementation(project(":core"))
-    implementation(libs.kotlinx.serialization.json)
+    implementation(project(":apache-interop"))
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.kotest.core)

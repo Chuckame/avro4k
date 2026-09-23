@@ -99,7 +99,7 @@ public class KotlinGenerator(
      */
     public fun generateKotlinClasses(schema: Schema, rootAnonymousSchemaName: String): List<FileSpec> {
         return generateRootKotlinClasses(
-            AvroSchema.from(schema),
+            schema.toAvro4k(),
             potentialAnonymousClassName = rootAnonymousSchemaName.toPascalCase()
         )
     }

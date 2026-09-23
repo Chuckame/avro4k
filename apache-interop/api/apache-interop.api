@@ -1,0 +1,5 @@
+public final class com/github/avrokotlin/avro4k/AvroSchemaApacheInteropKt {
+	public static final fun toApacheSchema (Lcom/github/avrokotlin/avro4k/AvroSchema;)Lorg/apache/avro/Schema;
+	public static final fun toAvro4k (Lorg/apache/avro/Schema;)Lcom/github/avrokotlin/avro4k/AvroSchema;
+}
+

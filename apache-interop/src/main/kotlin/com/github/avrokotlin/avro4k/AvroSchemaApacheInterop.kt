@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
 import com.github.avrokotlin.avro4k.AvroSchema.BooleanSchema
 import com.github.avrokotlin.avro4k.AvroSchema.BytesSchema
@@ -15,17 +16,40 @@ import com.github.avrokotlin.avro4k.AvroSchema.NullSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.apache.avro.JsonProperties
+import org.apache.avro.NameValidator
 import org.apache.avro.Schema
+import org.apache.avro.util.internal.Accessor
 import java.nio.charset.StandardCharsets
 
-internal fun AvroSchema.Companion.from(schema: Schema): AvroSchema {
-    return from(schema, mutableMapOf())
+// No cache here: in M2 the only caller is kotlin-generator (one-shot codegen). B6 adds an identity-keyed cache for the M3 hot paths.
+
+/**
+ * Converts this Apache Avro schema to avro4k's multiplatform [AvroSchema].
+ *
+ * The conversion walks the whole schema: do not call it on a hot path.
+ *
+ * Field default values are taken from their json, except that a number is converted to its schema's type, like Apache Avro's
+ * [Schema.Field.defaultVal] does: an integer literal like `36` as the default of a `float` field becomes `36.0`.
+ * The field's sort order, when not the default ascending one, is kept as the field's `order` prop, like in the schema's json.
+ */
+public fun Schema.toAvro4k(): AvroSchema {
+    return from(this, mutableMapOf())
+}
+
+/**
+ * Converts this [AvroSchema] to an Apache Avro schema, through its json representation.
+ *
+ * The conversion walks the whole schema and parses json: do not call it on a hot path.
+ */
+public fun AvroSchema.toApacheSchema(): Schema {
+    return Schema.Parser(NameValidator.NO_VALIDATION).parse(Json.encodeToString(JsonElement.serializer(), toJsonElement()))
 }
 
 private fun from(schema: Schema, seenNamedTypes: MutableMap<String, NamedSchema>): AvroSchema {
@@ -50,12 +74,7 @@ private fun from(schema: Schema, seenNamedTypes: MutableMap<String, NamedSchema>
                 RecordSchema.Field(
                     name = field.name(),
                     schema = from(field.schema(), seenNamedTypes),
-                    defaultValue =
-                        if (field.hasDefaultValue()) {
-                            toJsonElement(field.defaultVal())
-                        } else {
-                            null
-                        },
+                    defaultValue = if (field.hasDefaultValue()) field.defaultValueAsJson() else null,
                     doc = field.doc(),
                     aliases = field.aliases(),
                     props = field.propsWithOrder()
@@ -131,6 +150,54 @@ private fun toJsonElement(value: Any?): JsonElement =
         is Map<*, *> -> JsonObject(value.entries.associate { it.key as String to toJsonElement(it.value) })
         else -> throw UnsupportedOperationException("unsupported value of type ${value::class}: $value")
     }
+
+/**
+ * The default value is taken from its raw json. Only a number is converted to the type of the schema it is for,
+ * like Apache Avro's [Schema.Field.defaultVal] does, so `36` as the default of a `float` becomes `36.0`.
+ * [Schema.Field.defaultVal] is not used directly as it returns null for what it cannot convert, like a long json number for an int.
+ */
+private fun Schema.Field.defaultValueAsJson(): JsonElement {
+    return Accessor.defaultValue(this).toJsonElement(schema())
+}
+
+private fun JsonNode.toJsonElement(schema: Schema?): JsonElement {
+    // Like in Apache Avro, the default value of a union is for its first type
+    val actualSchema = if (schema?.type == Schema.Type.UNION) schema.types.first() else schema
+    return when {
+        isNull -> JsonNull
+
+        isTextual -> JsonPrimitive(textValue())
+
+        isBoolean -> JsonPrimitive(booleanValue())
+
+        isNumber ->
+            when (actualSchema?.type) {
+                Schema.Type.FLOAT -> JsonPrimitive(floatValue())
+                Schema.Type.DOUBLE -> JsonPrimitive(doubleValue())
+                else -> JsonPrimitive(numberValue())
+            }
+
+        isArray -> {
+            val elementSchema = actualSchema?.takeIf { it.type == Schema.Type.ARRAY }?.elementType
+            JsonArray(map { it.toJsonElement(elementSchema) })
+        }
+
+        isObject ->
+            JsonObject(
+                properties().associate { (key, value) ->
+                    val valueSchema =
+                        when (actualSchema?.type) {
+                            Schema.Type.RECORD -> actualSchema.getField(key)?.schema()
+                            Schema.Type.MAP -> actualSchema.valueType
+                            else -> null
+                        }
+                    key to value.toJsonElement(valueSchema)
+                }
+            )
+
+        else -> throw UnsupportedOperationException("Unsupported default value json node ${this::class}: $this")
+    }
+}
 
 private val Schema.aliasesWithSpace: Set<Name>
     get() = aliases.map { Name(it, namespace) }.toSet()
