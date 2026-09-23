@@ -314,15 +314,14 @@ Nothing in C9 is covered by any benchmark — no benchmark touches `AvroSingleOb
 path, or the generic tree — and the `readBytes()` fix in C5 is a correctness change measured only by
 its tests. Those two units are justified by inspection, not by the numbers above.
 
-> [!WARNING]
-> **`benchmarkAlloc` can report `BUILD SUCCESSFUL` for a run that measured nothing.** While capturing
-> the pre-M1 baseline, the Gradle build cache restored a `mainBenchmarkJar` without the benchmark
-> classes; every JMH fork died with `ClassNotFoundException`, JMH printed an empty result table, and
-> the task still succeeded. The output file looked plausible at a glance. Until the task asserts that
-> its report contains result rows, **check that the report actually has rows before trusting it** —
-> `grep -c '^<Family>MicroBenchmark' build/reports/benchmarks/alloc/main-alloc.txt` — and pass
-> `--no-build-cache` when benchmarking a worktree. Tracked as a backlog item in
-> `docs/plans/PROGRESS.md`.
+> [!NOTE]
+> **`benchmarkAlloc` fails on an empty or partial run.** JMH exits with 0 even when forks die, so the
+> task checks its own report: it fails, naming the runs, if JMH printed a failure marker (`<failure>`,
+> `<forked VM failed …>`, …) for any benchmark run, and it fails if there are fewer
+> `gc.alloc.rate.norm` result rows than runs. A run that measured nothing can no longer end in
+> `BUILD SUCCESSFUL`. The pre-M1 baseline hit exactly that: every fork died with
+> `ClassNotFoundException` because `mainBenchmarkJar` lacked the benchmark classes (see "Allocation
+> flame graphs" below for the cause). The task no longer runs from that jar.
 
 ## Run the benchmark locally
 
@@ -349,10 +348,10 @@ never instead of it.
 ../gradlew :benchmark:benchmarkAlloc -Pbench=Avro4kSimpleBenchmark.write -Pparams='recordCount=1'
 ```
 
-The task builds the JMH uber-jar (`:benchmark:mainBenchmarkJar`) and runs it with JMH's GC profiler
-(`-prof gc`). Output is streamed to the console *and* captured in
-`build/reports/benchmarks/alloc/main-alloc.txt`; the `gc.alloc.rate.norm` lines are echoed again at the
-end of the run.
+The task compiles the JMH stubs and runs JMH with its GC profiler (`-prof gc`), on the same classpath as
+the plugin's own `benchmark` task. Output is streamed to the console *and* captured in
+`build/reports/benchmarks/alloc/main-alloc.txt`; the `gc.alloc.rate.norm` result rows are echoed again
+at the end of the run. The task fails if any benchmark run failed or measured nothing.
 
 | Gradle property   | Default   | Meaning                                                                                      |
 |-------------------|-----------|----------------------------------------------------------------------------------------------|
@@ -392,18 +391,22 @@ against `ManualProfilingRead` / `ManualProfilingWrite` in
 `Avro4kBenchmark` read/write path 1,000,000 times in a plain loop, which is exactly the shape a
 sampling profiler wants — no JMH harness frames in the way.
 
-They are launched from the same self-contained uber-jar the allocation task uses (its `Main-Class` is
-JMH's, so pass the class explicitly):
+They are launched from the plugin's self-contained JMH uber-jar (its `Main-Class` is JMH's, so pass the
+class explicitly):
 
 ```shell
-../gradlew :benchmark:mainBenchmarkJar
+../gradlew --no-configuration-cache :benchmark:mainBenchmarkJar
 JMH_JAR=$(ls build/benchmarks/main/jars/*-JMH.jar)
 java -cp "$JMH_JAR" com.github.avrokotlin.benchmark.ManualProfilingRead
 ```
 
-> [!NOTE]
-> Do not hardcode the jar name: it embeds the project version (`local-SNAPSHOT` for local builds).
-> Glob for `*-JMH.jar`.
+> [!WARNING]
+> Build the jar with `--no-configuration-cache`. The plugin fills it from a provider that keeps only
+> the classpath directories that already exist when the provider is evaluated. With the configuration
+> cache on, that happens before `compileKotlin` runs, so on a fresh or cleaned `build/` the jar silently
+> lacks every benchmark class, and a reused cache entry keeps producing it that way.
+> Do not hardcode the jar name either: it embeds the project version (`local-SNAPSHOT` for local
+> builds). Glob for `*-JMH.jar`.
 
 **async-profiler is not installed on the current dev machine** (`java -jar "$JMH_JAR" -lprof` lists
 `async` as unsupported, and `perf`/`dtrace` need `sudo`). Install it first — on macOS, download the

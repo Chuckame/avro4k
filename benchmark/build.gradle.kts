@@ -195,18 +195,24 @@ repositories {
 // JVM is flattered by the JIT and by escape analysis that JS and native do not have.
 // See README.md > "Allocation profiling".
 // ---------------------------------------------------------------------------
-// The kotlinx-benchmark plugin registers `mainBenchmarkJar` from its own `afterEvaluate`
+// The kotlinx-benchmark plugin registers `mainBenchmarkCompile` from its own `afterEvaluate`
 // hook, so the task only exists once the project has been evaluated.
 afterEvaluate {
-    val jmhJar = tasks.named<org.gradle.jvm.tasks.Jar>("mainBenchmarkJar")
-
     tasks.register<JavaExec>("benchmarkAlloc") {
         group = "benchmark"
         description = "Runs a subset of the JMH benchmarks with the GC profiler (-prof gc) and reports gc.alloc.rate.norm (B/op)."
 
-        // The uber-jar built by the kotlinx-benchmark plugin already bundles JMH, the
-        // benchmark classes and all their dependencies, so it is the whole classpath.
-        classpath(jmhJar.map { it.archiveFile })
+        // The same classpath as the plugin's own `benchmark` task: the compiled JMH stubs, the JMH
+        // `BenchmarkList` resources, then the benchmark classes and their dependencies (JMH included).
+        // Not `mainBenchmarkJar`: the plugin fills that uber-jar from a provider that keeps only the
+        // classpath directories that already exist when it is evaluated, which the configuration cache
+        // does before `compileKotlin` has run on a fresh build directory. The jar then silently lacks
+        // every benchmark class and each fork dies with `ClassNotFoundException`.
+        classpath(
+            tasks.named("mainBenchmarkCompile"),
+            layout.buildDirectory.dir("benchmarks/main/resources"),
+            sourceSets["main"].runtimeClasspath,
+        )
         mainClass = "org.openjdk.jmh.Main"
 
         // Selection: which benchmarks, and which @Param combinations.
@@ -279,13 +285,55 @@ afterEvaluate {
 
         doLast {
             val target = reportFile.get().asFile
-            val allocLines = target.readLines().filter { it.contains("gc.alloc.rate.norm") }
+            val lines = target.readLines()
             logger.lifecycle("")
             logger.lifecycle("Allocation report: ${target.absolutePath}")
-            if (allocLines.isEmpty()) {
-                logger.warn("No gc.alloc.rate.norm line found - did the gc profiler actually run?")
-            } else {
-                allocLines.forEach { logger.lifecycle(it) }
+
+            // JMH exits with 0 even when forks die: it prints what went wrong, then an empty or partial
+            // result table. So the report is the only evidence of what was measured, and is checked here.
+            // Markers JMH 1.37 prints (Runner, BaseRunner, ForkedMain, BinaryLinkServer) when a run fails,
+            // not always at the start of a line: `# Warmup Iteration   1: <failure>`.
+            val failureMarkers =
+                listOf(
+                    "<failure",
+                    "<forked VM failed",
+                    "<failed to invoke the VM",
+                    "<binary link had failed",
+                    "<host VM has been interrupted",
+                )
+            val runs = mutableListOf<String>()
+            val failedRuns = linkedSetOf<String>()
+            for (line in lines) {
+                when {
+                    line.startsWith("# Benchmark: ") -> runs += line.removePrefix("# Benchmark: ").trim()
+                    line.startsWith("# Parameters: ") && runs.isNotEmpty() ->
+                        runs[runs.lastIndex] = runs.last() + " " + line.removePrefix("# Parameters: ").trim()
+                    failureMarkers.any { line.contains(it) } -> failedRuns += runs.lastOrNull() ?: "<before the first benchmark>"
+                }
+            }
+            // Result-table rows only, e.g. `Foo.read:gc.alloc.rate.norm  thrpt  3  1234.5 ± 0.1  B/op`; the
+            // per-iteration lines also mention gc.alloc.rate.norm but are indented.
+            val allocRow = Regex("""^\S+:gc\.alloc\.rate\.norm\s""")
+            val allocRows = lines.filter { allocRow.containsMatchIn(it) }
+            allocRows.forEach { logger.lifecycle(it) }
+
+            if (failedRuns.isNotEmpty()) {
+                throw GradleException(
+                    "${failedRuns.size} of ${runs.size} JMH benchmark run(s) failed, see ${target.absolutePath}:\n" +
+                        failedRuns.joinToString("\n") { "  - $it" }
+                )
+            }
+            if (allocRows.isEmpty()) {
+                throw GradleException(
+                    "No gc.alloc.rate.norm result row in ${target.absolutePath}: nothing was measured " +
+                        "(${runs.size} benchmark run(s) started). Check the report for the cause."
+                )
+            }
+            if (allocRows.size < runs.size) {
+                throw GradleException(
+                    "Only ${allocRows.size} gc.alloc.rate.norm result row(s) for ${runs.size} benchmark run(s) " +
+                        "in ${target.absolutePath}: some runs measured nothing."
+                )
             }
         }
     }
