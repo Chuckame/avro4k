@@ -8,9 +8,9 @@ the work — so the ledger stays consistent even if an agent fails midway. A uni
 its row here is updated **and committed**.
 
 **M0, M1 and M2 are complete.** M2 lives on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
-names collide with the existing `kmp` branch). Next: **M3 decomposition** (`Plan` agent → `notes/m3-decomposition.md`);
-it must start from the M3 rules recorded in the B1 and B6 rows of the decision log (API propagation lands in B3;
-schema keys → identity, descriptor keys → identity backed by equality).
+names collide with the existing `kmp` branch). **M3 is decomposed** into 17 units in [`notes/m3-decomposition.md`](notes/m3-decomposition.md) — follow its §10 batches
+and carry its §1 rules into every brief. Next: **batch 1 (M3-01 ∥ M3-02 ∥ M3-03)**; §11's open questions must be answered
+before M3-08 / M3-14.
 
 M1 shipped C2, C3, C9 and the C5 `readBytes()` fix. Read the two measurement findings in
 `benchmark/README.md` → "Results — M1" before doing any further perf work: **JVM `gc.alloc.rate.norm`
@@ -50,7 +50,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M2 · B6 caches → `expect`/`actual` | done | `v3/m2-foundation` | `ab24319` | `Cache` → common; `expect class WeakIdentityKeyCache` (JVM+native share one copy-on-write table in a new `jvmAndNative` source set; JS `WeakMap`); middleware `IdentityHashMap`s → `IdentityLookup`; interop conversions cached. **No existing call site changed key semantics.** jvm 756 · js 33 · macos/iOS-sim 34. A/B on the middleware: **neutral** (read −1.2%, write +3.7%, B/op identical). See [`notes/b6.md`](notes/b6.md) |
 | M2 review | done | `v3/m2-foundation` | _this commit_ | `feature-dev:code-reviewer` over B0+B1+B6 together. **No findings at ≥80% confidence.** Its one open question — does a Kotlin/Native atomic order the plain writes before it? — answered from the stdlib's own KDoc and cited in the code |
 | M2 follow-up · collection blocks in the decoder | done | `v3/m2-foundation` | `5c8a318`, `131221b` | supersedes C3: `AvroCollectionSerializer` and its one-slot global cache deleted; the block loop runs in `AbstractAvroDirectDecoder`. **−80 B/record** on the new two-collection-field benchmark (the old cache missed on every collection there), single-collection cases unchanged. First tests of multi-block collections at all (`CollectionBlocksDecodingTest`, mutation-verified). |
-| M3 decomposition (`Plan` agent) | todo | — | — | writes `notes/m3-decomposition.md` |
+| M3 decomposition (`Plan` agent) | done | `v3/m2-foundation` | _this commit_ | [`notes/m3-decomposition.md`](notes/m3-decomposition.md): **17 units** (M3-01…17) replacing B2/B3/B4's rows below, 4 parallel batches. Open questions §11 await the user |
 | M3 · B2 own codec ABI | todo | — | — | — |
 | M3 · B3 core → `commonMain`, Jackson dropped | todo | — | — | — |
 | M3 · B4 serializer split | todo | — | — | — |
