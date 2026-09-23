@@ -4,7 +4,6 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
-import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
 import com.github.avrokotlin.avro4k.serializer.AvroDurationSerializer
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
@@ -16,7 +15,6 @@ import com.github.avrokotlin.avro4k.serializer.createSchema
 import com.github.avrokotlin.avro4k.serializer.fixed
 import com.github.avrokotlin.avro4k.serializer.stringable
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
@@ -25,7 +23,6 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.internal.AbstractCollectionSerializer
 import org.apache.avro.Schema
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -96,60 +93,12 @@ internal object SerializerLocatorMiddleware {
         return serializer
     }
 
-    @OptIn(InternalSerializationApi::class)
     fun <T> apply(deserializer: DeserializationStrategy<T>): DeserializationStrategy<T> {
         interceptedSerializer(deserializer)?.let { return it as DeserializationStrategy<T> }
-        (deserializer as? AbstractCollectionSerializer<*, T, *>)?.let { return wrapCollection(it) }
 
         return deserializer
     }
-
-    /** Deliberately not `@Volatile`: see [wrapCollection]. */
-    private var cachedCollectionDeserializer: CachedCollectionDeserializer? = null
-
-    /**
-     * [AbstractAvroDirectDecoder.decodeSerializableValue] runs [apply] for every decoded value, so a collection used to
-     * allocate a brand new [AvroCollectionSerializer] every single time it was decoded. The wrapper only holds its
-     * `original` and keeps no decoding state (the state lives on the decoder), so one wrapper instance can safely be
-     * shared across calls and across threads: it is memoized here.
-     *
-     * The memoization is a **one-entry inline cache** on purpose:
-     * - A map keyed by the serializer instance would leak. Compiler-generated serializers are per-type singletons, but
-     *   `ListSerializer(elementSerializer)` / `MapSerializer(...)` hand out a *fresh* [AbstractCollectionSerializer]
-     *   on every call, so a global strong-keyed map would grow without bound in a long-running process.
-     * - A weak-keyed cache would be leak-free but re-introduces a per-call lookup that allocates, which is exactly
-     *   what this is trying to remove.
-     *
-     * Decoding is overwhelmingly repetitive - the same collection serializer comes back for every element of the
-     * enclosing collection - so a single entry captures nearly all of the wins while staying bounded.
-     *
-     * Thread safety: the cached key and value live in **one** immutable holder behind **one** non-volatile reference.
-     * A single reference read/write is atomic on every supported platform, so a racing thread either sees a fully
-     * consistent holder or a stale/null one and simply falls through to allocating a new wrapper - never a wrapper
-     * paired with the wrong `original`. Splitting the key and the value into two fields would allow exactly that torn
-     * read, which is why they are kept together.
-     */
-    @OptIn(InternalSerializationApi::class)
-    private fun <T> wrapCollection(deserializer: AbstractCollectionSerializer<*, T, *>): DeserializationStrategy<T> {
-        val cached = cachedCollectionDeserializer
-        if (cached != null && cached.original === deserializer) {
-            return cached.wrapped as DeserializationStrategy<T>
-        }
-        val wrapped = AvroCollectionSerializer(deserializer)
-        cachedCollectionDeserializer = CachedCollectionDeserializer(deserializer, wrapped)
-        return wrapped
-    }
 }
-
-/**
- * Immutable (key, value) pair for the one-entry collection-wrapper cache of [SerializerLocatorMiddleware].
- * Both fields must always be published together - see [SerializerLocatorMiddleware.wrapCollection].
- */
-@OptIn(InternalSerializationApi::class)
-private class CachedCollectionDeserializer(
-    @JvmField val original: AbstractCollectionSerializer<*, *, *>,
-    @JvmField val wrapped: AvroCollectionSerializer<*>,
-)
 
 private val AvroStringSerialDescriptor: SerialDescriptor =
     SerialDescriptorWithAvroSchemaDelegate(String.serializer().descriptor) { context ->
@@ -249,30 +198,5 @@ private object AvroByteArraySerializer : AvroSerializer<ByteArray>(ByteArray::cl
     @OptIn(ExperimentalEncodingApi::class)
     override fun deserializeGeneric(decoder: Decoder): ByteArray {
         return Base64.Mime.decode(decoder.decodeString())
-    }
-}
-
-@OptIn(InternalSerializationApi::class)
-internal class AvroCollectionSerializer<T>(private val original: AbstractCollectionSerializer<*, T, *>) : KSerializer<T> {
-    override val descriptor: SerialDescriptor
-        get() = original.descriptor
-
-    override fun deserialize(decoder: Decoder): T {
-        if (decoder is AbstractAvroDirectDecoder) {
-            var result: T? = null
-            decoder.decodedCollectionSize = -1
-            do {
-                result = original.merge(decoder, result)
-            } while (decoder.decodedCollectionSize > 0)
-            return result!!
-        }
-        return original.deserialize(decoder)
-    }
-
-    override fun serialize(
-        encoder: Encoder,
-        value: T,
-    ) {
-        original.serialize(encoder, value)
     }
 }

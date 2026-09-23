@@ -12,12 +12,14 @@ import com.github.avrokotlin.avro4k.internal.toShortExact
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PolymorphicKind
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.internal.AbstractCollectionSerializer
 import kotlinx.serialization.modules.SerializersModule
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
@@ -29,7 +31,7 @@ internal abstract class AbstractAvroDirectDecoder(
     protected val binaryDecoder: org.apache.avro.io.Decoder,
 ) : AbstractInterceptingDecoder(), AvroDecoder {
     abstract override var currentWriterSchema: Schema
-    internal var decodedCollectionSize = -1
+    private var decodedCollectionSize = -1
 
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
@@ -39,10 +41,34 @@ internal abstract class AbstractAvroDirectDecoder(
         throw UnsupportedOperationException("Direct decoding doesn't support decoding generic values")
     }
 
+    @OptIn(InternalSerializationApi::class)
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
         decodeAndResolveUnion()
-        return SerializerLocatorMiddleware.apply(deserializer)
-            .deserialize(this)
+        val actualDeserializer = SerializerLocatorMiddleware.apply(deserializer)
+        if (actualDeserializer is AbstractCollectionSerializer<*, T, *>) {
+            return decodeCollectionBlocks(actualDeserializer)
+        }
+        return actualDeserializer.deserialize(this)
+    }
+
+    /**
+     * Avro writes an array or a map as a sequence of blocks (`count, items..., count, items..., 0`), while a kotlinx
+     * collection deserializer reads a single one. So the blocks are merged into one value here, one [AbstractCollectionSerializer.merge] per block,
+     * until the decoder reads the terminating empty block.
+     *
+     * This lives on the decoder rather than in a wrapping serializer on purpose: a wrapper would have to be allocated
+     * per decoded collection, or cached in shared state that threads and differently-typed collections keep evicting
+     * from each other. Here the only state is a local and this decoder's [decodedCollectionSize], and a decoder is only
+     * ever used by the one decode call, and so the one thread, that created it.
+     */
+    @OptIn(InternalSerializationApi::class)
+    private fun <T> decodeCollectionBlocks(deserializer: AbstractCollectionSerializer<*, T, *>): T {
+        var result: T? = null
+        decodedCollectionSize = -1
+        do {
+            result = deserializer.merge(this, result)
+        } while (decodedCollectionSize > 0)
+        return result
     }
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
