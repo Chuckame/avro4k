@@ -16,9 +16,10 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
  * **Visibility.** A [Table], its bucket array and its [Entry]s are fully built *before* the compare-and-set that
  * publishes them, and never mutated afterwards. Both platforms give the atomic a happens-before edge from the
  * successful compare-and-set to every [AtomicReference.load] that observes it — on the JVM through the volatile
- * semantics of `java.util.concurrent.atomic.AtomicReference`, on Kotlin/Native because atomic operations are
- * sequentially consistent and order the plain writes made before them. So a reader that sees a table sees all of its
- * contents. This argument does **not** rely on the JVM's final-field guarantee, which Kotlin/Native does not have.
+ * semantics of `java.util.concurrent.atomic.AtomicReference` (JLS 17.4); on Kotlin/Native because the stdlib
+ * `AtomicReference` stores a [kotlin.concurrent.Volatile] variable, whose contract is that a thread reading the value
+ * "sees not only that value, but all side effects that led to writing that value". So a reader that sees a table sees
+ * all of its contents. This argument does **not** rely on the JVM's final-field guarantee, which Kotlin/Native does not have.
  *
  * **Reclamation.** Keys are only weakly referenced, so they stay collectable. An entry whose key was collected keeps
  * its slot (and its *value*, strongly) until the table next fills up: the rebuild that would grow it first drops the
