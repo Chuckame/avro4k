@@ -31,6 +31,9 @@ import java.util.concurrent.TimeUnit
  * begin/endStructure per element on top of the very same array handling: the difference between
  * the two families attributes the per-element structure cost, and the shape of each family over
  * [size] separates the fixed per-collection cost from the per-element one.
+ *
+ * [readTwoCollections] decodes [size] records that each hold two small collections, so the collection
+ * handling runs twice per record with two alternating collection serializers.
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
@@ -49,6 +52,10 @@ internal class CollectionMicroBenchmark {
     lateinit var recordsSchema: Schema
     lateinit var recordsData: ByteArray
 
+    lateinit var twoCollections: TwoCollectionsRecordList
+    lateinit var twoCollectionsSchema: Schema
+    lateinit var twoCollectionsData: ByteArray
+
     /** Allocated once so that the write methods only measure the encoding, not the sink construction. */
     lateinit var sink: Sink
 
@@ -60,6 +67,9 @@ internal class CollectionMicroBenchmark {
         records = smallRecordList(size)
         longsData = Avro.encodeToByteArray(longsSchema, longs)
         recordsData = Avro.encodeToByteArray(recordsSchema, records)
+        twoCollectionsSchema = Avro.schema<TwoCollectionsRecordList>()
+        twoCollections = twoCollectionsRecordList(size)
+        twoCollectionsData = Avro.encodeToByteArray(twoCollectionsSchema, twoCollections)
         sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 
@@ -82,4 +92,8 @@ internal class CollectionMicroBenchmark {
         Avro.encodeToSink(recordsSchema, records, sink)
         sink.flush()
     }
+
+    @Benchmark
+    fun readTwoCollections(): TwoCollectionsRecordList =
+        Avro.decodeFromByteArray<TwoCollectionsRecordList>(twoCollectionsSchema, twoCollectionsData)
 }

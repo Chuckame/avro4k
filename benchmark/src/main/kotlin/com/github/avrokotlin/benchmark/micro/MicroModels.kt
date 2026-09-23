@@ -74,6 +74,16 @@ internal data class SmallRecord(val id: Long, val flag: Boolean)
 @Serializable
 internal data class SmallRecordList(val values: List<SmallRecord>)
 
+/**
+ * Two collection fields per record, so decoding alternates between two collection serializers on every record: the
+ * worst case for a cache that only remembers the last collection serializer it saw (C3's, since replaced).
+ */
+@Serializable
+internal data class TwoCollectionsRecord(val longs: List<Long>, val flags: List<Boolean>)
+
+@Serializable
+internal data class TwoCollectionsRecordList(val values: List<TwoCollectionsRecord>)
+
 internal fun longList(size: Int): LongList {
     val random = Random(SEED)
     return LongList(List(size) { random.nextLong() })
@@ -82,6 +92,13 @@ internal fun longList(size: Int): LongList {
 internal fun smallRecordList(size: Int): SmallRecordList {
     val random = Random(SEED)
     return SmallRecordList(List(size) { SmallRecord(random.nextLong(), random.nextBoolean()) })
+}
+
+internal fun twoCollectionsRecordList(size: Int): TwoCollectionsRecordList {
+    val random = Random(SEED)
+    return TwoCollectionsRecordList(
+        List(size) { TwoCollectionsRecord(List(2) { random.nextLong() }, List(2) { random.nextBoolean() }) }
+    )
 }
 
 // ---------------------------------------------------------------------------
