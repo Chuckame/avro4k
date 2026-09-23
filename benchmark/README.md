@@ -345,7 +345,46 @@ no intended perf change; the one change on a hot path is B6's `SerializerLocator
 
 **Neutral.** Read −1.2% and write +3.7% on the means are both inside the ~10% cross-invocation band M1
 established, and allocation is byte-identical — as expected, since `IdentityHashMap.get` never allocated either. B6
-is accepted as "no regression", not as a win.
+is accepted as "no regression", not as a win. *But "no measurable end-to-end change" hid a 2× slower lookup — see
+the next section, which replaced the scan.*
+
+### Intercepted-serializer lookup: `when` vs `IdentityHashMap` vs linear scan
+
+`SerializerLocatorMiddleware.apply` runs on every encoded/decoded value and nearly always misses. B6 first replaced its
+`IdentityHashMap`s (JVM-only) with a linear `===` scan, expecting a scan over ≤5 entries to be as fast. **It was not**, so
+this micro-benchmark (`micro/IdentityLookupMicroBenchmark.kt`) was written to decide, and the middleware now uses
+hand-written `when { x === A -> … }` chains. AverageTime, ns/op (lower is better), 3 forks × 5 × 1 s; every variant
+allocates 0 B/op:
+
+```bash
+./gradlew :benchmark:benchmarkAlloc -Pbench='micro\.(InterceptionLookup|IdentityLookupScaling)MicroBenchmark' \
+  -PallocForks=3 -PallocWarmups=5 -PallocIterations=5
+```
+
+Production shape — the 4 real entries, each structure reached through a static final as in the middleware `object`:
+
+| | miss (the common case) | mixed (12 misses : 4 hits) |
+|---|---|---|
+| `when` chain of `===` | **0.753 ± 0.004** | **0.943 ± 0.008** |
+| `IdentityHashMap` (pre-B6) | 1.235 ± 0.005 | 1.702 ± 0.091 |
+| linear scan (B6's first `IdentityLookup`) | 2.388 ± 0.009 | 2.359 ± 0.003 |
+
+Scaling (keys in a state field, padding entries beyond the 4 real ones), miss / mixed:
+
+| entries | `IdentityHashMap` | linear scan |
+|---|---|---|
+| 4 | 1.97 ± 0.39 / 1.70 ± 0.07 | 2.45 ± 0.16 / 2.53 ± 0.03 |
+| 8 | 1.83 ± 0.46 / 1.78 ± 0.07 | 3.29 ± 0.02 / 3.23 ± 0.07 |
+| 16 | 2.05 ± 0.93 / 2.78 ± 0.49 | 4.88 ± 0.07 / 4.41 ± 0.02 |
+| 32 | 3.51 ± 1.02 / 2.95 ± 0.76 | 7.82 ± 0.09 / 6.97 ± 0.03 |
+
+- **The scan loses at every size** — there is no small-n crossover on the JVM, contrary to the expectation B6 was written
+  under. It costs ~0.17 ns per extra entry.
+- **The `when` chain wins by 1.6× over the map and 3× over the scan**, because the JIT compares against the static finals
+  as constants. It is also the only candidate that is platform-neutral *and* free of any lookup structure.
+- The gaps (1.6–3×) are far outside the ~10% cross-invocation band, so one invocation suffices here.
+- End to end this is ~1 ns out of ~30 ns per `Long` element (see the B6 A/B above), which is why the scan's regression
+  was invisible there: a micro-benchmark was needed to see it.
 
 ## Run the benchmark locally
 

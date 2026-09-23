@@ -17,43 +17,51 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-/** The middleware's lookups used to be IdentityHashMaps; they must keep mapping exactly the same instances. */
+/**
+ * The middleware keeps two `when` chains, one for serializers and one for descriptors, which must list the same types.
+ * This is the one place listing every intercepted type: adding a type to the middleware means adding it here, and
+ * the checks below then fail until *both* chains handle it.
+ */
 internal class SerializerLocatorMiddlewareTest : StringSpec({
+    /** Every intercepted built-in serializer, with avro4k's replacement when it is public (null when private). */
+    val intercepted: List<Pair<KSerializer<*>, KSerializer<*>?>> =
+        listOf(
+            ByteArraySerializer() to null,
+            Duration.serializer() to null,
+            Uuid.serializer() to KotlinUuidSerializer,
+            Instant.serializer() to KotlinInstantSerializer
+        )
+
     fun serialized(serializer: KSerializer<*>) = SerializerLocatorMiddleware.apply(serializer as SerializationStrategy<*>)
 
     fun deserialized(serializer: KSerializer<*>) = SerializerLocatorMiddleware.apply(serializer as DeserializationStrategy<*>)
 
-    "replaces the intercepted serializers, for both encoding and decoding" {
-        serialized(Uuid.serializer()) shouldBeSameInstanceAs KotlinUuidSerializer
-        deserialized(Uuid.serializer()) shouldBeSameInstanceAs KotlinUuidSerializer
-        serialized(Instant.serializer()) shouldBeSameInstanceAs KotlinInstantSerializer
-        deserialized(Instant.serializer()) shouldBeSameInstanceAs KotlinInstantSerializer
-        listOf(ByteArraySerializer(), Duration.serializer()).forEach {
-            serialized(it) shouldNotBeSameInstanceAs it
-            deserialized(it) shouldBeSameInstanceAs serialized(it)
+    "every intercepted type is replaced for encoding, decoding and schema inference, consistently" {
+        intercepted.forEach { (original, expected) ->
+            val replacement = serialized(original)
+            replacement shouldNotBeSameInstanceAs original
+            expected?.let { replacement shouldBeSameInstanceAs it }
+            deserialized(original) shouldBeSameInstanceAs replacement
+            // The descriptor chain must map to the very descriptor of the serializer chain's replacement.
+            SerializerLocatorMiddleware.apply(original.descriptor) shouldBeSameInstanceAs (replacement as KSerializer<*>).descriptor
         }
     }
 
-    "leaves any other serializer untouched" {
-        listOf(String.serializer(), Int.serializer(), Long.serializer()).forEach {
+    "strings keep kotlinx's serializer, and only their descriptor is replaced" {
+        serialized(String.serializer()) shouldBeSameInstanceAs String.serializer()
+        deserialized(String.serializer()) shouldBeSameInstanceAs String.serializer()
+        val replaced = SerializerLocatorMiddleware.apply(String.serializer().descriptor)
+        replaced shouldNotBeSameInstanceAs String.serializer().descriptor
+        replaced.serialName shouldBe String.serializer().descriptor.serialName
+    }
+
+    "leaves any other serializer and descriptor untouched" {
+        listOf(Int.serializer(), Long.serializer(), Double.serializer()).forEach {
             serialized(it) shouldBeSameInstanceAs it
             deserialized(it) shouldBeSameInstanceAs it
+            SerializerLocatorMiddleware.apply(it.descriptor) shouldBeSameInstanceAs it.descriptor
         }
-    }
-
-    "replaces the intercepted descriptors by avro4k's ones, keeping their serial names" {
-        SerializerLocatorMiddleware.apply(Uuid.serializer().descriptor) shouldBeSameInstanceAs KotlinUuidSerializer.descriptor
-        SerializerLocatorMiddleware.apply(Instant.serializer().descriptor) shouldBeSameInstanceAs KotlinInstantSerializer.descriptor
-        listOf(ByteArraySerializer().descriptor, String.serializer().descriptor, Duration.serializer().descriptor).forEach {
-            val replaced = SerializerLocatorMiddleware.apply(it)
-            replaced shouldNotBeSameInstanceAs it
-            replaced.serialName shouldBe it.serialName
-        }
-    }
-
-    "leaves any other descriptor untouched" {
-        listOf(Int.serializer().descriptor, Long.serializer().descriptor, Uuid.serializer().descriptor.let { KotlinUuidSerializer.descriptor }).forEach {
-            SerializerLocatorMiddleware.apply(it) shouldBeSameInstanceAs it
-        }
+        // An intercepted type's replacement is not intercepted again.
+        SerializerLocatorMiddleware.apply(KotlinUuidSerializer.descriptor) shouldBeSameInstanceAs KotlinUuidSerializer.descriptor
     }
 })

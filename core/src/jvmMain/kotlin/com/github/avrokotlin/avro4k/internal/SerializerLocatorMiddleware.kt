@@ -41,38 +41,64 @@ import kotlin.uuid.Uuid
  */
 @Suppress("UNCHECKED_CAST")
 internal object SerializerLocatorMiddleware {
-    // Identity-keyed, like the IdentityHashMaps these used to be, but platform-neutral. Every decoded value goes
-    // through [apply], so a scan over these few entries must stay a handful of reference compares, with no allocation.
-    private val serializers: IdentityLookup<KSerializer<*>, KSerializer<*>> =
-        IdentityLookup(
-            buildList {
-                add(ByteArraySerializer() to AvroByteArraySerializer)
-                add(Duration.serializer() to KotlinDurationSerializer)
-                add(Uuid.serializer() to KotlinUuidSerializer)
-                runCatching { add(Instant.serializer() to KotlinInstantSerializer) }
-            }
-        )
+    /*
+     * The intercepted built-in types. **Adding or changing one means updating both [interceptedSerializer] and
+     * [apply] (descriptor)** — `SerializerLocatorMiddlewareTest` lists every intercepted type once and checks both.
+     *
+     * Why `when` chains of `===` over these static finals, rather than a map: `apply` runs on every encoded and
+     * decoded value and nearly always misses. Measured by `benchmark/.../micro/IdentityLookupMicroBenchmark.kt`
+     * (see benchmark/README.md, "Results — M2"): per lookup, the `when` chain costs 0.75 ns on a miss, an
+     * `IdentityHashMap` 1.24 ns, and a linear `===` scan over an array 2.39 ns — the JIT compares against the static
+     * finals as constants. It is also platform-neutral and allocation-free, and keeps identity semantics (`===`, never
+     * `equals`: a plain `when (x) { A -> }` would compare with `equals`).
+     */
+    private val byteArraySerializer = ByteArraySerializer()
+    private val durationSerializer = Duration.serializer()
+    private val uuidSerializer = Uuid.serializer()
 
-    private val descriptors: IdentityLookup<SerialDescriptor, SerialDescriptor> =
-        IdentityLookup(
-            buildList {
-                add(ByteArraySerializer().descriptor to AvroByteArraySerializer.descriptor)
-                add(String.serializer().descriptor to AvroStringSerialDescriptor)
-                add(Duration.serializer().descriptor to KotlinDurationSerializer.descriptor)
-                add(Uuid.serializer().descriptor to KotlinUuidSerializer.descriptor)
-                runCatching { add(Instant.serializer().descriptor to KotlinInstantSerializer.descriptor) }
-            }
-        )
+    /** Null when the kotlinx-serialization on the classpath predates `kotlin.time.Instant` support. */
+    private val instantSerializer: KSerializer<Instant>? = runCatching { Instant.serializer() }.getOrNull()
+
+    private val byteArrayDescriptor = byteArraySerializer.descriptor
+    private val stringDescriptor = String.serializer().descriptor
+    private val durationDescriptor = durationSerializer.descriptor
+    private val uuidDescriptor = uuidSerializer.descriptor
+    private val instantDescriptor: SerialDescriptor? = instantSerializer?.descriptor
+
+    private fun interceptedSerializer(serializer: Any): KSerializer<*>? =
+        when {
+            serializer === byteArraySerializer -> AvroByteArraySerializer
+            serializer === durationSerializer -> KotlinDurationSerializer
+            serializer === uuidSerializer -> KotlinUuidSerializer
+            serializer === instantSerializer -> KotlinInstantSerializer
+            else -> null
+        }
+
+    fun apply(descriptor: SerialDescriptor): SerialDescriptor =
+        when {
+            descriptor === byteArrayDescriptor -> AvroByteArraySerializer.descriptor
+
+            // Descriptor only: strings keep kotlinx's serializer, only their schema is avro4k's.
+            descriptor === stringDescriptor -> AvroStringSerialDescriptor
+
+            descriptor === durationDescriptor -> KotlinDurationSerializer.descriptor
+
+            descriptor === uuidDescriptor -> KotlinUuidSerializer.descriptor
+
+            descriptor === instantDescriptor -> KotlinInstantSerializer.descriptor
+
+            else -> descriptor
+        }
 
     fun <T> apply(serializer: SerializationStrategy<T>): SerializationStrategy<T> {
-        serializers[serializer]?.let { return it as SerializationStrategy<T> }
+        interceptedSerializer(serializer)?.let { return it as SerializationStrategy<T> }
 
         return serializer
     }
 
     @OptIn(InternalSerializationApi::class)
     fun <T> apply(deserializer: DeserializationStrategy<T>): DeserializationStrategy<T> {
-        serializers[deserializer]?.let { return it as DeserializationStrategy<T> }
+        interceptedSerializer(deserializer)?.let { return it as DeserializationStrategy<T> }
         (deserializer as? AbstractCollectionSerializer<*, T, *>)?.let { return wrapCollection(it) }
 
         return deserializer
@@ -112,10 +138,6 @@ internal object SerializerLocatorMiddleware {
         val wrapped = AvroCollectionSerializer(deserializer)
         cachedCollectionDeserializer = CachedCollectionDeserializer(deserializer, wrapped)
         return wrapped
-    }
-
-    fun apply(descriptor: SerialDescriptor): SerialDescriptor {
-        return descriptors[descriptor] ?: descriptor
     }
 }
 
