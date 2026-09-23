@@ -1,22 +1,134 @@
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithSimulatorTests
+import org.jetbrains.kotlin.konan.target.Family
+import org.jetbrains.kotlin.konan.target.HostManager
+
 plugins {
-    id("library-module-conventions")
+    id("library-multiplatform-module-conventions")
     id("library-publish-conventions")
     kotlin("plugin.serialization")
 }
 
 description = "Core module of avro4k. Avro4k is the avro binary format support for kotlin, built on top of kotlinx-serialization."
 
-dependencies {
-    api(libs.apache.avro)
-    api(libs.kotlinx.serialization.core)
-    api(libs.kotlinx.io)
-    implementation(libs.kotlinx.serialization.json)
-    implementation(libs.okio)
+kotlin {
+    jvm()
 
-    testImplementation(libs.kotest.junit5)
-    testImplementation(libs.kotest.core)
-    testImplementation(libs.mockk)
-    testImplementation(kotlin("reflect"))
+    js(IR) {
+        browser()
+        nodejs()
+    }
+//    @OptIn(ExperimentalWasmDsl::class)
+//    wasmJs { browser() }
+
+    iosArm64()
+    iosSimulatorArm64()
+    iosX64()
+    macosArm64()
+    watchosSimulatorArm64()
+    watchosArm32()
+    watchosArm64()
+    watchosDeviceArm64()
+    tvosSimulatorArm64()
+    tvosArm64()
+
+    androidNativeArm32()
+    androidNativeArm64()
+    androidNativeX86()
+    androidNativeX64()
+
+    mingwX64()
+
+    linuxArm64()
+    linuxX64()
+
+    sourceSets {
+        commonMain {
+            dependencies {
+                api(libs.kotlinx.serialization.core)
+                api(libs.kotlinx.io)
+                implementation(libs.kotlinx.serialization.json)
+            }
+        }
+
+        commonTest {
+            dependencies {
+                implementation(kotlin("test"))
+                // kotest-assertions-core is not here yet: 6.2.0 publishes no androidNativeArm32 variant, so it cannot be a
+                // commonTest dependency while that target is in the matrix. To be settled by B1 (see docs/plans/notes/b0.md).
+            }
+        }
+
+        jvmMain {
+            dependencies {
+                api(libs.apache.avro)
+                implementation(libs.okio)
+            }
+        }
+
+        jvmTest {
+            dependencies {
+                implementation(libs.kotest.junit5)
+                implementation(libs.kotest.core)
+                implementation(libs.mockk)
+                implementation(kotlin("reflect"))
+            }
+        }
+    }
+}
+
+// Skip the Apple simulator test tasks when the simulator runtime they need is not installed,
+// instead of failing the build on a Mac that only has some of the runtimes.
+run {
+    if (!HostManager.hostIsMac) return@run
+    val simulatorFamilyPrefixes =
+        mapOf(
+            Family.IOS to "iOS ",
+            Family.TVOS to "tvOS ",
+            Family.WATCHOS to "watchOS "
+        )
+    val installedFamilies: Set<Family> =
+        providers.exec {
+            isIgnoreExitValue = true
+            commandLine("xcrun", "simctl", "list", "runtimes")
+        }.let { execOutput ->
+            if (execOutput.result.orNull?.exitValue != 0) {
+                emptySet()
+            } else {
+                val lines = execOutput.standardOutput.asText.get().lines()
+                simulatorFamilyPrefixes.filterValues { prefix -> lines.any { it.startsWith(prefix) } }.keys
+            }
+        }
+
+    kotlin.testableTargets
+        .filterIsInstance<KotlinNativeTargetWithSimulatorTests>()
+        .filter { it.konanTarget.family in simulatorFamilyPrefixes }
+        .forEach { target ->
+            val family = target.konanTarget.family
+            tasks.named("${target.name}Test") {
+                onlyIf("No $family simulator runtime installed") { family in installedFamilies }
+            }
+        }
+}
+
+// TEMPORARY (M2 B0 only, delete in B1): commonMain has no sources yet, so every native compilation is NO-SOURCE and
+// produces no .klib, and publishing a native target fails on the missing artifact. Skip the native publications until
+// the first sources land in commonMain; the check turns itself off as soon as `src/commonMain` exists.
+if (!layout.projectDirectory.dir("src/commonMain").asFile.exists()) {
+    val nativePublicationNames =
+        kotlin.targets
+            .withType<KotlinNativeTarget>()
+            .names
+            .map { it.replaceFirstChar(Char::uppercaseChar) }
+            .toSet()
+    tasks
+        .named { taskName ->
+            nativePublicationNames.any { target ->
+                taskName == "generateMetadataFileFor${target}Publication" || taskName.startsWith("publish${target}PublicationTo")
+            }
+        }.configureEach {
+            enabled = false
+        }
 }
 
 spotless {

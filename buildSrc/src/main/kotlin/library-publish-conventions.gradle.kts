@@ -19,7 +19,9 @@ mavenPublishing {
     pom {
         val projectUrl = "https://github.com/avro-kotlin/avro4k"
         name = project.name
-        description = project.description?.ifEmpty { null } ?: error("Missing ${project.name} project description")
+        // Lazy: under Kotlin Multiplatform the publications already exist when this plugin is applied, so this block runs
+        // before the module's build script has set `description`.
+        description = provider { project.description?.ifEmpty { null } ?: error("Missing ${project.name} project description") }
         url = projectUrl
 
         scm {

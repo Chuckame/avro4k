@@ -3,6 +3,9 @@ tasks.register("actionsBeforeCommit") {
     val tasksToBeRun = listOf(
         "classes",
         "testClasses",
+        // Kotlin Multiplatform modules have no `classes`/`testClasses`: compile their JVM target instead
+        "jvmMainClasses",
+        "jvmTestClasses",
         "apiDump",
         "spotlessApply"
     )
