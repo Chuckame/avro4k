@@ -16,6 +16,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.NullSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
+import com.github.avrokotlin.avro4k.internal.WeakIdentityKeyCache
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -28,27 +29,36 @@ import org.apache.avro.Schema
 import org.apache.avro.util.internal.Accessor
 import java.nio.charset.StandardCharsets
 
-// No cache here: in M2 the only caller is kotlin-generator (one-shot codegen). B6 adds an identity-keyed cache for the M3 hot paths.
+// Identity-keyed: both schema models have structural equals/hashCode that walk the whole schema. Neither result
+// references its source schema, so the weak keys stay collectable. The cached results are shared: an Apache Schema
+// must not be mutated (addProp...) by callers, as is already the case for the ones Avro.schema() caches.
+private val toAvro4kCache = WeakIdentityKeyCache<Schema, AvroSchema>()
+private val toApacheSchemaCache = WeakIdentityKeyCache<AvroSchema, Schema>()
 
 /**
  * Converts this Apache Avro schema to avro4k's multiplatform [AvroSchema].
  *
- * The conversion walks the whole schema: do not call it on a hot path.
+ * The result is cached per schema instance (by identity), so only the first conversion of a given instance walks it.
  *
  * Field default values are taken from their json, except that a number is converted to its schema's type, like Apache Avro's
  * [Schema.Field.defaultVal] does: an integer literal like `36` as the default of a `float` field becomes `36.0`.
  * The field's sort order, when not the default ascending one, is kept as the field's `order` prop, like in the schema's json.
  */
 public fun Schema.toAvro4k(): AvroSchema {
-    return from(this, mutableMapOf())
+    return toAvro4kCache.getOrPut(this) { from(this, mutableMapOf()) }
 }
 
 /**
  * Converts this [AvroSchema] to an Apache Avro schema, through its json representation.
  *
- * The conversion walks the whole schema and parses json: do not call it on a hot path.
+ * The result is cached per schema instance (by identity), so only the first conversion of a given instance walks the
+ * schema and parses json.
  */
 public fun AvroSchema.toApacheSchema(): Schema {
+    return toApacheSchemaCache.getOrPut(this) { toApacheSchemaUncached() }
+}
+
+private fun AvroSchema.toApacheSchemaUncached(): Schema {
     return Schema.Parser(NameValidator.NO_VALIDATION).parse(Json.encodeToString(JsonElement.serializer(), toJsonElement()))
 }
 

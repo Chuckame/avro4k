@@ -27,7 +27,6 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.internal.AbstractCollectionSerializer
 import org.apache.avro.Schema
-import java.util.IdentityHashMap
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Duration
@@ -42,30 +41,38 @@ import kotlin.uuid.Uuid
  */
 @Suppress("UNCHECKED_CAST")
 internal object SerializerLocatorMiddleware {
-    private val serializers: Map<in KSerializer<*>, KSerializer<*>> = IdentityHashMap<KSerializer<*>, KSerializer<*>>().apply {
-        this[ByteArraySerializer()] = AvroByteArraySerializer
-        this[Duration.serializer()] = KotlinDurationSerializer
-        this[Uuid.serializer()] = KotlinUuidSerializer
-        runCatching { this[Instant.serializer()] = KotlinInstantSerializer }
-    }
+    // Identity-keyed, like the IdentityHashMaps these used to be, but platform-neutral. Every decoded value goes
+    // through [apply], so a scan over these few entries must stay a handful of reference compares, with no allocation.
+    private val serializers: IdentityLookup<KSerializer<*>, KSerializer<*>> =
+        IdentityLookup(
+            buildList {
+                add(ByteArraySerializer() to AvroByteArraySerializer)
+                add(Duration.serializer() to KotlinDurationSerializer)
+                add(Uuid.serializer() to KotlinUuidSerializer)
+                runCatching { add(Instant.serializer() to KotlinInstantSerializer) }
+            }
+        )
 
-    private val descriptors = IdentityHashMap<SerialDescriptor, SerialDescriptor>().apply {
-        this[ByteArraySerializer().descriptor] = AvroByteArraySerializer.descriptor
-        this[String.serializer().descriptor] = AvroStringSerialDescriptor
-        this[Duration.serializer().descriptor] = KotlinDurationSerializer.descriptor
-        this[Uuid.serializer().descriptor] = KotlinUuidSerializer.descriptor
-        runCatching { this[Instant.serializer().descriptor] = KotlinInstantSerializer.descriptor }
-    }
+    private val descriptors: IdentityLookup<SerialDescriptor, SerialDescriptor> =
+        IdentityLookup(
+            buildList {
+                add(ByteArraySerializer().descriptor to AvroByteArraySerializer.descriptor)
+                add(String.serializer().descriptor to AvroStringSerialDescriptor)
+                add(Duration.serializer().descriptor to KotlinDurationSerializer.descriptor)
+                add(Uuid.serializer().descriptor to KotlinUuidSerializer.descriptor)
+                runCatching { add(Instant.serializer().descriptor to KotlinInstantSerializer.descriptor) }
+            }
+        )
 
     fun <T> apply(serializer: SerializationStrategy<T>): SerializationStrategy<T> {
-        (serializer as? KSerializer<*>)?.let(serializers::get)?.let { return it as SerializationStrategy<T> }
+        serializers[serializer]?.let { return it as SerializationStrategy<T> }
 
         return serializer
     }
 
     @OptIn(InternalSerializationApi::class)
     fun <T> apply(deserializer: DeserializationStrategy<T>): DeserializationStrategy<T> {
-        (deserializer as? KSerializer<*>)?.let(serializers::get)?.let { return it as DeserializationStrategy<T> }
+        serializers[deserializer]?.let { return it as DeserializationStrategy<T> }
         (deserializer as? AbstractCollectionSerializer<*, T, *>)?.let { return wrapCollection(it) }
 
         return deserializer

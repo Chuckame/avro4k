@@ -5,19 +5,10 @@ import java.lang.ref.ReferenceQueue
 import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
 
-@InternalAvro4kApi
-public interface Cache<K : Any, V : Any> {
-    /**
-     * Returns the cached value, or computes, stores, and returns it.
-     *
-     * The value can be re-computed at any time.
-     */
-    public fun getOrPut(key: K, compute: () -> V): V
-}
-
 /**
  * Cache for associating derived data with objects you don't own
- * without preventing their garbage collection.
+ * without preventing their garbage collection. Keys are compared by **equality** (`hashCode`/`equals`); see
+ * [WeakIdentityKeyCache] for the multiplatform identity-keyed counterpart.
  *
  * **Reclamation is lazy, and bounded rather than eager.** Entries whose key has been collected are only
  * swept during the put path of [getOrPut] (see there for why). A cache that reaches a steady state and

@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithSimulatorTests
 import org.jetbrains.kotlin.konan.target.Family
 import org.jetbrains.kotlin.konan.target.HostManager
@@ -40,6 +41,18 @@ kotlin {
 
     linuxArm64()
     linuxX64()
+
+    // `jvmAndNative`: the platforms with real weak references and identity hash codes, sharing one copy-on-write
+    // identity cache (JS has neither, and uses its own `WeakMap` instead).
+    @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    applyDefaultHierarchyTemplate {
+        common {
+            group("jvmAndNative") {
+                withJvm()
+                group("native")
+            }
+        }
+    }
 
     sourceSets {
         commonMain {
