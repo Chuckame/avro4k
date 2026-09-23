@@ -386,6 +386,31 @@ Scaling (keys in a state field, padding entries beyond the 4 real ones), miss / 
 - End to end this is ~1 ns out of ~30 ns per `Long` element (see the B6 A/B above), which is why the scan's regression
   was invisible there: a micro-benchmark was needed to see it.
 
+### Collection blocks decoded in the decoder: C3's wrapper cache removed
+
+C3 cached the per-collection `AvroCollectionSerializer` wrapper in **one global slot**, which only hits while the same
+collection serializer repeats. `readTwoCollections` (new: 1,000 records with two collection fields each) alternates
+two serializers, the worst case, which no benchmark covered. The wrapper is gone: the Avro block loop now runs inside
+`AbstractAvroDirectDecoder.decodeSerializableValue`. A/B of `5c8a318` (before) vs `131221b` (after), interleaved,
+3 forks × 5 iterations each, `-Pparams='size=1000'`:
+
+| | B/op before → after | ops/s before (inv. 1, 2 · EA off) | ops/s after (inv. 1, 2 · EA off) |
+|---|---|---|---|
+| `readTwoCollections` | 588,394 → **508,354** | 4,028 ± 321, 4,230 ± 62 · 4,245 | 4,451 ± 149, 4,407 ± 151 · 4,339 |
+| `readRecords` | 76,352 → 76,352 | 17,489 ± 284, 17,410 ± 512 · 17,370 | 17,948 ± 408, 18,277 ± 184 · 17,743 |
+| `readLongs` | 28,352 → 28,352 | 48,215 ± 3,383, 44,274 ± 410 · 46,326 | 46,340 ± 3,317, 43,738 ± 1,161 · 44,350 |
+
+- **−80 B per record** on `readTwoCollections` = 2 collections × (16 B wrapper + 24 B cache holder): the old cache
+  missed on *every* collection there and paid two allocations per miss, one more than having no cache at all.
+  Throughput +7% on the means, both "after" invocations above both "before" ones — consistent, though inside the ~10%
+  band, so the allocation figure is the claim and the throughput is supporting.
+- `readRecords`/`readLongs` hold a single collection field, the case where the old cache always hit: allocation is
+  unchanged (the new path allocates nothing either) and throughput is within noise (+3.6%, −2.3%).
+- Allocation is identical with escape analysis on and off, so these numbers already describe native/JS.
+- Not measured here, but covered by the same reasoning: a top-level `decodeFromByteArray<List<Foo>>()` (a fresh
+  `ListSerializer` per call, so a guaranteed miss) and concurrent decoding of different types, which evicted each
+  other from the shared slot.
+
 ## Run the benchmark locally
 
 Just execute the benchmark:
