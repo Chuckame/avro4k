@@ -323,6 +323,30 @@ its tests. Those two units are justified by inspection, not by the numbers above
 > `ClassNotFoundException` because `mainBenchmarkJar` lacked the benchmark classes (see "Allocation
 > flame graphs" below for the cause). The task no longer runs from that jar.
 
+## Results — M2 (KMP foundation: B0, B1, B6)
+
+2026-09-23, same machine and JDK as M0/M1 (Apple M2 Pro, OpenJDK 21.0.11). M2 is a build and model migration with
+no intended perf change; the one change on a hot path is B6's `SerializerLocatorMiddleware`, whose two
+`IdentityHashMap`s became an `===` scan over ≤5 entries (`apply` runs once per encoded/decoded value). A/B of
+`077a1af` (before) vs `ab24319` (after), interleaved before/after/before/after, 3 forks × 5 iterations each:
+
+```bash
+./gradlew :benchmark:benchmarkAlloc -Pbench='micro\.CollectionMicroBenchmark\.(readLongs|writeLongs)' -Pparams='size=100000' \
+  -PallocForks=3 -PallocWarmups=3 -PallocIterations=5 [-PallocJmhArgs='-jvmArgsAppend -XX:-DoEscapeAnalysis']
+```
+
+| @100,000 longs | before | after |
+|---|---|---|
+| `readLongs` ops/s (invocation 1, 2) | 336.4 ± 9.3, 343.9 ± 6.8 | 336.6 ± 8.8, 335.9 ± 4.0 |
+| `writeLongs` ops/s (invocation 1, 2) | 429.7 ± 14.5, 442.6 ± 8.4 | 452.7 ± 3.8, 454.5 ± 7.0 |
+| EA off: `readLongs` / `writeLongs` ops/s | 339.7 / 452.9 | 337.1 / 449.2 |
+| B/op `readLongs` (EA on = EA off) | 2,800,372 | 2,800,372 |
+| B/op `writeLongs` EA on / EA off | 248 / 287 | 247 / 287 |
+
+**Neutral.** Read −1.2% and write +3.7% on the means are both inside the ~10% cross-invocation band M1
+established, and allocation is byte-identical — as expected, since `IdentityHashMap.get` never allocated either. B6
+is accepted as "no regression", not as a win.
+
 ## Run the benchmark locally
 
 Just execute the benchmark:
