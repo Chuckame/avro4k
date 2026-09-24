@@ -213,6 +213,7 @@ hooks. All `J/serializer/*.kt` bodies change; the facade is deleted. Bridge bodi
 `AvroCustomSchemaTest`, `AvroFixedEncodingTest`, `RecordBuilderForTest`, `AvroSingleObject*Test`, `AvroObjectContainerTest`.
 Deps: M3-01, M3-03, M3-11. `ACC+KMP`, review the api diff. **A/B:** M3-11+12 against the commit before M3-11. **Risk:** size; the
 `core.api` diff is the authoritative list of breaking changes — record it for B8.
+**Amended after batch 3 (2026-09-25):** M3-01's structural grep, rerun on the merged tree, has two hits outside the bridge, both from M3-08: `T/internal/JsonDefaultDecoderTest.kt` (internal API, constructs `JsonDefaultDecoder` and reads its `currentWriterSchema` — M3-11 retypes it with `RecordResolverTest`) and `T/encoding/AvroDefaultSpecTest.kt:236` (a test serializer reading `decoder.currentWriterSchema.type` — M3-12 must change it, or route it through the bridge first). The third hit, `SchemaGenerationTest.kt:38`, is a KDoc line.
 
 **M3-13 · Serializers ready for common** (B4 part 1). `J/serializer/{KotlinStdLibrarySerializers,KotlinInstantExtensions,AvroDuration}.kt`:
 literal serial names instead of `qualifiedName!!` (**grep all 22 sites**, incl. `J/internal/SerializerLocatorMiddleware.kt`,
