@@ -11,6 +11,10 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. Done: M3-01 … M3-08 (batches 1 and 2, then M3-08). Next: batch 3 (M3-09 ∥ M3-10).
 
+### Resume here (2026-09-25, M3-11 running)
+
+Batch 3 (M3-09, M3-10), the fixed-naming follow-up and the step-code cleanup are merged. **M3-11 is running** in an agent worktree (`git worktree list`); if this session died, review its WIP line by line before finishing it. Then M3-12, then the M3-11+12 A/B (orchestrator, serialized, `caffeinate -i`, ≥3 invocations per side, JVM watch list below). The user asked to continue alone through M3-11/12 and to keep the orchestrator's context small (delegate; stop around 60%).
+
 ### Resume here (2026-09-24, after M3-08)
 
 Batch 2 and M3-08 are complete. Next, in order: batch 3 (M3-09 ∥ M3-10),
@@ -78,6 +82,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M3-09 follow-up · fixed type naming | done | `v3/m2-foundation` | `2b3ac70`, `2db64eb` | core: value-class property → fixed named after the value class (its `@SerialName`, `@AvroAlias`, `@AvroDoc`); data-class field → `<record full name>.<field>`; clash message starts `Can't redefine: <full name>`. kotlin-generator: each named fixed is a generated value class (`@SerialName`/`@AvroDoc`/`@AvroAlias`/`@AvroFixed`), reused by name; round trip proven by a new `fixedTypesRoundTripTest` task compiling the goldens **without** `@AvroGenerated` (with it, `Avro.schema()` already returned the source schema and proved nothing; without it a fixed in an array/map came out as `bytes` before). README + gradle-plugin README rewritten; [`notes/b8-migration-items.md`](notes/b8-migration-items.md) created. jvmTest 904 → 919, apache-interop 451 → 459, kotlin-generator 148 → 149 (+1 round-trip task). Api unchanged. See [`notes/m3-09-fixed-naming.md`](notes/m3-09-fixed-naming.md) |
 | Cleanup · plan step codes out of source code | done | `v3/m2-foundation` | `ba0e8ae`, `1d758ee` | 43 + 20 files, comments/KDoc/build scripts only (no test name or asserted string had one); codes replaced by their meaning, and the 23 `docs/plans/notes/…` pointers in source dropped or replaced by 1–3 inline sentences (the folder does not ship, and file names carry codes). Counts unchanged, api clean. Left on purpose: `benchmark/README.md` (results log by milestone) and the `C3 01` single-object marker bytes |
 | M3-10 · CRC-64-AVRO + canonical form in common | done | `v3/m2-foundation` | `d379dbc` | `internal/SchemaFingerprint.kt` (commonMain, internal): PCF + CRC-64-AVRO, **byte-identical to Apache `SchemaNormalization`** (string, `Long`, LE bytes) over all 51 resource schemas, generated schemas, 13 corner cases and every sub-schema as a root (477 comparisons); no Apache deviation found. "Already written" keyed by full name, as Apache (not identity). Not wired: `AvroSingleObject` switches in M3-14. 19/19 mutations killed. jvmTest 876 → 897; js 115, macos/iOS-sim 118; all 10 unrunnable native test binaries linked. Not benchmarked (cold). See [`notes/m3-10.md`](notes/m3-10.md) |
+| M3-11 · runtime flip behind an Apache facade | in progress | agent (worktree) | — | started 2026-09-25 from `db996f9`; decode commit then encode commit |
 | M3 · B3 core → `commonMain`, Jackson dropped | todo | — | — | split into M3-05 … M3-15 |
 | M3 · B4 serializer split | todo | — | — | — |
 | M3 re-baseline + review | todo | — | — | **regressions hide here** |
