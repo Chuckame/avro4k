@@ -10,12 +10,14 @@ import com.github.avrokotlin.avro4k.`internal`.AvroGenerated
 import kotlin.ByteArray
 import kotlin.OptIn
 import kotlin.jvm.JvmInline
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @JvmInline
 @Serializable
-@AvroGenerated("""{"type":"fixed","name":"IgnoredName","namespace":"ignored.namespace","size":16}""")
-public value class TestSchema(
-    @AvroFixed(size = 16)
+@SerialName("FixedType")
+@AvroGenerated("""{"type":"fixed","name":"FixedType","size":12}""")
+public value class FixedType(
+    @AvroFixed(size = 12)
     public val `value`: ByteArray,
 )

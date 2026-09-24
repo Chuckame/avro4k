@@ -40,13 +40,31 @@ internal fun TypeSpec.Builder.addPrimaryProperty(property: PropertySpec, default
 
 /**
  * Generates equals and hashCode functions, while comparing ByteArray properties with contentEquals and contentHashCode
- * to avoid reference equality issues.
+ * to avoid reference equality issues. The properties typed with one of [byteArrayValueClasses] (value classes wrapping a
+ * ByteArray `value`, nullable or not) are compared on their `value` the same way.
  */
-internal fun TypeSpec.Builder.addEqualsHashCode(className: ClassName): TypeSpec.Builder {
-    if (propertySpecs.none { it.type == ByteArray::class.asClassName() }) {
+internal fun TypeSpec.Builder.addEqualsHashCode(
+    className: ClassName,
+    byteArrayValueClasses: Set<ClassName> = emptySet(),
+): TypeSpec.Builder {
+    val byteArrayType = ByteArray::class.asClassName()
+    val byteArrayValueClassTypes = byteArrayValueClasses.flatMapTo(mutableSetOf()) { listOf(it, it.copy(nullable = true)) }
+    if (propertySpecs.none { it.type == byteArrayType || it.type in byteArrayValueClassTypes }) {
         // we only generate equals/hashcode if a field has ByteArray type
         return this
     }
+
+    /** The expression to compare or hash by content, or null to compare or hash the property itself. */
+    fun contentOf(
+        property: PropertySpec,
+        receiver: String,
+    ): CodeBlock? =
+        when {
+            property.type == byteArrayType -> CodeBlock.of("%L%N", receiver, property.name)
+            property.type in byteArrayValueClassTypes && property.type.isNullable -> CodeBlock.of("%L%N?.value", receiver, property.name)
+            property.type in byteArrayValueClassTypes -> CodeBlock.of("%L%N.value", receiver, property.name)
+            else -> null
+        }
     addFunction(
         FunSpec.builder("equals")
             .addModifiers(KModifier.OVERRIDE)
@@ -57,8 +75,9 @@ internal fun TypeSpec.Builder.addEqualsHashCode(className: ClassName): TypeSpec.
             .addStatement("other as %T", className)
             .apply {
                 propertySpecs.forEach { property ->
-                    if (property.type == ByteArray::class.asClassName()) {
-                        addStatement("if (!%N.contentEquals(other.%N)) return false", property.name, property.name)
+                    val content = contentOf(property, "")
+                    if (content != null) {
+                        addStatement("if (!%L.contentEquals(%L)) return false", content, contentOf(property, "other.")!!)
                     } else {
                         addStatement("if (%N != other.%N) return false", property.name, property.name)
                     }
@@ -72,13 +91,13 @@ internal fun TypeSpec.Builder.addEqualsHashCode(className: ClassName): TypeSpec.
             .addModifiers(KModifier.OVERRIDE)
             .returns(Int::class)
             .apply {
+                fun hashCodeOf(property: PropertySpec): CodeBlock =
+                    contentOf(property, "")?.let { CodeBlock.of("%L.contentHashCode()", it) } ?: CodeBlock.of("%N.hashCode()", property.name)
                 propertySpecs.first().let { property ->
-                    val hashCodeMethodName = if (property.type == ByteArray::class.asClassName()) "contentHashCode" else "hashCode"
-                    addStatement("var result = %N.%N()", property.name, hashCodeMethodName)
+                    addStatement("var result = %L", hashCodeOf(property))
                 }
                 propertySpecs.drop(1).forEach { property ->
-                    val hashCodeMethodName = if (property.type == ByteArray::class.asClassName()) "contentHashCode" else "hashCode"
-                    addStatement("result = 31 * result + %N.%N()", property.name, hashCodeMethodName)
+                    addStatement("result = 31 * result + %L", hashCodeOf(property))
                 }
                 addStatement("return result")
             }

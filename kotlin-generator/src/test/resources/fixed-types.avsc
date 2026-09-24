@@ -1,0 +1,127 @@
+{
+    "type": "record",
+    "name": "FixedTypes",
+    "namespace": "fixed.ns",
+    "fields": [
+        {
+            "name": "plain",
+            "type": {
+                "type": "fixed",
+                "name": "Plain",
+                "size": 4
+            }
+        },
+        {
+            "name": "documented",
+            "type": {
+                "type": "fixed",
+                "name": "Documented",
+                "namespace": "other.ns",
+                "doc": "a fixed with a doc and aliases",
+                "aliases": [
+                    "OldDocumented",
+                    "legacy.ns.LegacyDocumented"
+                ],
+                "size": 8
+            }
+        },
+        {
+            "name": "plainAgain",
+            "type": "Plain"
+        },
+        {
+            "name": "nullable",
+            "type": [
+                "null",
+                {
+                    "type": "fixed",
+                    "name": "NullableFixed",
+                    "size": 2
+                }
+            ],
+            "default": null
+        },
+        {
+            "name": "array",
+            "type": {
+                "type": "array",
+                "items": {
+                    "type": "fixed",
+                    "name": "Item",
+                    "namespace": "items.ns",
+                    "size": 3
+                }
+            }
+        },
+        {
+            "name": "map",
+            "type": {
+                "type": "map",
+                "values": "items.ns.Item"
+            }
+        },
+        {
+            "name": "noNamespace",
+            "type": {
+                "type": "fixed",
+                "name": "NoNamespace",
+                "namespace": "",
+                "size": 1
+            }
+        },
+        {
+            "name": "uuid",
+            "type": {
+                "type": "fixed",
+                "name": "TheUuid",
+                "size": 16,
+                "logicalType": "uuid"
+            }
+        },
+        {
+            "name": "decimal",
+            "type": {
+                "type": "fixed",
+                "name": "TheDecimal",
+                "size": 8,
+                "logicalType": "decimal",
+                "precision": 10,
+                "scale": 2
+            }
+        },
+        {
+            "name": "withDefault",
+            "type": {
+                "type": "fixed",
+                "name": "WithDefault",
+                "size": 2
+            },
+            "default": "\u0001\u0002"
+        },
+        {
+            "name": "union",
+            "type": [
+                "int",
+                "Plain",
+                {
+                    "type": "fixed",
+                    "name": "UnionOnly",
+                    "size": 5
+                }
+            ]
+        },
+        {
+            "name": "nested",
+            "type": {
+                "type": "record",
+                "name": "Nested",
+                "fields": [
+                    {
+                        "name": "plain",
+                        "type": "Plain"
+                    }
+                ]
+            }
+        }
+    ]
+}

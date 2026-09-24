@@ -27,7 +27,7 @@ public data class BaseRecord(
      */
     @AvroDefault("{\"intField\":42,\"floatField\":36.0,\"stringField\":\"abc\",\"bytesField\":\"\\u0001\\u0002\\u0003\",\"fixedField\":\"\\u0001\\u0002\\u0003\",\"enumField\":\"B\",\"recordField\":{\"field\":\"cde\"}}")
     public val simpleRecordDefault:
-            SimpleSubRecord = SimpleSubRecord(intField = 42, floatField = 36.0f, stringField = "abc", bytesField = byteArrayOf(1, 2, 3), fixedField = byteArrayOf(1, 2, 3), enumField = Enum.B, recordField = DeepRecord(`field` = "cde")),
+            SimpleSubRecord = SimpleSubRecord(intField = 42, floatField = 36.0f, stringField = "abc", bytesField = byteArrayOf(1, 2, 3), fixedField = Fixed(byteArrayOf(1, 2, 3)), enumField = Enum.B, recordField = DeepRecord(`field` = "cde")),
     /**
      * as this record has custom serializer, it won't generate a kotlin property default
      *

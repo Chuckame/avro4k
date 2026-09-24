@@ -122,6 +122,9 @@ public class KotlinGenerator(
         schema: AvroSchema,
         potentialAnonymousClassName: String,
     ): List<FileSpec> {
+        if (schema is AvroSchema.FixedSchema && schema.isGeneratedAsFixedClass) {
+            return listOf(generateFixedClass(schema).toFileSpec(schema.name.space))
+        }
         schema.typeNameFromMetadata()?.let {
             return listOf(generateRootValueClass(schema, potentialAnonymousClassName, it).toFileSpec(null))
         }
@@ -220,9 +223,13 @@ public class KotlinGenerator(
             .addAnnotation(Serializable::class)
             .addPrimaryProperty(
                 PropertySpec.builder("value", wrappedType)
-                    .addAnnotationIfNotNull(buildAvroDecimalAnnotation(nonNullSchema))
-                    .addAnnotationIfNotNull(buildAvroFixedAnnotation(nonNullSchema))
-                    .addAnnotations((nonNullSchema as? WithProps)?.let { buildAvroPropAnnotations(it) } ?: emptyList())
+                    .addAnnotations(buildInlinedFixedAnnotations(nonNullSchema))
+                    .apply {
+                        // A fixed's value class carries its own schema: a value class cannot add props to a named schema
+                        if (!nonNullSchema.isGeneratedAsFixedClass) {
+                            addAnnotations((nonNullSchema as? WithProps)?.let { buildAvroPropAnnotations(it) } ?: emptyList())
+                        }
+                    }
                     .build(),
                 defaultValue = buildImplicitAvroDefaultCodeBlock(schema, implicitNulls = implicitNulls, implicitEmptyCollections = implicitEmptyCollections)
             )
@@ -235,6 +242,9 @@ public class KotlinGenerator(
         potentialAnonymousBaseName: String,
         generatedRecords: Map<ClassName, TypeSpec>,
     ): List<FileSpec> {
+        if (schema is AvroSchema.FixedSchema && schema.isGeneratedAsFixedClass) {
+            return listOf(generateFixedClass(schema).toFileSpec(schema.name.space))
+        }
         schema.typeNameFromMetadata()?.let {
             // nothing to generate except the root value class wrapping the already existing type
             return emptyList()
@@ -303,7 +313,7 @@ public class KotlinGenerator(
                 generateNestedKotlinClasses(schema.valueSchema, mapNameFormatter(potentialAnonymousBaseName), generatedRecords)
             }
 
-            // fixed type is for now set as ByteArray, so nothing to generate
+            // a fixed not generated as a value class (see isGeneratedAsFixedClass) is inlined in its field, so nothing to generate
             is AvroSchema.FixedSchema,
             is AvroSchema.PrimitiveSchema,
             is AvroSchema.NullSchema,
@@ -317,6 +327,9 @@ public class KotlinGenerator(
     }
 
     private fun getTypeName(schema: AvroSchema, potentialAnonymousBaseName: String): TypeName {
+        if (schema is AvroSchema.FixedSchema && schema.isGeneratedAsFixedClass) {
+            return schema.asClassName()
+        }
         return schema.typeNameFromMetadata() ?: when (schema) {
             is AvroSchema.RecordSchema,
             is AvroSchema.EnumSchema,
@@ -335,8 +348,8 @@ public class KotlinGenerator(
             is AvroSchema.DoubleSchema -> Double::class.asClassName()
 
             is AvroSchema.BytesSchema,
+            // Only a fixed not generated as a value class, and without a logical type nor a java-class property, reaches here
             is AvroSchema.FixedSchema,
-            // To have anything else than a ByteArray for fixed type, the user needs to provide a logical type or a java-class property
             -> ByteArray::class.asClassName()
 
             is AvroSchema.ArraySchema -> {
@@ -400,8 +413,7 @@ public class KotlinGenerator(
                             .addAnnotation(Serializable::class)
                             .addPrimaryProperty(
                                 PropertySpec.builder("value", typeName)
-                                    .addAnnotationIfNotNull(buildAvroDecimalAnnotation(subSchema))
-                                    .addAnnotationIfNotNull(buildAvroFixedAnnotation(subSchema))
+                                    .addAnnotations(buildInlinedFixedAnnotations(subSchema))
                                     .build()
                             )
                             .build()
@@ -499,8 +511,7 @@ public class KotlinGenerator(
                                 }
                             }
                             .addAnnotationIfNotNull(buildAvroAliasAnnotation(field.aliases))
-                            .addAnnotationIfNotNull(buildAvroDecimalAnnotation(nonNullFieldSchema))
-                            .addAnnotationIfNotNull(buildAvroFixedAnnotation(nonNullFieldSchema))
+                            .addAnnotations(buildInlinedFixedAnnotations(nonNullFieldSchema))
                             .addAnnotationIfNotNull(buildAvroDefaultAnnotation(field))
                             .apply {
                                 if (fieldNamingStrategy != FieldNamingStrategy.Identity) {
@@ -549,15 +560,85 @@ public class KotlinGenerator(
                     }
                 }
             )
-            .addEqualsHashCode(schema.asClassName())
+            .addEqualsHashCode(
+                schema.asClassName(),
+                byteArrayValueClasses =
+                    schema.fields.mapNotNullTo(mutableSetOf()) { field ->
+                        val nonNullFieldSchema = (field.schema as? AvroSchema.UnionSchema)?.unwrapIfSimpleNullableType ?: field.schema
+                        nonNullFieldSchema.takeIf { it.isGeneratedAsByteArrayFixedClass }?.let { (it as AvroSchema.FixedSchema).asClassName() }
+                    }
+            )
             .build()
     }
+
+    /**
+     * Generates a value class representing the Avro fixed schema, named after it. avro4k names a fixed after the value class
+     * whose property carries `@AvroFixed`, so the generated code gives back the fixed's full name, aliases, doc and size.
+     *
+     * ```kotlin
+     * @JvmInline
+     * @Serializable
+     * @SerialName("<fixed full name>")
+     * @AvroDoc("doc")
+     * @AvroAlias("alias1", "alias2")
+     * value class <Fixed name>(
+     *     @AvroFixed(size = <size>)
+     *     val value: ByteArray, // or the type of the fixed's logical type or java-class property
+     * )
+     * ```
+     */
+    private fun generateFixedClass(schema: AvroSchema.FixedSchema): TypeSpec {
+        return TypeSpec.classBuilder(schema.name.simpleName)
+            .addModifiers(KModifier.VALUE)
+            .addAnnotation(JvmInline::class)
+            .addAnnotation(Serializable::class)
+            .addAnnotation(
+                AnnotationSpec.builder(SerialName::class)
+                    .addMember("%S", schema.fullName)
+                    .build()
+            )
+            .addAnnotationIfNotNull(buildAvroDocAnnotation(schema))
+            .addKDocIfNotNull(schema.doc)
+            .addAnnotationIfNotNull(buildAvroAliasAnnotation(schema))
+            .addAnnotation(buildAvroGeneratedAnnotation(schema))
+            .addPrimaryProperty(
+                PropertySpec.builder("value", schema.typeNameFromMetadata() ?: ByteArray::class.asClassName())
+                    .addAnnotationIfNotNull(buildAvroDecimalAnnotation(schema))
+                    .addAnnotationIfNotNull(buildAvroFixedAnnotation(schema))
+                    .build()
+            )
+            .build()
+    }
+
+    /**
+     * The fixed annotations of a property whose type is this schema: none for a fixed generated as a value class, as the value
+     * class carries them.
+     */
+    private fun buildInlinedFixedAnnotations(schema: AvroSchema): List<AnnotationSpec> {
+        if (schema.isGeneratedAsFixedClass) {
+            return emptyList()
+        }
+        return listOfNotNull(buildAvroDecimalAnnotation(schema), buildAvroFixedAnnotation(schema))
+    }
+
+    private val AvroSchema.isGeneratedAsByteArrayFixedClass: Boolean
+        get() = isGeneratedAsFixedClass && typeNameFromMetadata() == null
 
     private fun getRecordFieldDefault(schema: AvroSchema, fieldDefault: JsonElement): CodeBlock? {
         return when (schema) {
             is AvroSchema.FixedSchema,
             is AvroSchema.BytesSchema,
-            -> CodeBlock.of("byteArrayOf(%L)", (fieldDefault.jsonPrimitive.content.toByteArray(Charsets.ISO_8859_1)).joinToString(", "))
+            -> {
+                val bytes = CodeBlock.of("byteArrayOf(%L)", (fieldDefault.jsonPrimitive.content.toByteArray(Charsets.ISO_8859_1)).joinToString(", "))
+                when {
+                    schema.isGeneratedAsByteArrayFixedClass -> CodeBlock.of("%T(%L)", (schema as AvroSchema.FixedSchema).asClassName(), bytes)
+
+                    // A fixed value class wrapping a logical type: its value cannot be built from the default's bytes
+                    schema.isGeneratedAsFixedClass -> null
+
+                    else -> bytes
+                }
+            }
 
             is AvroSchema.EnumSchema -> CodeBlock.of("%T.%L", schema.asClassName(), fieldDefault.jsonPrimitive.content)
 
@@ -663,6 +744,16 @@ private fun getBuiltinLogicalTypes() =
             kSerializerClassName = it.value::class.qualifiedName!!
         )
     }
+
+/**
+ * A named fixed is generated as a value class named after it, except a `duration` one: its serializer creates its own fixed
+ * schema and ignores `@AvroFixed`, so a value class could not give it the fixed's name. It stays a property of the
+ * duration type annotated with `@AvroFixed`, as before.
+ */
+private val AvroSchema.isGeneratedAsFixedClass: Boolean
+    get() = this is AvroSchema.FixedSchema && logicalTypeName != DURATION_LOGICAL_TYPE_NAME
+
+private const val DURATION_LOGICAL_TYPE_NAME = "duration"
 
 private val AvroSchema.UnionSchema.nonNullTypes get() = types.filter { it !is AvroSchema.NullSchema }
 private val AvroSchema.UnionSchema.unwrapIfSimpleNullableType: AvroSchema?

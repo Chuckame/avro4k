@@ -3,7 +3,6 @@
     ExperimentalAvro4kApi::class,
 )
 
-import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.`internal`.AvroGenerated
@@ -23,8 +22,7 @@ public data class SimpleSubRecord(
     public val floatField: Float,
     public val stringField: String,
     public val bytesField: ByteArray,
-    @AvroFixed(size = 3)
-    public val fixedField: ByteArray,
+    public val fixedField: Fixed,
     public val enumField: Enum,
     public val recordField: DeepRecord,
 ) {
@@ -36,7 +34,7 @@ public data class SimpleSubRecord(
         if (floatField != other.floatField) return false
         if (stringField != other.stringField) return false
         if (!bytesField.contentEquals(other.bytesField)) return false
-        if (!fixedField.contentEquals(other.fixedField)) return false
+        if (!fixedField.value.contentEquals(other.fixedField.value)) return false
         if (enumField != other.enumField) return false
         if (recordField != other.recordField) return false
         return true
@@ -47,7 +45,7 @@ public data class SimpleSubRecord(
         result = 31 * result + floatField.hashCode()
         result = 31 * result + stringField.hashCode()
         result = 31 * result + bytesField.contentHashCode()
-        result = 31 * result + fixedField.contentHashCode()
+        result = 31 * result + fixedField.value.contentHashCode()
         result = 31 * result + enumField.hashCode()
         result = 31 * result + recordField.hashCode()
         return result
