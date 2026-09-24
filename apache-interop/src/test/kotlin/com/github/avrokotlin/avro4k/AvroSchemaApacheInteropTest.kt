@@ -1,5 +1,7 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4kUncached
+import com.github.avrokotlin.avro4k.internal.avro4kToApacheUncached
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
@@ -25,26 +27,22 @@ import kotlin.jvm.JvmInline
 /**
  * Guards the conversions between [AvroSchema] and Apache's [Schema] over every schema of the other modules' test suites,
  * plus the schemas avro4k generates for a representative set of classes.
+ *
+ * The fidelity checks go through the uncached conversions ([convertUncached]): the cached ones pair each node with its
+ * source, so a cached round trip returns the very same instance and would compare nothing. The pairing itself is covered
+ * by [AvroSchemaApacheIdentityTest].
  */
 class AvroSchemaApacheInteropTest : FunSpec({
     val rootDir = File(System.getProperty("avro4k.rootDir") ?: error("Missing avro4k.rootDir system property"))
 
-    val schemaFiles =
-        listOf("core/src/jvmTest/resources", "kotlin-generator/src/test/resources")
-            .map { rootDir.resolve(it) }
-            .flatMap { dir ->
-                dir.walkTopDown().filter { it.isFile && (it.extension == "avsc" || it.extension == "json") }.toList()
-            }
-            .sorted()
+    val schemaFiles = schemaFiles(rootDir)
 
     test("finds the test suites' schema files") {
         // guards against a moved resources directory silently emptying the round-trip coverage
         (schemaFiles.size > 90) shouldBe true
     }
 
-    // Files are parsed per directory, sharing the known types, as some of them reference types defined in other files
-    val schemasFromFiles: List<Pair<String, Pair<Schema, AvroSchema>>> =
-        schemaFiles.groupBy { it.parentFile }.flatMap { (dir, files) -> parseDirectory(dir, files, rootDir) }
+    val schemasFromFiles: List<Pair<String, Pair<Schema, AvroSchema>>> = parseSchemaFiles(rootDir)
 
     test("parses every schema file") {
         schemasFromFiles.size shouldBe schemaFiles.size - UNPARSEABLE_FILES.size
@@ -54,7 +52,7 @@ class AvroSchemaApacheInteropTest : FunSpec({
         val (apacheSchema, parsedAvro4kSchema) = schemas
         context(name) {
             test("apache -> avro4k -> apache") {
-                val roundTripped = apacheSchema.toAvro4k().toApacheSchema()
+                val roundTripped = apacheSchema.convertUncached().convertUncached()
                 if (name in DEFAULTS_COERCED_BY_APACHE) {
                     roundTripped shouldBe apacheSchema.withNormalizedDefaults()
                 } else {
@@ -62,14 +60,14 @@ class AvroSchemaApacheInteropTest : FunSpec({
                 }
             }
             test("apache -> avro4k -> apache -> avro4k is stable") {
-                val avro4k = apacheSchema.toAvro4k()
-                avro4k.toApacheSchema().toAvro4k() shouldBe avro4k
+                val avro4k = apacheSchema.convertUncached()
+                avro4k.convertUncached().convertUncached() shouldBe avro4k
             }
             test("avro4k parsed from json -> apache -> avro4k") {
                 if (name in DEFAULTS_COERCED_BY_APACHE) {
-                    parsedAvro4kSchema.toApacheSchema().toAvro4k() shouldBe apacheSchema.toAvro4k()
+                    parsedAvro4kSchema.convertUncached().convertUncached() shouldBe apacheSchema.convertUncached()
                 } else {
-                    parsedAvro4kSchema.toApacheSchema().toAvro4k() shouldBe parsedAvro4kSchema
+                    parsedAvro4kSchema.convertUncached().convertUncached() shouldBe parsedAvro4kSchema
                 }
             }
             test("avro4k's json parser and the apache conversion agree") {
@@ -84,12 +82,12 @@ class AvroSchemaApacheInteropTest : FunSpec({
         GENERATED_SCHEMAS.forEach { serializer ->
             test(serializer.descriptor.serialName) {
                 val apacheSchema = Avro.schema(serializer)
-                val avro4k = apacheSchema.toAvro4k()
+                val avro4k = apacheSchema.convertUncached()
                 // Same json, but compared with a parsed schema: Apache compares defaults by json node type, and core builds some
                 // defaults with a different node type than the parser (see "core's int defaults are big integer json nodes")
-                avro4k.toApacheSchema().toString() shouldBe apacheSchema.toString()
-                avro4k.toApacheSchema() shouldBe Schema.Parser().parse(apacheSchema.toString())
-                avro4k.toApacheSchema().toAvro4k() shouldBe avro4k
+                avro4k.convertUncached().toString() shouldBe apacheSchema.toString()
+                avro4k.convertUncached() shouldBe Schema.Parser().parse(apacheSchema.toString())
+                avro4k.convertUncached().convertUncached() shouldBe avro4k
                 AvroSchema.fromJsonString(apacheSchema.toString()) shouldBe avro4k
             }
         }
@@ -107,7 +105,7 @@ class AvroSchemaApacheInteropTest : FunSpec({
         val schema = Avro.schema(Node.serializer()).toAvro4k() as AvroSchema.RecordSchema
         val next = schema.getFieldByName("next").schema as AvroSchema.UnionSchema
         next.types[1] shouldBeSameInstanceAs schema
-        schema.toApacheSchema().toAvro4k() shouldBe schema
+        schema.convertUncached().convertUncached() shouldBe schema
     }
 
     test("field order is kept as a field prop") {
@@ -116,17 +114,17 @@ class AvroSchemaApacheInteropTest : FunSpec({
         val avro4k = apacheSchema.toAvro4k() as AvroSchema.RecordSchema
         avro4k.fields.map { it.props["order"]?.toString() } shouldBe listOf("\"descending\"", "\"ignore\"")
         avro4k shouldBe AvroSchema.fromJsonString(json)
-        avro4k.toApacheSchema() shouldBe apacheSchema
+        avro4k.convertUncached() shouldBe apacheSchema
     }
 
     test("the known exceptions are still exceptions") {
         // if one of those starts to round-trip, remove it from the list
-        schemasFromFiles.filter { (name, schemas) -> name in DEFAULTS_COERCED_BY_APACHE && schemas.first.toAvro4k().toApacheSchema() == schemas.first }
+        schemasFromFiles.filter { (name, schemas) -> name in DEFAULTS_COERCED_BY_APACHE && schemas.first.convertUncached().convertUncached() == schemas.first }
             .map { it.first }
             .shouldBeEmpty()
     }
 }) {
-    private companion object {
+    internal companion object {
         /**
          * Schemas whose field defaults Apache Avro coerces to the field's type ([Schema.Field.defaultVal]), which [toAvro4k] relies on,
          * so the textual default changes (e.g. `36` becomes `36.0` for a float field), and Apache's json node equality is textual.
@@ -156,6 +154,21 @@ class AvroSchemaApacheInteropTest : FunSpec({
                 serializer<String?>(),
                 serializer<Int>()
             )
+
+        fun schemaFiles(rootDir: File): List<File> =
+            listOf("core/src/jvmTest/resources", "kotlin-generator/src/test/resources")
+                .map { rootDir.resolve(it) }
+                .flatMap { dir ->
+                    dir.walkTopDown().filter { it.isFile && (it.extension == "avsc" || it.extension == "json") }.toList()
+                }
+                .sorted()
+
+        /**
+         * Every parseable schema file, by path relative to [rootDir], parsed by Apache and by avro4k: fresh instances on each call.
+         * Files are parsed per directory, sharing the known types, as some of them reference types defined in other files.
+         */
+        fun parseSchemaFiles(rootDir: File): List<Pair<String, Pair<Schema, AvroSchema>>> =
+            schemaFiles(rootDir).groupBy { it.parentFile }.flatMap { (dir, files) -> parseDirectory(dir, files, rootDir) }
 
         /**
          * Parses each file on its own. The files that reference types defined in other files of the same directory
@@ -208,7 +221,7 @@ class AvroSchemaApacheInteropTest : FunSpec({
         }
 
         /** Re-parses the schema from its json, after going through avro4k, to get the coerced defaults as json nodes */
-        fun Schema.withNormalizedDefaults(): Schema = Schema.Parser().parse(toAvro4k().toApacheSchema().toString())
+        fun Schema.withNormalizedDefaults(): Schema = Schema.Parser().parse(convertUncached().convertUncached().toString())
     }
 }
 
@@ -294,3 +307,8 @@ private data class Everything(
     val wrapper: Wrapper,
     @AvroStringable val stringable: Int,
 )
+
+/** The uncached conversions, which compare the converted schemas rather than return the cached, paired, instances. */
+internal fun Schema.convertUncached(): AvroSchema = apacheToAvro4kUncached(this)
+
+internal fun AvroSchema.convertUncached(): Schema = avro4kToApacheUncached(this)
