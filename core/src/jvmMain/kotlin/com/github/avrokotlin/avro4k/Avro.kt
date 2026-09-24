@@ -1,11 +1,10 @@
 package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.Buffer
-import com.github.avrokotlin.avro4k.internal.Cache
 import com.github.avrokotlin.avro4k.internal.EnumResolver
+import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.PolymorphicResolver
 import com.github.avrokotlin.avro4k.internal.RecordResolver
-import com.github.avrokotlin.avro4k.internal.WeakKeyCache
 import com.github.avrokotlin.avro4k.internal.schema.ValueVisitor
 import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
 import com.github.avrokotlin.avro4k.serializer.JavaStdLibSerializersModule
@@ -39,7 +38,12 @@ public sealed class Avro(
     public val configuration: AvroConfiguration,
     public final override val serializersModule: SerializersModule,
 ) : BinaryFormat {
-    private val schemaCache: Cache<SerialDescriptor, Schema> = WeakKeyCache()
+    /**
+     * Identity fast path backed by an equality lookup: `serializer<List<Foo>>().descriptor` and other generic, nullable
+     * or collection descriptors are fresh per call, so identity alone would re-infer the schema on every call (M3-06).
+     * `internal` for tests.
+     */
+    internal val schemaCache = IdentityFirstCache<SerialDescriptor, Schema>()
 
     internal val recordResolver = RecordResolver(this)
     internal val polymorphicResolver = PolymorphicResolver(serializersModule) { schema(it).fullName }

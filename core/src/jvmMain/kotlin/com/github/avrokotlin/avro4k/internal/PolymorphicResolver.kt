@@ -8,7 +8,11 @@ internal class PolymorphicResolver(
     private val serializersModule: SerializersModule,
     private val schemaNameResolver: (SerialDescriptor) -> String,
 ) {
-    private val cache = WeakKeyCache<SerialDescriptor, Map<String, String>>()
+    /**
+     * Read per polymorphic value. Identity-first: non-generic sealed descriptors are stable instances, but a generic sealed
+     * hierarchy obtained through a fresh top-level serializer is an equal-but-distinct instance per call (M3-06).
+     */
+    private val cache = IdentityFirstCache<SerialDescriptor, Map<String, String>>()
 
     fun getFullNamesAndAliasesToSerialName(descriptor: SerialDescriptor): Map<String, String> {
         return cache.getOrPut(descriptor) {

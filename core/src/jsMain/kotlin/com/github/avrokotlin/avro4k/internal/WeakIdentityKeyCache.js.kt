@@ -16,15 +16,32 @@ public actual class WeakIdentityKeyCache<K : Any, V : Any> actual constructor() 
     private val objectKeys: dynamic = js("new WeakMap()")
     private val primitiveKeys: dynamic = js("new Map()")
 
-    actual override fun getOrPut(key: K, compute: () -> V): V {
-        val map = if (key.isJsObject()) objectKeys else primitiveKeys
-        val existing = map.get(key)
-        if (existing !== undefined) return existing.unsafeCast<V>()
+    /** Entries ever inserted: a `WeakMap` cannot be counted, and forgets collected keys silently. */
+    private var insertions = 0
 
+    actual override fun getOrPut(key: K, compute: () -> V): V {
+        getOrNull(key)?.let { return it }
         val value = compute()
-        map.set(key, value)
-        return value
+        return putIfAbsent(key, value) ?: value
     }
+
+    internal actual fun getOrNull(key: K): V? {
+        val existing = mapFor(key).get(key)
+        return if (existing === undefined) null else existing.unsafeCast<V>()
+    }
+
+    internal actual fun putIfAbsent(key: K, value: V): V? {
+        // Single-threaded: nothing can have inserted the key since the caller's getOrNull, except a re-entrant
+        // computation of the same key, whose value then wins as on the other platforms.
+        getOrNull(key)?.let { return it }
+        mapFor(key).set(key, value)
+        insertions++
+        return null
+    }
+
+    internal actual val size: Int get() = insertions
+
+    private fun mapFor(key: K): dynamic = if (key.isJsObject()) objectKeys else primitiveKeys
 }
 
 private fun Any.isJsObject(): Boolean {

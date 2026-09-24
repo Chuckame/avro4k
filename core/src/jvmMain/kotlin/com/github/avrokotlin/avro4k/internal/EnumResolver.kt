@@ -4,7 +4,12 @@ import com.github.avrokotlin.avro4k.AvroEnumDefault
 import kotlinx.serialization.descriptors.SerialDescriptor
 
 internal class EnumResolver {
-    private val defaultIndexCache: Cache<SerialDescriptor, EnumDefault> = WeakKeyCache()
+    /**
+     * Identity-keyed: generated enum serializers are singletons, so their descriptors are stable instances (M3-06; see
+     * `docs/plans/notes/b6.md`). A rare equal-but-distinct instance (e.g. a nullable wrapper reaching the
+     * schema visitor) only costs a recomputation and an entry that is dropped once the instance is collected.
+     */
+    private val defaultIndexCache = WeakIdentityKeyCache<SerialDescriptor, EnumDefault>()
 
     /**
      * Holds the resolved default element index of an enum descriptor.
@@ -17,10 +22,12 @@ internal class EnumResolver {
     )
 
     fun getDefaultValueIndex(enumDescriptor: SerialDescriptor): Int? {
+        // getOrNull first: the getOrPut lambda captures, so it would be allocated on every hit.
         val index =
-            defaultIndexCache.getOrPut(enumDescriptor) {
-                loadCache(enumDescriptor)
-            }.index
+            (
+                defaultIndexCache.getOrNull(enumDescriptor)
+                    ?: defaultIndexCache.getOrPut(enumDescriptor) { loadCache(enumDescriptor) }
+            ).index
         return if (index == NO_DEFAULT) null else index
     }
 
