@@ -24,7 +24,6 @@ import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.encoding.CompositeEncoder
 import org.apache.avro.Schema
-import org.apache.avro.util.Utf8
 
 @OptIn(ExperimentalSerializationApi::class)
 internal abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
@@ -60,7 +59,8 @@ internal abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
 
     abstract fun encodeDoubleUnchecked(value: Double)
 
-    abstract fun encodeStringUnchecked(value: Utf8)
+    /** Encodes a STRING whose content is already UTF-8 encoded. */
+    abstract fun encodeStringUnchecked(utf8: ByteArray)
 
     abstract fun encodeStringUnchecked(value: String)
 
@@ -174,7 +174,7 @@ internal abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
         }
         when (currentWriterSchema.type) {
             Schema.Type.BYTES -> encodeBytesUnchecked(value)
-            Schema.Type.STRING -> encodeStringUnchecked(Utf8(value))
+            Schema.Type.STRING -> encodeStringUnchecked(utf8 = value)
             Schema.Type.FIXED -> encodeFixedUnchecked(ensureFixedSize(value))
             else -> throw unsupportedWriterTypeError(Schema.Type.BYTES, Schema.Type.STRING, Schema.Type.FIXED)
         }
@@ -190,7 +190,7 @@ internal abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
         when (currentWriterSchema.type) {
             Schema.Type.FIXED -> encodeFixedUnchecked(ensureFixedSize(value))
             Schema.Type.BYTES -> encodeBytesUnchecked(value)
-            Schema.Type.STRING -> encodeStringUnchecked(Utf8(value))
+            Schema.Type.STRING -> encodeStringUnchecked(utf8 = value)
             else -> throw unsupportedWriterTypeError(Schema.Type.FIXED, Schema.Type.BYTES, Schema.Type.STRING)
         }
     }

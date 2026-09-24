@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.encoder.direct
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.MissingFieldsEncodingException
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
@@ -13,7 +14,7 @@ internal fun RecordDirectEncoder(
     descriptor: SerialDescriptor,
     schema: Schema,
     avro: Avro,
-    binaryEncoder: org.apache.avro.io.Encoder,
+    binaryEncoder: AvroBinaryEncoder,
 ): CompositeEncoder {
     return when (val encodingWorkflow = avro.recordResolver.resolveFields(schema, descriptor).encoding) {
         is EncodingWorkflow.ExactMatch -> RecordContiguousExactEncoder(schema, avro, binaryEncoder)
@@ -45,7 +46,7 @@ private class RecordNonContiguousEncoder(
     private val descriptorToWriterFieldIndex: IntArray,
     private val schema: Schema,
     avro: Avro,
-    binaryEncoder: org.apache.avro.io.Encoder,
+    binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
     override lateinit var currentWriterSchema: Schema
 
@@ -67,7 +68,7 @@ private class RecordContiguousSkippingEncoder(
     private val skippedElements: BooleanArray,
     private val schema: Schema,
     avro: Avro,
-    binaryEncoder: org.apache.avro.io.Encoder,
+    binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
     private var nextWriterFieldIndex = 0
     override lateinit var currentWriterSchema: Schema
@@ -88,7 +89,7 @@ private class RecordContiguousSkippingEncoder(
 private class RecordContiguousExactEncoder(
     private val schema: Schema,
     avro: Avro,
-    binaryEncoder: org.apache.avro.io.Encoder,
+    binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
     override lateinit var currentWriterSchema: Schema
 

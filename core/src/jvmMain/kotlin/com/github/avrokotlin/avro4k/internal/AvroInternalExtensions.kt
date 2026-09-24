@@ -2,6 +2,11 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
+import com.github.avrokotlin.avro4k.internal.codec.ApacheDecoderAdapter
+import com.github.avrokotlin.avro4k.internal.codec.ApacheEncoderAdapter
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
+import com.github.avrokotlin.avro4k.internal.codec.validating
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AvroValueDirectDecoder
 import com.github.avrokotlin.avro4k.internal.encoder.direct.AvroValueDirectEncoder
 import kotlinx.serialization.DeserializationStrategy
@@ -23,8 +28,7 @@ public fun <T> Avro.encodeWithApacheEncoder(
         } else {
             binaryEncoder
         }
-    AvroValueDirectEncoder(writerSchema, this, apacheEncoder)
-        .encodeSerializableValue(serializer, value)
+    encodeWithBinaryEncoder(writerSchema, serializer, value, ApacheEncoderAdapter(apacheEncoder))
 }
 
 @InternalAvro4kApi
@@ -39,6 +43,61 @@ public fun <T> Avro.decodeWithApacheDecoder(
         } else {
             binaryDecoder
         }
-    return AvroValueDirectDecoder(writerSchema, this, apacheDecoder)
+    return decodeWithBinaryDecoder(writerSchema, deserializer, ApacheDecoderAdapter(apacheDecoder))
+}
+
+/**
+ * Encodes [value] with one of avro4k's own codecs, validated against [writerSchema] when
+ * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled.
+ */
+internal fun <T> Avro.encodeWithValidation(
+    writerSchema: Schema,
+    serializer: SerializationStrategy<T>,
+    value: T,
+    binaryEncoder: AvroBinaryEncoder,
+) {
+    val encoder =
+        if (configuration.validateSerialization) {
+            binaryEncoder.validating(writerSchema)
+        } else {
+            binaryEncoder
+        }
+    encodeWithBinaryEncoder(writerSchema, serializer, value, encoder)
+}
+
+/**
+ * Decodes a value with one of avro4k's own codecs, validated against [writerSchema] when
+ * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled.
+ */
+internal fun <T> Avro.decodeWithValidation(
+    writerSchema: Schema,
+    deserializer: DeserializationStrategy<T>,
+    binaryDecoder: AvroBinaryDecoder,
+): T {
+    val decoder =
+        if (configuration.validateSerialization) {
+            binaryDecoder.validating(writerSchema)
+        } else {
+            binaryDecoder
+        }
+    return decodeWithBinaryDecoder(writerSchema, deserializer, decoder)
+}
+
+private fun <T> Avro.encodeWithBinaryEncoder(
+    writerSchema: Schema,
+    serializer: SerializationStrategy<T>,
+    value: T,
+    binaryEncoder: AvroBinaryEncoder,
+) {
+    AvroValueDirectEncoder(writerSchema, this, binaryEncoder)
+        .encodeSerializableValue(serializer, value)
+}
+
+private fun <T> Avro.decodeWithBinaryDecoder(
+    writerSchema: Schema,
+    deserializer: DeserializationStrategy<T>,
+    binaryDecoder: AvroBinaryDecoder,
+): T {
+    return AvroValueDirectDecoder(writerSchema, this, binaryDecoder)
         .decodeSerializableValue(deserializer)
 }

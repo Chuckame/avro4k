@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.apache.avro.Schema
@@ -11,7 +12,7 @@ internal class ArrayBlockDirectDecoder(
     private val decodeFirstBlock: Boolean,
     private val onCollectionSizeDecoded: (Int) -> Unit,
     avro: Avro,
-    binaryDecoder: org.apache.avro.io.Decoder,
+    binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
     override lateinit var currentWriterSchema: Schema
 
@@ -44,7 +45,7 @@ internal class MapBlockDirectDecoder(
     private val decodeFirstBlock: Boolean,
     private val onCollectionSizeDecoded: (Int) -> Unit,
     avro: Avro,
-    binaryDecoder: org.apache.avro.io.Decoder,
+    binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
     override lateinit var currentWriterSchema: Schema
 

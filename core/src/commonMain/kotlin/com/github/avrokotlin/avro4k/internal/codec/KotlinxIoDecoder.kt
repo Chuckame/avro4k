@@ -1,25 +1,25 @@
-package com.github.avrokotlin.avro4k.internal.decoder.direct
+package com.github.avrokotlin.avro4k.internal.codec
 
 import kotlinx.io.InternalIoApi
 import kotlinx.io.Source
 import kotlinx.io.UnsafeIoApi
-import kotlinx.io.readAtMostTo
 import kotlinx.io.readByteArray
 import kotlinx.io.readDoubleLe
 import kotlinx.io.readFloatLe
 import kotlinx.io.readString
-import kotlinx.io.readTo
 import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlinx.io.unsafe.withData
 import kotlinx.serialization.SerializationException
-import org.apache.avro.SystemLimitException
-import org.apache.avro.io.Decoder
-import org.apache.avro.util.Utf8
-import java.nio.ByteBuffer
 
+/**
+ * Reads Avro binary from a kotlinx-io [Source].
+ *
+ * Every length prefix is checked by [checkBinaryLength] before anything is allocated or skipped for it, and every
+ * returned array is an exact copy, safe even when the value spans several segments of the [source].
+ */
 internal class KotlinxIoDecoder(
     private val source: Source,
-) : Decoder() {
+) : AvroBinaryDecoder() {
     override fun readNull() {
     }
 
@@ -43,68 +43,39 @@ internal class KotlinxIoDecoder(
         return source.readDoubleLe()
     }
 
-    override fun readString(old: Utf8?): Utf8 {
-        return Utf8(source.readByteArray(SystemLimitException.checkMaxStringLength(readLong())))
+    override fun readString(): String {
+        return source.readString(readLength().toLong())
     }
 
-    override fun readString(): String {
-        return source.readString(readLong())
+    override fun readStringBytes(): ByteArray {
+        return source.readByteArray(readLength())
     }
 
     override fun skipString() {
-        source.skip(readLong())
+        source.skip(readLength().toLong())
     }
 
-    @OptIn(InternalIoApi::class, UnsafeIoApi::class)
-    override fun readBytes(old: ByteBuffer?): ByteBuffer {
-        val length = SystemLimitException.checkMaxBytesLength(readLong())
-        source.require(length.toLong())
-        if (old != null && length <= old.capacity()) {
-            old.clear().limit(length)
-            source.readFully(old)
-            old.flip()
-            return old
-        } else {
-            UnsafeBufferOperations.forEachSegment(source.buffer) { ctx, segment ->
-                if (length >= segment.size) {
-                    // the bytes can be split across segments.
-                    val buffer = ByteBuffer.allocate(length)
-                    source.readFully(buffer)
-                    buffer.flip()
-                    return buffer
-                }
-                ctx.withData(segment) { bytes, offset, _ ->
-                    // IMPORTANT: don't wrap the buffer when length == segment.size
-                    //  as the segment will be recycled, so the backing array content can change
-                    source.skip(length.toLong())
-                    return ByteBuffer.wrap(bytes, offset, length).asReadOnlyBuffer()
-                }
-            }
-        }
-        error("Unreachable")
+    override fun readBytes(): ByteArray {
+        return source.readByteArray(readLength())
     }
 
     override fun skipBytes() {
-        source.skip(readLong())
+        source.skip(readLength().toLong())
     }
 
-    override fun readFixed(bytes: ByteArray) {
-        source.readTo(bytes)
+    override fun readFixed(size: Int): ByteArray {
+        return source.readByteArray(size)
     }
 
-    override fun readFixed(
-        bytes: ByteArray,
-        start: Int,
-        length: Int,
-    ) {
-        source.readTo(bytes, startIndex = start, endIndex = start + length)
-    }
-
-    override fun skipFixed(length: Int) {
-        source.skip(length.toLong())
+    override fun skipFixed(size: Int) {
+        source.skip(size.toLong())
     }
 
     override fun readEnum(): Int {
+        return readInt()
+    }
+
+    override fun readIndex(): Int {
         return readInt()
     }
 
@@ -112,15 +83,7 @@ internal class KotlinxIoDecoder(
         return doReadItemCount()
     }
 
-    override fun readMapStart(): Long {
-        return doReadItemCount()
-    }
-
     override fun arrayNext(): Long {
-        return doReadItemCount()
-    }
-
-    override fun mapNext(): Long {
         return doReadItemCount()
     }
 
@@ -128,8 +91,20 @@ internal class KotlinxIoDecoder(
         return doSkipItems()
     }
 
+    override fun readMapStart(): Long {
+        return doReadItemCount()
+    }
+
+    override fun mapNext(): Long {
+        return doReadItemCount()
+    }
+
     override fun skipMap(): Long {
         return doSkipItems()
+    }
+
+    private fun readLength(): Int {
+        return checkBinaryLength(readLong())
     }
 
     private fun doReadItemCount(): Long {
@@ -149,13 +124,7 @@ internal class KotlinxIoDecoder(
         }
         return result
     }
-
-    override fun readIndex(): Int {
-        return readInt()
-    }
 }
-
-private const val MAX_VARINT_INT_BYTES = 5
 
 @OptIn(InternalIoApi::class, UnsafeIoApi::class)
 private fun Source.readVarInt(): Int {
@@ -183,8 +152,6 @@ private fun Source.readVarInt(): Int {
     }
     error("Unreachable")
 }
-
-private const val MAX_VARINT_LONG_BYTES = 10
 
 @OptIn(InternalIoApi::class, UnsafeIoApi::class)
 private fun Source.readVarLong(): Long {
@@ -291,17 +258,3 @@ private inline fun decodeVarLong2(lo: Long, readByte: () -> Byte): Long {
 private fun decodeZigZag(varint: Int): Int = (varint ushr 1) xor (-(varint and 1))
 
 private fun decodeZigZag(varint: Long): Long = (varint ushr 1) xor (-(varint and 1))
-
-/**
- * Fills the remaining space of [sink], leaving its position at its limit.
- *
- * [kotlinx.io.readAtMostTo] only reads from the source's head segment, so a single call may fill only a part of
- * [sink] when the requested bytes span multiple segments.
- */
-private fun Source.readFully(sink: ByteBuffer) {
-    while (sink.hasRemaining()) {
-        if (readAtMostTo(sink) < 0) {
-            throw SerializationException("Unexpected end of source: missing ${sink.remaining()} bytes")
-        }
-    }
-}

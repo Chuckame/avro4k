@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.internal.DecodingStep
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.generic.AvroValueGenericDecoder
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import kotlinx.serialization.DeserializationStrategy
@@ -12,13 +13,12 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericFixed
-import org.apache.avro.io.Decoder
 
 internal class RecordDirectDecoder(
     private val writerRecordSchema: Schema,
     descriptor: SerialDescriptor,
     avro: Avro,
-    binaryDecoder: Decoder,
+    binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
     // from descriptor element index to schema field. The missing fields are at the end to decode the default values
     private val classDescriptor = avro.recordResolver.resolveFields(writerRecordSchema, descriptor)
@@ -171,7 +171,7 @@ internal class RecordDirectDecoder(
     }
 }
 
-private fun Decoder.skip(s: Schema) {
+private fun AvroBinaryDecoder.skip(s: Schema) {
     val schema =
         if (s.isUnion) {
             s.types[readIndex()]

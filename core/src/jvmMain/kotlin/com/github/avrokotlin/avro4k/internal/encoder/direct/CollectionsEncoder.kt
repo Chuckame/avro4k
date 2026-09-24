@@ -1,14 +1,14 @@
 package com.github.avrokotlin.avro4k.internal.encoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.apache.avro.Schema
 
-internal class MapDirectEncoder(private val schema: Schema, mapSize: Int, avro: Avro, binaryEncoder: org.apache.avro.io.Encoder) :
+internal class MapDirectEncoder(private val schema: Schema, mapSize: Int, avro: Avro, binaryEncoder: AvroBinaryEncoder) :
     AbstractAvroDirectEncoder(avro, binaryEncoder) {
     init {
-        binaryEncoder.writeMapStart()
-        binaryEncoder.setItemCount(mapSize.toLong())
+        binaryEncoder.writeMapStart(mapSize.toLong())
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
@@ -41,11 +41,10 @@ internal class ArrayDirectEncoder(
     private val arraySchema: Schema,
     arraySize: Int,
     avro: Avro,
-    binaryEncoder: org.apache.avro.io.Encoder,
+    binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
     init {
-        binaryEncoder.writeArrayStart()
-        binaryEncoder.setItemCount(arraySize.toLong())
+        binaryEncoder.writeArrayStart(arraySize.toLong())
     }
 
     override lateinit var currentWriterSchema: Schema

@@ -1,15 +1,16 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.decodeWithApacheDecoder
-import com.github.avrokotlin.avro4k.internal.encodeWithApacheEncoder
+import kotlinx.io.Buffer
+import kotlinx.io.InternalIoApi
+import kotlinx.io.RawSource
+import kotlinx.io.asSink
+import kotlinx.io.buffered
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer
 import okio.BufferedSink
 import okio.BufferedSource
 import org.apache.avro.Schema
-import org.apache.avro.io.DecoderFactory
-import org.apache.avro.io.EncoderFactory
 
 @Deprecated("Use kotlinx.io's encodeToSink instead")
 @ExperimentalAvro4kApi
@@ -19,9 +20,9 @@ public fun <T> Avro.encodeToSink(
     value: T,
     sink: BufferedSink,
 ) {
-    val binaryEncoder = EncoderFactory.get().directBinaryEncoder(sink.outputStream(), null)
-    encodeWithApacheEncoder(writerSchema, serializer, value, binaryEncoder)
-    binaryEncoder.flush()
+    val kotlinxIoSink = sink.outputStream().asSink().buffered()
+    encodeToSink(writerSchema, serializer, value, kotlinxIoSink)
+    kotlinxIoSink.flush()
 }
 
 @Deprecated("Use kotlinx.io's encodeToSink instead")
@@ -54,11 +55,35 @@ public fun <T> Avro.decodeFromSource(
     deserializer: DeserializationStrategy<T>,
     source: BufferedSource,
 ): T {
-    return decodeWithApacheDecoder(
-        writerSchema,
-        deserializer,
-        DecoderFactory.get().directBinaryDecoder(source.inputStream(), null)
-    )
+    // Decoding reads ahead, so it reads from a peek of the source, which is then advanced by exactly the decoded bytes
+    val peekSource = CountingPeekSource(source)
+    val kotlinxIoSource = peekSource.buffered()
+    val result = decodeFromSource(writerSchema, deserializer, kotlinxIoSource)
+    @OptIn(InternalIoApi::class)
+    source.skip(peekSource.bytesRead - kotlinxIoSource.buffer.size)
+    return result
+}
+
+private class CountingPeekSource(source: BufferedSource) : RawSource {
+    private val peek = source.peek()
+    var bytesRead = 0L
+        private set
+
+    override fun readAtMostTo(
+        sink: Buffer,
+        byteCount: Long,
+    ): Long {
+        if (!peek.request(1)) {
+            return -1
+        }
+        val bytes = peek.readByteArray(minOf(byteCount, peek.buffer.size))
+        sink.write(bytes)
+        bytesRead += bytes.size
+        return bytes.size.toLong()
+    }
+
+    override fun close() {
+    }
 }
 
 @Deprecated("Use kotlinx.io's decodeFromSource instead")

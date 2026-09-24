@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.decoder.direct
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.internal.toByteExact
@@ -28,7 +29,7 @@ import org.apache.avro.generic.GenericFixed
 @OptIn(ExperimentalSerializationApi::class)
 internal abstract class AbstractAvroDirectDecoder(
     internal val avro: Avro,
-    protected val binaryDecoder: org.apache.avro.io.Decoder,
+    protected val binaryDecoder: AvroBinaryDecoder,
 ) : AbstractInterceptingDecoder(), AvroDecoder {
     abstract override var currentWriterSchema: Schema
     private var decodedCollectionSize = -1
@@ -195,7 +196,7 @@ internal abstract class AbstractAvroDirectDecoder(
     override fun decodeChar(): Char {
         return when (currentWriterSchema.type) {
             Schema.Type.INT -> binaryDecoder.readInt().toChar()
-            Schema.Type.STRING -> binaryDecoder.readString(null).single()
+            Schema.Type.STRING -> binaryDecoder.readStringBytes().decodeToString().single()
             else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.STRING)
         }
     }
@@ -206,7 +207,7 @@ internal abstract class AbstractAvroDirectDecoder(
 
             Schema.Type.BYTES -> binaryDecoder.readBytes().decodeToString()
 
-            Schema.Type.FIXED -> binaryDecoder.readFixedBytes(currentWriterSchema.fixedSize).decodeToString()
+            Schema.Type.FIXED -> binaryDecoder.readFixed(currentWriterSchema.fixedSize).decodeToString()
 
             Schema.Type.BOOLEAN -> binaryDecoder.readBoolean().toString()
 
@@ -267,8 +268,8 @@ internal abstract class AbstractAvroDirectDecoder(
     override fun decodeBytes(): ByteArray {
         return when (currentWriterSchema.type) {
             Schema.Type.BYTES -> binaryDecoder.readBytes()
-            Schema.Type.FIXED -> binaryDecoder.readFixedBytes(currentWriterSchema.fixedSize)
-            Schema.Type.STRING -> binaryDecoder.readString(null).bytes
+            Schema.Type.FIXED -> binaryDecoder.readFixed(currentWriterSchema.fixedSize)
+            Schema.Type.STRING -> binaryDecoder.readStringBytes()
             else -> throw unsupportedWriterTypeError(Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.STRING)
         }
     }
@@ -276,37 +277,18 @@ internal abstract class AbstractAvroDirectDecoder(
     override fun decodeFixed(): GenericFixed {
         return when (currentWriterSchema.type) {
             Schema.Type.BYTES -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readBytes())
-            Schema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readFixedBytes(currentWriterSchema.fixedSize))
-            Schema.Type.STRING -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readString(null).bytes)
+            Schema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readFixed(currentWriterSchema.fixedSize))
+            Schema.Type.STRING -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readStringBytes())
             else -> throw unsupportedWriterTypeError(Schema.Type.FIXED, Schema.Type.BYTES, Schema.Type.STRING)
         }
     }
-}
-
-private fun org.apache.avro.io.Decoder.readFixedBytes(size: Int): ByteArray {
-    return ByteArray(size).also { buf -> readFixed(buf) }
-}
-
-/**
- * Reads the next `bytes` value as an exclusively owned [ByteArray].
- *
- * The returned buffer of [org.apache.avro.io.Decoder.readBytes] is only guaranteed to expose its content between
- * `position()` and `limit()`, so [java.nio.ByteBuffer.array] may be larger than — or offset from — the value.
- * It may also be a view onto memory owned by someone else (e.g. `DirectBinaryDecoder` over a
- * `ByteBufferInputStream` hands back the caller's own buffer, and `KotlinxIoDecoder` wraps a recyclable segment),
- * so the bytes must always be copied out before being handed to the deserialized value.
- */
-private fun org.apache.avro.io.Decoder.readBytes(): ByteArray {
-    val buffer = readBytes(null)
-    return ByteArray(buffer.remaining())
-        .apply { buffer.get(this) }
 }
 
 private class PolymorphicDecoder(
     avro: Avro,
     descriptor: SerialDescriptor,
     schema: Schema,
-    private val binaryDecoder: org.apache.avro.io.Decoder,
+    private val binaryDecoder: AvroBinaryDecoder,
 ) : AbstractPolymorphicDecoder(avro, descriptor, schema) {
     override fun tryFindSerialNameForUnion(
         namesAndAliasesToSerialName: Map<String, String>,

@@ -1,9 +1,9 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.decodeWithApacheDecoder
-import com.github.avrokotlin.avro4k.internal.decoder.direct.KotlinxIoDecoder
-import com.github.avrokotlin.avro4k.internal.encodeWithApacheEncoder
-import com.github.avrokotlin.avro4k.internal.encoder.direct.KotlinxIoEncoder
+import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoDecoder
+import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
+import com.github.avrokotlin.avro4k.internal.decodeWithValidation
+import com.github.avrokotlin.avro4k.internal.encodeWithValidation
 import kotlinx.io.Sink
 import kotlinx.io.Source
 import kotlinx.serialization.DeserializationStrategy
@@ -34,7 +34,7 @@ public fun <T> Avro.encodeToSink(
     value: T,
     sink: Sink,
 ) {
-    encodeWithApacheEncoder(writerSchema, serializer, value, KotlinxIoEncoder(sink))
+    encodeWithValidation(writerSchema, serializer, value, KotlinxIoEncoder(sink))
 }
 
 /**
@@ -108,7 +108,7 @@ public fun <T> Avro.decodeFromSource(
     deserializer: DeserializationStrategy<T>,
     source: Source,
 ): T {
-    return decodeWithApacheDecoder(
+    return decodeWithValidation(
         writerSchema,
         deserializer,
         KotlinxIoDecoder(source)

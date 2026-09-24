@@ -47,8 +47,8 @@ internal abstract class AbstractAvroGenericEncoder : AbstractAvroEncoder() {
         encodeValue(value)
     }
 
-    override fun encodeStringUnchecked(value: Utf8) {
-        encodeValue(value)
+    override fun encodeStringUnchecked(utf8: ByteArray) {
+        encodeValue(Utf8(utf8))
     }
 
     override fun encodeStringUnchecked(value: String) {

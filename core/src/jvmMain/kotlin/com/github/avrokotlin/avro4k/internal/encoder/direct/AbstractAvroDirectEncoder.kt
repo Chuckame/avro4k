@@ -1,6 +1,7 @@
 package com.github.avrokotlin.avro4k.internal.encoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.encoder.AbstractAvroEncoder
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
@@ -10,17 +11,16 @@ import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.modules.SerializersModule
 import org.apache.avro.Schema
-import org.apache.avro.util.Utf8
 
 internal class AvroValueDirectEncoder(
     override var currentWriterSchema: Schema,
     avro: Avro,
-    binaryEncoder: org.apache.avro.io.Encoder,
+    binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder)
 
 internal sealed class AbstractAvroDirectEncoder(
     protected val avro: Avro,
-    protected val binaryEncoder: org.apache.avro.io.Encoder,
+    protected val binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroEncoder() {
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
@@ -79,8 +79,8 @@ internal sealed class AbstractAvroDirectEncoder(
         binaryEncoder.writeDouble(value)
     }
 
-    override fun encodeStringUnchecked(value: Utf8) {
-        binaryEncoder.writeString(value)
+    override fun encodeStringUnchecked(utf8: ByteArray) {
+        binaryEncoder.writeString(utf8)
     }
 
     override fun encodeStringUnchecked(value: String) {
@@ -108,7 +108,7 @@ private fun Schema.getEnumOrdinalChecked(symbol: String): Int {
 internal class PolymorphicDirectEncoder(
     private val avro: Avro,
     private val schema: Schema,
-    private val binaryEncoder: org.apache.avro.io.Encoder,
+    private val binaryEncoder: AvroBinaryEncoder,
 ) : AbstractEncoder() {
     override val serializersModule: SerializersModule
         get() = avro.serializersModule

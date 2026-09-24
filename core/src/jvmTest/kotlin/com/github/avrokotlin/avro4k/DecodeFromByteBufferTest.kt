@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.Serializable
@@ -56,6 +57,47 @@ internal class DecodeFromByteBufferTest : StringSpec({
         Avro.decodeFromByteBuffer<SimpleRecord>(buffer)
 
         buffer.position() shouldBe prefix.size + encoded.size
+    }
+
+    "decodes consecutive values from the same ByteBuffer" {
+        val other = SimpleRecord(name = "bob", age = 7)
+        val buffer = ByteBuffer.wrap(encoded + Avro.encodeToByteArray(other))
+
+        Avro.decodeFromByteBuffer<SimpleRecord>(buffer) shouldBe value
+        Avro.decodeFromByteBuffer<SimpleRecord>(buffer) shouldBe other
+        buffer.hasRemaining() shouldBe false
+    }
+
+    "decodes from a direct ByteBuffer and advances its position past the consumed bytes" {
+        val suffix = byteArrayOf(0x01, 0x02, 0x03)
+        val buffer = ByteBuffer.allocateDirect(encoded.size + suffix.size).put(encoded).put(suffix).flip()
+
+        Avro.decodeFromByteBuffer<SimpleRecord>(buffer) shouldBe value
+        buffer.position() shouldBe encoded.size
+    }
+
+    "decodes from a read-only ByteBuffer and advances its position past the consumed bytes" {
+        val suffix = byteArrayOf(0x01, 0x02, 0x03)
+        val buffer = ByteBuffer.wrap(encoded + suffix).asReadOnlyBuffer()
+
+        Avro.decodeFromByteBuffer<SimpleRecord>(buffer) shouldBe value
+        buffer.position() shouldBe encoded.size
+    }
+
+    "decodes from a sliced ByteBuffer with a non-zero arrayOffset" {
+        val prefix = byteArrayOf(0x00, 0x00, 0x00, 0x00, 42)
+        val suffix = byteArrayOf(0x01, 0x02, 0x03)
+        val sliced = ByteBuffer.wrap(prefix + encoded + suffix).position(prefix.size).slice()
+
+        Avro.decodeFromByteBuffer<SimpleRecord>(sliced) shouldBe value
+        sliced.position() shouldBe encoded.size
+    }
+
+    "does not advance the position of an empty ByteBuffer that fails to decode" {
+        val buffer = ByteBuffer.wrap(encoded).position(encoded.size)
+
+        shouldThrow<Exception> { Avro.decodeFromByteBuffer<SimpleRecord>(buffer) }
+        buffer.position() shouldBe encoded.size
     }
 }) {
     @Serializable

@@ -18,15 +18,14 @@ import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 
 /**
- * Regression tests for the `Decoder.readBytes()` helper of the direct decoders.
+ * Regression tests for reading BYTES values into an exclusively owned, exactly sized [ByteArray].
  *
- * `org.apache.avro.io.Decoder.readBytes(null)` is only contracted to return a [ByteBuffer] positioned on the
- * requested bytes: it is free to return a buffer that is a view onto memory owned by someone else. This is exactly
- * what `DirectBinaryDecoder` does when it reads from an `ByteBufferInputStream` (the decoder used by
- * [decodeFromByteBuffer]): `ByteBufferInputStream.readBuffer` returns the caller's own buffer as-is whenever its
- * remaining bytes match the requested length.
- *
- * So the decoded bytes must always be copied out of `position()`..`limit()`, never taken from `array()`.
+ * - [decodeFromByteBuffer] reads a heap buffer in place (its array is wrapped, not copied, into the kotlinx-io source),
+ *   so every decoded value must be copied out of it, bounded by the buffer's position and limit.
+ * - `org.apache.avro.io.Decoder.readBytes(null)`, which the Apache adapter calls, is only contracted to return a
+ *   [ByteBuffer] positioned on the requested bytes: it is free to return a view onto memory owned by someone else,
+ *   as `DirectBinaryDecoder` over a `ByteBufferInputStream` does. So the adapter copies `position()`..`limit()` out,
+ *   never `array()`.
  */
 internal class ReadBytesBufferBoundsTest : StringSpec({
     val payload = byteArrayOf(11, 22, 33, 44, 55)
@@ -90,6 +89,25 @@ internal class ReadBytesBufferBoundsTest : StringSpec({
         val decoded = Avro.decodeFromSource<BytesRecord>(ByteArrayInputStream(encoded).asSource().buffered())
 
         decoded.payload shouldBe bigPayload
+    }
+
+    "does not alias the caller's heap buffer, which is decoded in place" {
+        val encoded = Avro.encodeToByteArray(BytesRecord("header", payload))
+
+        val decoded = Avro.decodeFromByteBuffer<BytesRecord>(ByteBuffer.wrap(encoded))
+
+        decoded.payload shouldBe payload
+        encoded.fill(0)
+        decoded.payload shouldBe payload
+        decoded.header shouldBe "header"
+    }
+
+    "decodes a trailing BYTES field from a read-only and from a direct buffer" {
+        val encoded = Avro.encodeToByteArray(BytesRecord("header", payload))
+        val direct = ByteBuffer.allocateDirect(encoded.size).put(encoded).flip()
+
+        Avro.decodeFromByteBuffer<BytesRecord>(ByteBuffer.wrap(encoded).asReadOnlyBuffer()).payload shouldBe payload
+        Avro.decodeFromByteBuffer<BytesRecord>(direct).payload shouldBe payload
     }
 
     "does not alias the caller's buffer even when its bounds exactly match the BYTES field" {

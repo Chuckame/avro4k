@@ -2,16 +2,16 @@ package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericFixed
-import org.apache.avro.io.Decoder
 
 internal class RecordAsMapDirectDecoder(
     private val writerRecordSchema: Schema,
     avro: Avro,
-    binaryDecoder: Decoder,
+    binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
     override lateinit var currentWriterSchema: Schema
     private var fieldNameToRead: String? = null

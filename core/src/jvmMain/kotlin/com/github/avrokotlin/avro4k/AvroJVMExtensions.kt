@@ -1,15 +1,16 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.decodeWithApacheDecoder
+import kotlinx.io.Buffer
+import kotlinx.io.UnsafeIoApi
 import kotlinx.io.asSink
 import kotlinx.io.asSource
 import kotlinx.io.buffered
+import kotlinx.io.transferFrom
+import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer
 import org.apache.avro.Schema
-import org.apache.avro.io.DecoderFactory
-import org.apache.avro.util.ByteBufferInputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
@@ -84,9 +85,39 @@ public inline fun <reified T> Avro.decodeFromByteBuffer(
     deserializer: DeserializationStrategy<T> = serializersModule.serializer<T>(),
     writerSchema: Schema = schema(deserializer.descriptor),
 ): T {
-    return decodeWithApacheDecoder(
-        writerSchema,
-        deserializer,
-        DecoderFactory.get().directBinaryDecoder(ByteBufferInputStream(listOf(input)), null)
-    )
+    return decodeFromByteBufferInternal(writerSchema, deserializer, input)
+}
+
+/**
+ * The body of [decodeFromByteBuffer], which is inline. Decodes from the [input]'s remaining bytes and then advances its
+ * position by exactly the number of bytes decoded.
+ *
+ * A heap buffer is read in place, without copying its content; any other buffer is copied first.
+ */
+@InternalAvro4kApi
+public fun <T> Avro.decodeFromByteBufferInternal(
+    writerSchema: Schema,
+    deserializer: DeserializationStrategy<T>,
+    input: ByteBuffer,
+): T {
+    val source = input.toKotlinxIoBuffer()
+    val size = source.size
+    val result = decodeFromSource(writerSchema, deserializer, source)
+    input.position(input.position() + (size - source.size).toInt())
+    return result
+}
+
+@OptIn(UnsafeIoApi::class)
+private fun ByteBuffer.toKotlinxIoBuffer(): Buffer {
+    val buffer = Buffer()
+    if (!hasRemaining()) {
+        return buffer
+    }
+    if (hasArray()) {
+        // Wraps the array without copying it: the decoder only reads from its source, and copies every value out
+        UnsafeBufferOperations.moveToTail(buffer, array(), arrayOffset() + position(), arrayOffset() + limit())
+    } else {
+        buffer.transferFrom(duplicate())
+    }
+    return buffer
 }
