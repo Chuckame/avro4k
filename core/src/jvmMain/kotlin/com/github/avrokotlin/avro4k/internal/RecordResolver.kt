@@ -128,8 +128,21 @@ internal class RecordResolver(
     ): SerializationWorkflow {
         return SerializationWorkflow(
             computeDecodingSteps(classDescriptor, writerSchema),
-            computeEncodingWorkflow(classDescriptor, writerSchema)
+            computeEncodingWorkflow(classDescriptor, writerSchema),
+            // computed at most a few times on a race, and then only read: no lock
+            lazy(LazyThreadSafetyMode.PUBLICATION) { computeMissingElementSteps(classDescriptor) }
         )
+    }
+
+    /**
+     * The step of every element of [classDescriptor] when its value is missing, whatever the writer schema: see
+     * [SerializationWorkflow.missingElements].
+     */
+    private fun computeMissingElementSteps(classDescriptor: SerialDescriptor): Array<DecodingStep> {
+        val readerSchema = avro.schema(classDescriptor)
+        return Array(classDescriptor.elementsCount) { elementIndex ->
+            resolveMissingElement(classDescriptor, elementIndex, readerSchema.fields[elementIndex])
+        }
     }
 
     private fun computeDecodingSteps(
@@ -181,45 +194,55 @@ internal class RecordResolver(
             visitedElements.forEachIndexed { elementIndex, visited ->
                 if (visited) return@forEachIndexed
 
-                val readerDefaultAnnotation = classDescriptor.findElementAnnotation<AvroDefault>(elementIndex)
-                val readerField = readerSchema.fields[elementIndex]
-
-                decodingSteps +=
-                    if (readerDefaultAnnotation != null) {
-                        val defaultValue = readerDefaultAnnotation.toFieldDefault(readerField.schema())
-                        DecodingStep.GetDefaultValue(
-                            elementIndex = elementIndex,
-                            schema = readerField.schema().resolveDefaultBranch(defaultValue),
-                            defaultValue = defaultValue
-                        )
-                    } else if (classDescriptor.isElementOptional(elementIndex)) {
-                        // There is already a kotlin default value for this element, so we can skip it.
-                        // We don't want to put an implicit null/empty collection here as it would override the kotlin default.
-                        DecodingStep.IgnoreOptionalElement(elementIndex)
-                    } else if (avro.configuration.implicitNulls && readerField.schema().isNullable) {
-                        DecodingStep.GetDefaultValue(
-                            elementIndex = elementIndex,
-                            schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.NULL },
-                            defaultValue = JsonNull
-                        )
-                    } else if (avro.configuration.implicitEmptyCollections && readerField.schema().isTypeOf(Schema.Type.ARRAY)) {
-                        DecodingStep.GetDefaultValue(
-                            elementIndex = elementIndex,
-                            schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.ARRAY },
-                            defaultValue = EMPTY_JSON_ARRAY
-                        )
-                    } else if (avro.configuration.implicitEmptyCollections && readerField.schema().isTypeOf(Schema.Type.MAP)) {
-                        DecodingStep.GetDefaultValue(
-                            elementIndex = elementIndex,
-                            schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.MAP },
-                            defaultValue = EMPTY_JSON_OBJECT
-                        )
-                    } else {
-                        DecodingStep.MissingElementValueFailure(elementIndex)
-                    }
+                decodingSteps += resolveMissingElement(classDescriptor, elementIndex, readerSchema.fields[elementIndex])
             }
         }
         return decodingSteps.toTypedArray()
+    }
+
+    /**
+     * The step of an element whose value is missing, in this order: its `@AvroDefault` (the json its schema has, see
+     * [toFieldDefault]), its kotlin default, the implicit `null` or empty collection when configured, or a failure. This is
+     * the resolution of a reader field missing from the writer schema, and of a field missing from a record default value.
+     */
+    private fun resolveMissingElement(
+        classDescriptor: SerialDescriptor,
+        elementIndex: Int,
+        readerField: Schema.Field,
+    ): DecodingStep {
+        val readerDefaultAnnotation = classDescriptor.findElementAnnotation<AvroDefault>(elementIndex)
+        return if (readerDefaultAnnotation != null) {
+            val defaultValue = readerDefaultAnnotation.toFieldDefault(readerField.schema())
+            DecodingStep.GetDefaultValue(
+                elementIndex = elementIndex,
+                schema = readerField.schema().resolveDefaultBranch(defaultValue),
+                defaultValue = defaultValue
+            )
+        } else if (classDescriptor.isElementOptional(elementIndex)) {
+            // There is already a kotlin default value for this element, so we can skip it.
+            // We don't want to put an implicit null/empty collection here as it would override the kotlin default.
+            DecodingStep.IgnoreOptionalElement(elementIndex)
+        } else if (avro.configuration.implicitNulls && readerField.schema().isNullable) {
+            DecodingStep.GetDefaultValue(
+                elementIndex = elementIndex,
+                schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.NULL },
+                defaultValue = JsonNull
+            )
+        } else if (avro.configuration.implicitEmptyCollections && readerField.schema().isTypeOf(Schema.Type.ARRAY)) {
+            DecodingStep.GetDefaultValue(
+                elementIndex = elementIndex,
+                schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.ARRAY },
+                defaultValue = EMPTY_JSON_ARRAY
+            )
+        } else if (avro.configuration.implicitEmptyCollections && readerField.schema().isTypeOf(Schema.Type.MAP)) {
+            DecodingStep.GetDefaultValue(
+                elementIndex = elementIndex,
+                schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.MAP },
+                defaultValue = EMPTY_JSON_OBJECT
+            )
+        } else {
+            DecodingStep.MissingElementValueFailure(elementIndex)
+        }
     }
 
     private fun computeEncodingWorkflow(
@@ -289,7 +312,16 @@ internal class SerializationWorkflow(
      * Encoding steps are ordered regarding the class descriptor and not the writer schema.
      */
     val encoding: EncodingWorkflow,
-)
+    /**
+     * The step of each element, by element index, when its value is missing: a [DecodingStep.GetDefaultValue],
+     * [DecodingStep.IgnoreOptionalElement] or [DecodingStep.MissingElementValueFailure]. Used for the fields a record default
+     * value leaves out, which take their own default, as the specification reads a record default. Computed on first use,
+     * as only default values need it.
+     */
+    missingElements: Lazy<Array<DecodingStep>>,
+) {
+    val missingElements: Array<DecodingStep> by missingElements
+}
 
 internal sealed interface EncodingWorkflow {
     /**

@@ -71,6 +71,18 @@ internal class AvroDefaultSpecTest : StringSpec({
         assertDecodedLikeApacheJava<NullStringDefault>() shouldBe NullStringDefault("x", "null")
     }
 
+    "a field a record default leaves out takes its own default, at any depth" {
+        val inner = Inner(a = 1, b = "dflt", c = 'z', d = null, e = emptyList(), deeper = Deeper(5, 7))
+        assertDecodedLikeApacheJava<NestedDefaults>() shouldBe
+            NestedDefaults(
+                name = "x",
+                inner = inner,
+                inners = listOf(inner.copy(a = 2, b = "given")),
+                innerMap = mapOf("k" to inner.copy(a = 3)),
+                innerNullable = inner.copy(a = 4, deeper = Deeper(6, 7))
+            )
+    }
+
     "other defaults decode like Apache Java" {
         assertDecodedLikeApacheJava<OtherDefaults>() shouldBe
             OtherDefaults(
@@ -162,6 +174,34 @@ internal class AvroDefaultSpecTest : StringSpec({
     @Serializable
     @SerialName("Nested")
     private data class Nested(val a: Int, val b: String)
+
+    @Serializable
+    @SerialName("Inner")
+    private data class Inner(
+        val a: Int,
+        @AvroDefault("dflt") val b: String,
+        @AvroDefault("z") val c: Char,
+        val d: String?,
+        val e: List<Int>,
+        @AvroDefault("""{"x": 5}""") val deeper: Deeper,
+    )
+
+    @Serializable
+    @SerialName("Deeper")
+    private data class Deeper(
+        val x: Int,
+        @AvroDefault("7") val y: Int,
+    )
+
+    @Serializable
+    @SerialName("R")
+    private data class NestedDefaults(
+        val name: String,
+        @AvroDefault("""{"a": 1}""") val inner: Inner,
+        @AvroDefault("""[{"a": 2, "b": "given"}]""") val inners: List<Inner>,
+        @AvroDefault("""{"k": {"a": 3}}""") val innerMap: Map<String, Inner>,
+        @AvroDefault("""{"a": 4, "deeper": {"x": 6}}""") val innerNullable: Inner?,
+    )
 
     @Serializable
     @SerialName("R")

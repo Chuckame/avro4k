@@ -5,6 +5,7 @@ import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
+import com.github.avrokotlin.avro4k.internal.SerializationWorkflow
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.defaultValueBytes
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
@@ -44,14 +45,13 @@ import org.apache.avro.generic.GenericFixed
  * parsed from its `@AvroDefault` (or the implicit `null`, `[]` or `{}`), against the reader field's [schema].
  *
  * The json is never converted to an intermediate value tree: each node is decoded against the schema at its position,
- * a union being resolved by the json's kind ([resolveDefaultBranch]), so [currentWriterSchema] is never a union.
- * A record goes through the [com.github.avrokotlin.avro4k.internal.RecordResolver] workflow of its reader schema, its
- * fields being read from the json object by name.
+ * a union being resolved to the first branch the json is valid for ([resolveDefaultBranch]), so [currentWriterSchema] is
+ * never a union. A record goes through the [com.github.avrokotlin.avro4k.internal.RecordResolver] workflow of its reader
+ * schema, its fields being read from the json object by name, and a field the json leaves out taking its own default.
  *
  * The accepted conversions are those of the former path, which converted the json to Apache `GenericData` values and
- * decoded them with the generic decoder (a number or a boolean can be read from a string, a missing field of a record
- * default decodes as `null`), except where the specification says otherwise: bytes and fixed defaults map each code point
- * 0-255 to a byte, and a union default is read from the first branch it is valid for.
+ * decoded them with the generic decoder (a number or a boolean can be read from a string), except where the
+ * specification says otherwise: bytes and fixed defaults map each code point 0-255 to a byte.
  */
 @OptIn(ExperimentalSerializationApi::class)
 internal class JsonDefaultDecoder(
@@ -376,7 +376,9 @@ private class MapJsonDefaultDecoder(
 
 /**
  * A record default, decoded through the workflow of its reader schema: each field is read from the json object by its
- * name in that schema, and a field the json does not have decodes as `null`.
+ * name in that schema. A field the json object leaves out takes its own default, exactly as a reader field missing from
+ * the writer schema does ([SerializationWorkflow.missingElements]): its `@AvroDefault`, its kotlin default, the implicit
+ * `null` or empty collection, or a failure. That is how the specification reads a record default.
  */
 private class RecordJsonDefaultDecoder(
     avro: Avro,
@@ -384,19 +386,23 @@ private class RecordJsonDefaultDecoder(
     private val recordSchema: Schema,
     descriptor: SerialDescriptor,
 ) : JsonDefaultCompositeDecoder(avro) {
-    private val decodingSteps = avro.recordResolver.resolveFields(recordSchema, descriptor).decoding
+    private val workflow = avro.recordResolver.resolveFields(recordSchema, descriptor)
     private var nextDecodingStepIndex = 0
     private lateinit var currentDecodingStep: DecodingStep.ValidatedDecodingStep
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
-        while (nextDecodingStepIndex < decodingSteps.size) {
-            when (val step = decodingSteps[nextDecodingStepIndex++]) {
+        while (nextDecodingStepIndex < workflow.decoding.size) {
+            var step = workflow.decoding[nextDecodingStepIndex++]
+            if (step is DecodingStep.DeserializeWriterField && recordSchema.fields[step.writerFieldIndex].name() !in record) {
+                step = workflow.missingElements[step.elementIndex]
+            }
+            when (step) {
                 is DecodingStep.IgnoreOptionalElement, is DecodingStep.SkipWriterField -> {}
 
                 is DecodingStep.MissingElementValueFailure ->
                     throw SerializationException(
-                        "Reader field '${descriptor.nonNullSerialName}.${descriptor.getElementName(step.elementIndex)}' " +
-                            "has no corresponding field in the default value's schema $recordSchema"
+                        "Field '${descriptor.getElementName(step.elementIndex)}' is missing from the default value $record of " +
+                            "'${descriptor.nonNullSerialName}', and has no default value of its own"
                     )
 
                 is DecodingStep.ValidatedDecodingStep -> {
@@ -411,7 +417,7 @@ private class RecordJsonDefaultDecoder(
     override fun elementDecoder(index: Int): JsonDefaultDecoder =
         when (val step = currentDecodingStep) {
             is DecodingStep.DeserializeWriterField ->
-                JsonDefaultDecoder(avro, record[recordSchema.fields[step.writerFieldIndex].name()] ?: JsonNull, step.schema)
+                JsonDefaultDecoder(avro, record.getValue(recordSchema.fields[step.writerFieldIndex].name()), step.schema)
 
             is DecodingStep.GetDefaultValue -> JsonDefaultDecoder(avro, step.defaultValue, step.schema)
         }

@@ -17,6 +17,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -184,6 +185,16 @@ internal class JsonDefaultDecoderTest : StringSpec({
         shouldThrow<SerializationException> { JsonDefaultDecoder(Avro, JsonPrimitive(true), intOrString) }
     }
 
+    "a field a record default leaves out takes its kotlin default, or fails when it has no default at all" {
+        // unreachable from a generated schema, which Apache's validation rejects, but resolved as a missing writer field is
+        val schema = Avro.apacheSchema<WithKotlinDefault>()
+        JsonDefaultDecoder(Avro, Json.parseToJsonElement("{\"a\":1}"), schema).decodeSerializableValue(serializer<WithKotlinDefault>()) shouldBe
+            WithKotlinDefault(1, 42)
+        shouldThrow<SerializationException> {
+            JsonDefaultDecoder(Avro, Json.parseToJsonElement("{\"b\":1}"), schema).decodeSerializableValue(serializer<WithKotlinDefault>())
+        }.message shouldContain "Field 'a' is missing from the default value"
+    }
+
     "an inline element reading its enum default with decodeEnum gets the symbol's index" {
         // RecordDirectDecoder.decodeEnum used to decode a default with Int.serializer(), so "B".toInt() failed
         val writerSchema = SchemaBuilder.record("EnumHolder").fields().requiredString("name").endRecord()
@@ -249,6 +260,10 @@ internal class JsonDefaultDecoderTest : StringSpec({
         @com.github.avrokotlin.avro4k.AvroEnumDefault
         Z,
     }
+
+    @Serializable
+    @SerialName("WithKotlinDefault")
+    private data class WithKotlinDefault(val a: Int, val b: Int = 42)
 
     @Serializable
     @SerialName("EnumHolder")
