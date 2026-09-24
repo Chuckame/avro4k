@@ -11,7 +11,8 @@
 
 ## Executive summary
 
-- **17 units** (M3-01 … M3-17), one commit / one agent each, in 4 parallel batches of ≤ 3 agents; api-touching units run alone.
+- **19 units** (M3-01 … M3-19; 18 and 19 added by the user's answers in §11), one commit / one agent each; api-touching units
+  run alone; **at most 2 concurrent agents on the 16 GB host**.
 - **Order of the switch.** The Apache → `AvroSchema` switch is cut only at boundaries that are not crossed per value: schema
   generation (per descriptor) and the encode/decode entry points (per call). M3-05 temporarily hosts the converter in core
   `jvmMain`, so core can convert at those boundaries; M3-14 moves it back to `apache-interop`. Order: groundwork → visitors
@@ -231,6 +232,24 @@ produce identical bytes. Tests only.
 **M3-17 · Re-baseline + review.** The orchestrator runs the benchmarks, strictly serialized (§9), then a
 `feature-dev:code-reviewer` pass over M3-01 … M3-16 together (the M1/M2 lesson).
 
+**M3-18 · Common validating codec** (added by answer Q2). `ValidatingAvroBinaryEncoder` / `ValidatingAvroBinaryDecoder` in
+`C/internal/codec/`, wrapping the M3-02 ABI and checking every call against the writer `AvroSchema` (a small explicit stack of
+expected symbols — record fields in order, union index then branch, array/map item counts, enum/fixed bounds). Wired to
+`configuration.validateSerialization` on every platform; the Apache `ValidatingEncoder` path from M3-02's adapters is deleted.
+Deps: M3-02, M3-07, M3-11 (the runtime must hand it an `AvroSchema`). Before M3-14. Not api. Alone (touches the encoder/decoder
+entry points). `ACC+KMP` + a JVM **differential** test: the same call sequences accepted/rejected by Apache's
+`ValidatingEncoder`/`ValidatingDecoder`, including the invalid ones the current tests exercise. Perf: only when the flag is on
+(a debugging aid); the flag-off path must stay a single branch — confirm by reading, no A/B. **Risk:** grammar edge cases
+(nested unions, empty arrays, map keys); per-operation state lives on the validator instance created per call (shared-state rule).
+
+**M3-19 · GenericData APIs → `apache-interop`** (added by answer Q1; **api**, alone). Move `J/AvroGenericDataExtensions.kt`,
+`J/internal/encoder/generic/*`, `J/internal/decoder/generic/*`, `J/ListRecord.kt` and their tests (`GenericDataMapEncodingTest`,
+the generic parts of `ArrayEncodingTest`/`AvroAssertions`) to `apache-interop`, same packages where possible. Core exposes, as
+`@InternalAvro4kApi`, only what those trees build on (e.g. `AbstractAvroEncoder`/decoder bases, `RecordResolver` workflows) —
+list them in the note and keep the set minimal. Fix the ledger's `ArrayGenericDecoder` nullable-union backlog bug while here (own
+commit if it grows). Deps: M3-11, M3-12 (the trees are flipped to `AvroSchema` internals by M3-11). Before M3-14. `ACC` + review
+the api diffs of both modules. Perf: generic tree is unbenchmarked; not covered.
+
 ## 4. B2 decisions
 
 - **ABI** (`C/internal/codec/`, `@InternalAvro4kApi public abstract class`), mirroring Apache's grammar so `ValidatingEncoder` and
@@ -338,17 +357,27 @@ delta under 10% confirmed over **≥ 3 separate invocations per side** (M1); num
 
 | Step | Units | Notes |
 |---|---|---|
-| Batch 1 | M3-01 ∥ M3-02 ∥ M3-03 | disjoint files; merge 02 first, then its A/B, then 01 and 03 |
+| Batch 1 | M3-01 ∥ M3-02, then M3-03 | **max 2 concurrent agents on the 16 GB host** (orchestrator decision); merge 02 first, then its A/B, then 01 and 03 |
 | 2 | M3-04 | alone (api) |
 | Batch 2 | M3-05 ∥ M3-06 ∥ M3-07 | M3-06 A/B after merging |
 | 3 | M3-08 | alone (api if Q1 = drop) |
 | Batch 3 | M3-09 ∥ M3-10 | |
 | 4 | M3-11, then M3-12 | back to back, each alone; one A/B covers both |
+| 4b | M3-18, then M3-19 | 18 alone (entry points); 19 is api |
 | 5 | M3-13, then M3-14, then M3-15 | 13 not api but touches the serializers; 14 and 15 are api |
 | 6 | M3-16 | may overlap with M4 planning |
 | 7 | M3-17 | orchestrator benchmarks, then the reviewer |
 
-## 11. Open questions (the user decides before M3-08 / M3-14)
+## 11. Open questions — answered by the user on 2026-09-24
+
+| # | Question | Answer | Effect |
+|---|---|---|---|
+| 1 | Deprecated Apache-typed APIs (GenericData extensions + generic trees, `ListRecord`/`Record`) | **Move to `apache-interop`** (not the recommended drop) | M3-08 keeps them (it only replaces the *default-value* path); new unit **M3-19** moves them |
+| 2 | `validateSerialization` once core drops Apache | **Reimplement in common** (not the recommended interop-only) | new unit **M3-18**: a common validating encoder/decoder over the codec ABI |
+| 3 | Core ends M3 with no Apache dependency | **Yes** | M3-10 and M3-14 as written |
+| 4 | `FixedSchema.size` → `Int`, `AvroSchema.type` stored | **Yes, both** | M3-04 as written |
+
+Original questions and recommendations, kept for the record:
 
 1. **Deprecated Apache-typed APIs** — the `GenericData` extensions with their generic encode/decode trees, and
    `ListRecord` / `Record`. **Recommendation: drop them in v3.** Deprecated since the Confluent module appeared, used by nothing
