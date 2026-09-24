@@ -2,16 +2,13 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDefault
-import com.github.avrokotlin.avro4k.internal.decoder.resolveDefaultBranch
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import org.apache.avro.Schema
 
 /**
@@ -189,7 +186,7 @@ internal class RecordResolver(
 
                 decodingSteps +=
                     if (readerDefaultAnnotation != null) {
-                        val defaultValue = readerDefaultAnnotation.parseValueToJson()
+                        val defaultValue = readerDefaultAnnotation.toFieldDefault(readerField.schema())
                         DecodingStep.GetDefaultValue(
                             elementIndex = elementIndex,
                             schema = readerField.schema().resolveDefaultBranch(defaultValue),
@@ -372,17 +369,6 @@ internal sealed interface DecodingStep {
     data class MissingElementValueFailure(
         val elementIndex: Int,
     ) : DecodingStep
-}
-
-/**
- * The default as json, exactly as the schema generation reads it: a value that looks like json is parsed, anything else
- * is a string.
- */
-private fun AvroDefault.parseValueToJson(): JsonElement {
-    if (value.isStartingAsJson()) {
-        return Json.parseToJsonElement(value)
-    }
-    return JsonPrimitive(value)
 }
 
 private fun Schema.findFieldNamedOrAliasedAs(name: String): Schema.Field? =

@@ -529,16 +529,15 @@ public sealed class AvroSchema(
                 return toString(IdentitySet())
             }
 
+            /**
+             * A union's default may match any of its branches: the specification reads it from "the first schema that
+             * matches in the union" since 1.12 (it said "the first schema in the union" before), and Apache Java accepts
+             * any branch, so every schema it parses must convert.
+             */
             private fun isValidDefault(
                 defaultValue: JsonElement,
                 schema: AvroSchema,
-            ): Boolean {
-                if (schema is UnionSchema) {
-                    // A default value must be of type of the first one in a union
-                    return defaultValue.isValidJsonForSchema(schema.types[0])
-                }
-                return defaultValue.isValidJsonForSchema(schema)
-            }
+            ): Boolean = defaultValue.isValidJsonForSchema(schema)
         }
     }
 

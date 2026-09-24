@@ -114,11 +114,20 @@ class AvroSchemaTest {
             parse("""{"type":"record","name":"R","fields":[{"name":"a","type":"int","default":"not an int"}]}""")
         }
         shouldThrow<IllegalArgumentException> {
-            // the default of a union must match its first type
-            parse("""{"type":"record","name":"R","fields":[{"name":"a","type":["string","null"],"default":null}]}""")
+            // the default of a union must match one of its branches
+            parse("""{"type":"record","name":"R","fields":[{"name":"a","type":["int","null"],"default":"x"}]}""")
         }
         (parse("""{"type":"record","name":"R","fields":[{"name":"a","type":["null","string"],"default":null}]}""") as RecordSchema)
             .fields.single().defaultValue shouldBe JsonNull
+    }
+
+    @Test
+    fun acceptsUnionDefaultsMatchingAnyBranch() {
+        // Avro 1.12: "the first schema that matches in the union" (1.11: "the first schema in the union"), as Apache Java accepts
+        (parse("""{"type":"record","name":"R","fields":[{"name":"a","type":["string","null"],"default":null}]}""") as RecordSchema)
+            .fields.single().defaultValue shouldBe JsonNull
+        (parse("""{"type":"record","name":"R","fields":[{"name":"a","type":["null","string"],"default":"foo"}]}""") as RecordSchema)
+            .fields.single().defaultValue shouldBe JsonPrimitive("foo")
     }
 
     // ---- JSON serialization ----

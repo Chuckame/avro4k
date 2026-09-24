@@ -101,6 +101,14 @@ class AvroSchemaApacheInteropTest : FunSpec({
         (Avro.schema(Everything.serializer()).toAvro4k() as AvroSchema.RecordSchema).getFieldByName("withDefault").defaultValue shouldBe JsonPrimitive(42)
     }
 
+    test("a union default matching a later branch converts, as Apache Java accepts it") {
+        val apache = Schema.Parser().parse("""{"type":"record","name":"R","fields":[{"name":"f","type":["null","string"],"default":"foo"}]}""")
+        val avro4k = apache.toAvro4k() as AvroSchema.RecordSchema
+
+        avro4k.fields.single().defaultValue shouldBe JsonPrimitive("foo")
+        avro4k.toApacheSchema() shouldBe apache
+    }
+
     test("recursive records keep their identity") {
         val schema = Avro.schema(Node.serializer()).toAvro4k() as AvroSchema.RecordSchema
         val next = schema.getFieldByName("next").schema as AvroSchema.UnionSchema

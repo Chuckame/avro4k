@@ -6,7 +6,9 @@ import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
+import com.github.avrokotlin.avro4k.internal.defaultValueBytes
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
+import com.github.avrokotlin.avro4k.internal.resolveDefaultBranch
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
 import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toFloatExact
@@ -47,9 +49,9 @@ import org.apache.avro.generic.GenericFixed
  * fields being read from the json object by name.
  *
  * The accepted conversions are those of the former path, which converted the json to Apache `GenericData` values and
- * decoded them with the generic decoder: bytes and fixed defaults are the UTF-8 bytes of the json string, a char is the
- * single character of the string (its schema being an int with the `char` logical type), a number or a boolean can be
- * read from a string, and a missing field of a record default decodes as `null`.
+ * decoded them with the generic decoder (a number or a boolean can be read from a string, a missing field of a record
+ * default decodes as `null`), except where the specification says otherwise: bytes and fixed defaults map each code point
+ * 0-255 to a byte, and a union default is read from the first branch it is valid for.
  */
 @OptIn(ExperimentalSerializationApi::class)
 internal class JsonDefaultDecoder(
@@ -121,14 +123,28 @@ internal class JsonDefaultDecoder(
                 else -> throw SerializationException("Not a valid primitive value for schema $currentWriterSchema: $value")
             }
 
+    /**
+     * A char's default is its code (see [com.github.avrokotlin.avro4k.internal.toFieldDefault]), or, nested in a structure, still
+     * its single-character string.
+     */
     private fun intValue(): Int =
-        if (currentWriterSchema.logicalType?.name == CHAR_LOGICAL_TYPE_NAME) {
+        if (currentWriterSchema.logicalType?.name == CHAR_LOGICAL_TYPE_NAME && primitive.isString) {
             primitive.content.single().code
         } else {
             primitive.int
         }
 
-    private fun bytesValue(): ByteArray = primitive.content.toByteArray()
+    /**
+     * Bytes and fixed defaults map each code point 0-255 to a byte, as the specification says, and a fixed default is padded
+     * with zeros or truncated to the fixed size, as Apache Java does. A string or an enum symbol is read as its UTF-8 bytes,
+     * as a string is written.
+     */
+    private fun bytesValue(): ByteArray =
+        when (currentWriterSchema.type) {
+            Schema.Type.BYTES -> primitive.content.defaultValueBytes()
+            Schema.Type.FIXED -> primitive.content.defaultValueBytes().copyOf(currentWriterSchema.fixedSize)
+            else -> primitive.content.toByteArray()
+        }
 
     override fun decodeBoolean(): Boolean {
         return when (currentWriterSchema.type) {
@@ -253,42 +269,6 @@ internal class JsonDefaultDecoder(
         }
     }
 }
-
-/**
- * Returns the schema a default value is decoded with: this schema, or, for a union, its first branch matching the kind
- * of [value] (Avro's rule is the first branch, but avro4k's generated unions put the default's branch first anyway).
- */
-internal fun Schema.resolveDefaultBranch(value: JsonElement): Schema {
-    if (type != Schema.Type.UNION) return this
-    return when (value) {
-        is JsonNull -> types.firstOrNull { it.type == Schema.Type.NULL } ?: this
-        is JsonArray -> resolveDefaultBranch(value, Schema.Type.ARRAY)
-        is JsonObject -> resolveDefaultBranch(value, Schema.Type.RECORD, Schema.Type.MAP)
-        is JsonPrimitive -> resolveDefaultBranch(value, *PRIMITIVE_DEFAULT_TYPES)
-    }
-}
-
-private val PRIMITIVE_DEFAULT_TYPES =
-    arrayOf(
-        Schema.Type.BYTES,
-        Schema.Type.FIXED,
-        Schema.Type.STRING,
-        Schema.Type.ENUM,
-        Schema.Type.BOOLEAN,
-        Schema.Type.INT,
-        Schema.Type.LONG,
-        Schema.Type.FLOAT,
-        Schema.Type.DOUBLE
-    )
-
-private fun Schema.resolveDefaultBranch(
-    value: JsonElement,
-    vararg expectedTypes: Schema.Type,
-): Schema =
-    types.firstOrNull { it.type in expectedTypes }
-        ?: throw SerializationException(
-            "Union type does not contain one of ${expectedTypes.asList()}, unable to convert default value '$value' for schema $this"
-        )
 
 /**
  * A structure inside a default value: each element is decoded by its own [JsonDefaultDecoder].

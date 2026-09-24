@@ -13,6 +13,7 @@ import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.generic.AvroValueGenericDecoder
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -56,10 +57,15 @@ import java.math.BigDecimal
  * The differential tests pin the new decoder to that former path, kept here as the oracle: [formerConvert] is the
  * conversion `RecordResolver` used to do, and [AvroValueGenericDecoder] the decoder it fed. They must agree on every
  * value, and fail together.
+ *
+ * The oracle carries exactly the changes the Avro specification required afterwards (M3-08 follow-up, each marked
+ * "spec:" in [formerConvert]): bytes and fixed defaults map code points 0-255 to bytes, a fixed default is padded or
+ * truncated to its size, and a char default is its code. The other spec changes (union branch selection, `"null"` on a
+ * non-nullable string) are pinned against Apache Java by `AvroDefaultSpecTest`.
  */
 internal class JsonDefaultDecoderTest : StringSpec({
     "primitives, strings and bytes decode as the former GenericData path did" {
-        assertSameAsFormerPath(String.serializer(), "hello", "\"hello\"", "12", "true", "null")
+        assertSameAsFormerPath(String.serializer(), "hello", "\"hello\"", "12", "true")
         assertSameAsFormerPath(String.serializer().nullable, "hello", "null")
         assertSameAsFormerPath(Int.serializer(), "1", "\"12\"", "-3", "1.5", "hello", "null")
         assertSameAsFormerPath(Int.serializer().nullable, "1", "null")
@@ -150,14 +156,14 @@ internal class JsonDefaultDecoderTest : StringSpec({
             for ((name, decode) in decodeMethods) {
                 for (default in listOf("1", "true", "A", "3000000000", "1.5", "1.1", "é")) {
                     withClue("$name of '$default' against $schema") {
-                        assertSameAsFormerPath(schema, default, decode)
+                        assertSameAsFormerPath(schema, default, decode = decode)
                     }
                 }
             }
         }
     }
 
-    "a union default resolves to the branch matching the json kind, so currentWriterSchema is never a union" {
+    "a union default resolves to the first branch it is valid for, so currentWriterSchema is never a union" {
         val union =
             SchemaBuilder.unionOf().nullType().and().array().items().intType()
                 .and().map().values().stringType().and().stringType().endUnion()
@@ -165,7 +171,17 @@ internal class JsonDefaultDecoderTest : StringSpec({
         JsonDefaultDecoder(Avro, JsonNull, union).currentWriterSchema.type shouldBe Schema.Type.NULL
         JsonDefaultDecoder(Avro, JsonArray(emptyList()), union).currentWriterSchema.type shouldBe Schema.Type.ARRAY
         JsonDefaultDecoder(Avro, JsonObject(emptyMap()), union).currentWriterSchema.type shouldBe Schema.Type.MAP
-        JsonDefaultDecoder(Avro, JsonPrimitive(1), union).currentWriterSchema.type shouldBe Schema.Type.STRING
+        JsonDefaultDecoder(Avro, JsonPrimitive("x"), union).currentWriterSchema.type shouldBe Schema.Type.STRING
+
+        // the spec's "first schema that matches", where the former path took the first branch of the json's kind
+        val intOrString = SchemaBuilder.unionOf().intType().and().stringType().endUnion()
+        JsonDefaultDecoder(Avro, JsonPrimitive("foo"), intOrString).decodeString() shouldBe "foo"
+        JsonDefaultDecoder(Avro, JsonPrimitive(1), SchemaBuilder.unionOf().stringType().and().intType().endUnion()).decodeInt() shouldBe 1
+        JsonDefaultDecoder(Avro, JsonPrimitive(3_000_000_000), SchemaBuilder.unionOf().intType().and().longType().endUnion())
+            .currentWriterSchema.type shouldBe Schema.Type.LONG
+        val shapes = Avro.apacheSchema<Shape>()
+        JsonDefaultDecoder(Avro, Json.parseToJsonElement("{\"side\":2}"), shapes).decodeSerializableValue(serializer<Shape>()) shouldBe Square(2)
+        shouldThrow<SerializationException> { JsonDefaultDecoder(Avro, JsonPrimitive(true), intOrString) }
     }
 
     "an inline element reading its enum default with decodeEnum gets the symbol's index" {
@@ -314,19 +330,22 @@ private fun <T> assertSameAsFormerPath(
 ) {
     for (default in defaults) {
         withClue("default '$default' decoded with ${serializer.descriptor.serialName} against $schema") {
-            assertSameAsFormerPath(schema, default) { it.decodeSerializableValue(serializer) }
+            assertSameAsFormerPath(schema, default, currentJson = { AvroDefault(default).toFieldDefault(schema) }) { it.decodeSerializableValue(serializer) }
         }
     }
 }
 
+/**
+ * @param currentJson the json the new path decodes: by default the parsed annotation, as the former path read it
+ */
 private fun assertSameAsFormerPath(
     schema: Schema,
     default: String,
+    currentJson: () -> JsonElement = { parseDefault(default) },
     decode: (AvroDecoder) -> Any?,
 ) {
-    val json = parseDefault(default)
-    val former = runCatching { decode(AvroValueGenericDecoder(Avro, json.formerConvert(schema), schema)) }
-    val current = runCatching { decode(JsonDefaultDecoder(Avro, json, schema)) }
+    val former = runCatching { decode(AvroValueGenericDecoder(Avro, parseDefault(default).formerConvert(schema), schema)) }
+    val current = runCatching { decode(JsonDefaultDecoder(Avro, currentJson(), schema)) }
     withClue("former: $former, current: $current") {
         current.isSuccess shouldBe former.isSuccess
         if (former.isSuccess) {
@@ -374,9 +393,11 @@ private fun JsonElement.formerConvert(schema: Schema): Any? =
 
         is JsonPrimitive ->
             when (schema.type) {
-                Schema.Type.BYTES -> this.content.toByteArray()
+                // spec: code points 0-255 are bytes (was UTF-8)
+                Schema.Type.BYTES -> this.content.toByteArray(Charsets.ISO_8859_1)
 
-                Schema.Type.FIXED -> GenericData.Fixed(schema, this.content.toByteArray())
+                // spec: code points 0-255 are bytes (was UTF-8), padded or truncated to the size as Apache Java does
+                Schema.Type.FIXED -> GenericData.Fixed(schema, this.content.toByteArray(Charsets.ISO_8859_1).copyOf(schema.fixedSize))
 
                 Schema.Type.STRING -> this.content
 
@@ -386,7 +407,9 @@ private fun JsonElement.formerConvert(schema: Schema): Any? =
 
                 Schema.Type.INT ->
                     when (schema.logicalType?.name) {
-                        CHAR_LOGICAL_TYPE_NAME -> this.content.single().code
+                        // spec: the schema generation writes a char's default as its code, a string is kept for nested chars
+                        CHAR_LOGICAL_TYPE_NAME -> if (this.isString) this.content.single().code else this.int
+
                         else -> this.int
                     }
 

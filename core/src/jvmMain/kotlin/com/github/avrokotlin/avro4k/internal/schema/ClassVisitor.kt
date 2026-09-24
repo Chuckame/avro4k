@@ -2,13 +2,13 @@ package com.github.avrokotlin.avro4k.internal.schema
 
 import com.github.avrokotlin.avro4k.AvroDefault
 import com.github.avrokotlin.avro4k.internal.asSchemaList
-import com.github.avrokotlin.avro4k.internal.isStartingAsJson
+import com.github.avrokotlin.avro4k.internal.isValidDefaultFor
 import com.github.avrokotlin.avro4k.internal.jsonNode
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
+import com.github.avrokotlin.avro4k.internal.toFieldDefault
 import com.github.avrokotlin.avro4k.serializer.ElementLocation
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -110,8 +110,8 @@ internal class ClassVisitor(
         annotations: FieldAnnotations,
         elementSchema: Schema,
     ): Pair<Schema, Any?> {
-        val defaultValue = annotations.default?.toAvroObject()
-        if (defaultValue == null) {
+        val defaultAnnotation = annotations.default
+        if (defaultAnnotation == null) {
             if (context.configuration.implicitNulls && elementSchema.isNullable) {
                 return elementSchema.moveToHeadOfUnion { it.type == Schema.Type.NULL } to JsonProperties.NULL_VALUE
             } else if (context.configuration.implicitEmptyCollections) {
@@ -124,31 +124,31 @@ internal class ClassVisitor(
                     }
                 }
             }
-        } else if (defaultValue === JsonProperties.NULL_VALUE) {
-            // If the user sets "null" but the field is not nullable, maybe the user wanted to set the "null" string default
-            val finalSchema = elementSchema.moveToHeadOfUnion { it.type == Schema.Type.NULL }
-            val adaptedDefault = if (!elementSchema.isNullable) "null" else defaultValue
-            return finalSchema to adaptedDefault
-        } else if (elementSchema.asSchemaList().any { it.logicalType?.name == CHAR_LOGICAL_TYPE_NAME }) {
-            // requires a string default value with exactly 1 character, and map the character to the char code as it is an int
-            if (defaultValue is String && defaultValue.length == 1) {
-                return elementSchema.moveToHeadOfUnion { it.logicalType?.name == CHAR_LOGICAL_TYPE_NAME } to defaultValue.single().code
-            } else {
-                throw SerializationException("Default value for Char must be a single character string. Invalid value of type ${defaultValue::class.qualifiedName}: $defaultValue")
-            }
-        } else if (elementSchema.isNullable) {
-            // default is not null, so let's just put the null schema at the end of the union which should cover the main use cases
-            return elementSchema.moveToTailOfUnion { it.type === Schema.Type.NULL } to defaultValue
+            return elementSchema to null
         }
-        return elementSchema to defaultValue
-    }
-}
 
-private fun AvroDefault.toAvroObject(): Any {
-    if (value.isStartingAsJson()) {
-        return Json.parseToJsonElement(value).toAvroObject()
+        val defaultValue = defaultAnnotation.toFieldDefault(elementSchema)
+        if (!defaultValue.isValidDefaultFor(elementSchema) && defaultValue.isValidDefaultFor(elementSchema, allowAnyCodePoint = true)) {
+            throw SerializationException(
+                "Invalid default value $defaultValue for a bytes or fixed field: the specification only allows the code points 0-255, each one being a byte"
+            )
+        }
+        val orderedSchema =
+            when {
+                defaultValue is JsonNull -> elementSchema.moveToHeadOfUnion { it.type == Schema.Type.NULL }
+
+                elementSchema.asSchemaList().any { it.logicalType?.name == CHAR_LOGICAL_TYPE_NAME } ->
+                    elementSchema.moveToHeadOfUnion { it.logicalType?.name == CHAR_LOGICAL_TYPE_NAME }
+
+                // default is not null, so let's just put the null schema at the end of the union which should cover the main use cases
+                elementSchema.isNullable -> elementSchema.moveToTailOfUnion { it.type === Schema.Type.NULL }
+
+                else -> elementSchema
+            }
+        // The specification reads a union's default from its first branch that matches, but most implementations only ever
+        // read it from the first branch: so that branch goes first (e.g. the second subclass of a sealed type).
+        return orderedSchema.moveToHeadOfUnion { defaultValue.isValidDefaultFor(it) } to defaultValue.toAvroObject()
     }
-    return value
 }
 
 private fun JsonElement.toAvroObject(): Any =
@@ -182,7 +182,7 @@ private fun Schema.moveToHeadOfUnion(predicate: (Schema) -> Boolean): Schema {
         return this
     }
     types.indexOfFirst(predicate).let { index ->
-        if (index == -1) {
+        if (index <= 0) {
             return this
         }
         return moveToHeadOfUnion(index)
