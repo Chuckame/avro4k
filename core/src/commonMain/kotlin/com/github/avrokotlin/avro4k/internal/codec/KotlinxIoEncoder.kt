@@ -54,7 +54,7 @@ internal class KotlinxIoEncoder(
             writeZero()
             return
         }
-        // TODO M5/C5: encode straight into the sink instead of allocating the intermediate array
+        // TODO: encode straight into the sink instead of allocating the intermediate array
         writeBytes(value.encodeToByteArray())
     }
 

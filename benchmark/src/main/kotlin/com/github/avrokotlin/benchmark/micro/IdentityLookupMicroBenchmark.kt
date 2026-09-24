@@ -26,12 +26,13 @@ import kotlin.uuid.Uuid
  * on every encoded and decoded value, and nearly always *misses* (a Long, a String, a record...), so the miss path is
  * the one that matters. Three candidates:
  *
- * - `IdentityHashMap.get`: what the middleware used before B6. JVM-only, so it cannot move to commonMain as is.
- * - a linear `===` scan over an array ([ScanLookup]): what B6 first replaced it with (`IdentityLookup`, since removed).
+ * - `IdentityHashMap.get`: what the middleware used before its caches went multiplatform. JVM-only, so it cannot move
+ *   to commonMain as is.
+ * - a linear `===` scan over an array ([ScanLookup]): what first replaced it (`IdentityLookup`, since removed).
  * - a hand-written `when { key === A -> ...; key === B -> ... }` chain: what the middleware uses now.
  *
- * Result (benchmark/README.md, "Results — M2"): the `when` chain is fastest and the scan slowest at every size, so a
- * scan never pays off here. Kept as the record of that decision, and to re-check it if the entries ever grow.
+ * Result (benchmark/README.md, "Intercepted-serializer lookup"): the `when` chain is fastest and the scan slowest at
+ * every size, so a scan never pays off here. Kept as the record of that decision, and to re-check it if the entries ever grow.
  *
  * Every structure is reached the way production reaches it: from a static final field (the middleware is an `object`),
  * which lets the JIT treat the `when` chain's keys as constants. That is the `when` chain's one structural advantage, so
@@ -69,7 +70,7 @@ private fun whenLookup(key: Any): Any? =
         else -> null
     }
 
-/** The linear scan B6 briefly used in core (`IdentityLookup`). */
+/** The linear scan core briefly used (`IdentityLookup`). */
 internal class ScanLookup(entries: List<Pair<Any, Any>>) {
     private val keys: Array<Any> = Array(entries.size) { entries[it].first }
     private val values: Array<Any> = Array(entries.size) { entries[it].second }

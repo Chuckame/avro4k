@@ -45,8 +45,8 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
  *   stdlib only offers the atomics used here. Third-party multiplatform maps are excluded by that policy, and the ones
  *   that exist are equality-keyed without weak keys anyway.
  * - **Not `ConcurrentHashMap` on the JVM.** Weak keys need a `WeakReference` wrapper as the map key, so every lookup —
- *   identity or equality — needs a wrapper object per call to compare against it (the pre-M3 `WeakKeyCache` and the
- *   `kmp`-branch design): an allocation on every cache *hit*, which the M1 measurements showed is real once escape
+ *   identity or equality — needs a wrapper object per call to compare against it (the former JVM-only `WeakKeyCache`
+ *   and the `kmp`-branch design): an allocation on every cache *hit*, which measurement showed is real once escape
  *   analysis is not there to remove it — and native and JS have no escape analysis. Its `ReferenceQueue` would also
  *   need polling. A JVM-only `ConcurrentHashMap` actual would additionally make the two platforms behave differently
  *   (compute-once vs may-recompute, eager vs deferred sweeping) under the same tests.

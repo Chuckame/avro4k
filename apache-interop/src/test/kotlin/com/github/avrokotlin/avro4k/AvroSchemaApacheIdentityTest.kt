@@ -19,7 +19,7 @@ import java.util.IdentityHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * The pairing of the cached conversions (M3-05's two-way seeding): for every node `s` of an Apache schema and the node `a`
+ * The pairing of the cached conversions (two-way seeding): for every node `s` of an Apache schema and the node `a`
  * at the same position of its conversion, `s.toAvro4k() === a` and `a.toApacheSchema() === s`, whichever side was
  * converted, and the pairs stay collectable.
  */

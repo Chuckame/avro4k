@@ -4,9 +4,9 @@ import org.apache.avro.LogicalType
 import org.apache.avro.Schema
 
 /*
- * Test-local copies of core's Apache-typed internal schema helpers (`internal/helpers.kt`), taken verbatim at M3-01.
- * The tests use them to *build expected* Apache schemas, so they must not follow core's internals when M3-11 retypes
- * those to `AvroSchema`. Pure Apache code: nothing here calls core.
+ * Test-local copies of core's Apache-typed internal schema helpers (`internal/helpers.kt`), taken verbatim. The tests
+ * use them to *build expected* Apache schemas, so they must not follow core's internals when those are retyped to
+ * `AvroSchema`. Pure Apache code: nothing here calls core.
  */
 
 /** Copy of core's `internal.nullable`: wraps the schema in a union with `null` first, unless it is already nullable. */

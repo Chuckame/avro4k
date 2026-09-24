@@ -3,7 +3,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // A7: `SpecificCompiler` has no schema CLI entry point in 1.12 (`SpecificCompiler.main` only
+        // `SpecificCompiler` has no schema CLI entry point in 1.12 (`SpecificCompiler.main` only
         // compiles protocols), and `avro-tools`, which does, is a ~70 MB shaded uber-jar. Calling the
         // compiler API directly from `generateSpecificRecords` is both smaller and one process less.
         classpath("org.apache.avro:avro-compiler:1.12.1")
@@ -59,14 +59,14 @@ benchmark {
         register("lists-write") {
             include("^com.github.avrokotlin.benchmark.lists.+.write$")
         }
-        // A6: Apache's generic read path with its fast reader on and off, on its own. The fast
+        // Apache's generic read path with its fast reader on and off, on its own. The fast
         // reader is the only Apache read configuration that has an on/off switch, and it exists for
         // `GenericData`/`SpecificData` only - never for `ReflectData` - so it lives in its own
         // benchmark classes and is runnable without paying for the whole end-to-end matrix.
         register("fastreader") {
             include("ApacheAvroGenericFastReader")
         }
-        // A7: Apache's specific data model - generated `SpecificRecord` classes plus `SpecificData`,
+        // Apache's specific data model - generated `SpecificRecord` classes plus `SpecificData`,
         // the fastest configuration Apache offers - runnable on its own.
         register("specific") {
             include("ApacheAvroSpecific")
@@ -92,7 +92,7 @@ dependencies {
     implementation("org.slf4j:slf4j-simple:2.0.18")
 
     implementation(project(":core"))
-    // M3-03: internal/CoreBridge.kt converts with its toAvro4k() / toApacheSchema() once core speaks AvroSchema (M3-12)
+    // internal/CoreBridge.kt converts with its toAvro4k() / toApacheSchema() once core's public API speaks AvroSchema
     implementation(project(":apache-interop"))
 }
 
@@ -105,7 +105,7 @@ kotlin {
 }
 
 // ---------------------------------------------------------------------------
-// A7: Apache `SpecificData` + generated `SpecificRecord` classes
+// Apache `SpecificData` + generated `SpecificRecord` classes
 //
 // The fastest data model Apache offers, and the one performance-minded Apache users deploy. It
 // needs generated classes, so the benchmark module generates them - from avro4k's *own* canonical
@@ -122,7 +122,7 @@ kotlin {
 // `regenerateAvroSchemas` rewrites them from avro4k, and `CanonicalSchemas.kt` says so.
 //
 // Drift is not trusted to discipline. Every `apache-specific` benchmark trial compares the
-// generated classes' `SCHEMA$` against `Avro.schema<T>()` through the A5 equivalence gate, so an
+// generated classes' `SCHEMA$` against `Avro.schema<T>()` through the equivalence gate, so an
 // `.avsc` that falls behind avro4k fails loudly in `@Setup` with the exact differing path.
 //
 // Rejected: a third-party Avro Gradle plugin (a whole plugin, and its own conventions, for one
@@ -158,8 +158,8 @@ val generateSpecificRecords = tasks.register("generateSpecificRecords") {
             // setting that makes the decoded specific model comparable to avro4k's (which decodes
             // into `String`), and it *costs* Apache - `Utf8` is cheaper to produce than `String`.
             // See docs/plans/notes/a7.md. It adds an `avro.java.string` property, one of the four
-            // object-mapping hints the A5 schema comparison deliberately ignores, and it does not
-            // reach the wire.
+            // object-mapping hints the equivalence gate's schema comparison deliberately ignores, and it
+            // does not reach the wire.
             compiler.setStringType(org.apache.avro.generic.GenericData.StringType.String)
             compiler.compileToDestination(file, target)
         }

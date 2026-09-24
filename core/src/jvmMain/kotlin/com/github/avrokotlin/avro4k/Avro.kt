@@ -41,7 +41,7 @@ public sealed class Avro(
 ) : BinaryFormat {
     /**
      * Identity fast path backed by an equality lookup: `serializer<List<Foo>>().descriptor` and other generic, nullable
-     * or collection descriptors are fresh per call, so identity alone would re-infer the schema on every call (M3-06).
+     * or collection descriptors are fresh per call, so identity alone would re-infer the schema on every call.
      * `internal` for tests.
      */
     internal val schemaCache = IdentityFirstCache<SerialDescriptor, GeneratedSchema>()
@@ -314,8 +314,8 @@ private class AvroImpl(configuration: AvroConfiguration, serializersModule: Seri
     Avro(configuration, serializersModule)
 
 /**
- * A schema inferred by [Avro.schema], in both forms: the schema generation builds [avroSchema] (M3-09), and [apacheSchema]
- * is its Apache form, which the public API and the runtime still use until M3-11/M3-12.
+ * A schema inferred by [Avro.schema], in both forms: the schema generation builds [avroSchema], and [apacheSchema] is its
+ * Apache form, which the public API and the runtime still use until they are switched to `AvroSchema`.
  *
  * [apacheSchema] is computed once, eagerly, with the identity-cached conversion: every node of both trees is paired with
  * its counterpart (`avro4kToApache`), so the identity of the Apache schema is stable per cache entry, as it was when the

@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.serializer
 
 /**
- * Regression tests for `Avro.schemaCache`, an identity-first cache backed by an equality lookup (M3-06).
+ * Regression tests for `Avro.schemaCache`, an identity-first cache backed by an equality lookup.
  *
  * `serializer<List<Foo>>().descriptor` is a fresh instance on every call (`docs/plans/notes/b6.md`). Such an instance must
  * hit through equality — same schema instance, no re-inference — and must not be remembered by identity, or the identity

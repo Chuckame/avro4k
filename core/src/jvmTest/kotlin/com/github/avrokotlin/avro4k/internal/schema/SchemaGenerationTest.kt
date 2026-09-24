@@ -36,7 +36,7 @@ import org.apache.avro.Schema
 import java.math.BigDecimal
 
 /**
- * The schema generation builds [AvroSchema]s since M3-09, and `Avro.schema()` returns their Apache form. The generated
+ * The schema generation builds [AvroSchema]s, and `Avro.schema()` returns their Apache form. The generated
  * schemas themselves are pinned by the `schema/` suite; these tests pin what the switch had to preserve or add.
  */
 internal class SchemaGenerationTest : StringSpec({

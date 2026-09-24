@@ -23,7 +23,7 @@ package com.github.avrokotlin.avro4k.internal
  * instance that missed the identity layer would instead add one entry per fresh descriptor — per top-level call for
  * `serializer<List<Foo>>()` — growing the identity layer without bound (until GC) and paying its O(capacity)
  * copy-on-write put on **every** call. So a fresh-per-call key always pays the equality lookup (step 2), which is exactly
- * the cost of the pre-M3 equality-only cache minus its per-lookup wrapper allocation — never more. A stable instance
+ * the cost of the former equality-only cache minus its per-lookup wrapper allocation — never more. A stable instance
  * pays it too while an equal fresh instance is the canonical key; once that one is collected, the next lookup misses,
  * recomputes (as the equality-only cache always did after a collection), and the stable instance becomes canonical.
  *

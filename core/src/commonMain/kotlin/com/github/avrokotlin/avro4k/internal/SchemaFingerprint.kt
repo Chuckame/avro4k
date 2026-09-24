@@ -11,7 +11,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.internal.schema.getName
 
 /*
- * The Parsing Canonical Form of a schema and its CRC-64-AVRO fingerprint (M3-10), in pure Kotlin over the common
+ * The Parsing Canonical Form of a schema and its CRC-64-AVRO fingerprint, in pure Kotlin over the common
  * `AvroSchema` model: the replacement of Apache's `SchemaNormalization.toParsingForm`, `parsingFingerprint64` and
  * `parsingFingerprint("CRC-64-AVRO", …)`.
  *
@@ -20,7 +20,8 @@ import com.github.avrokotlin.avro4k.internal.schema.getName
  * differ, Apache's output wins: single-object encoding and schema registries need byte compatibility with the JVM
  * ecosystem. The rules and the (non-)deviations are listed in docs/plans/notes/m3-10.md.
  *
- * Cold code: a fingerprint walks the whole schema. Callers memoize per schema instance (M3-14: `AvroSingleObject`).
+ * Cold code: a fingerprint walks the whole schema. Callers memoize per schema instance (`AvroSingleObject` will, once it
+ * uses this fingerprint instead of Apache's).
  */
 
 /**

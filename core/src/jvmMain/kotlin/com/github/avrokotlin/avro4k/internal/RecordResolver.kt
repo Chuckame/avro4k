@@ -29,9 +29,10 @@ internal class RecordResolver(
      *
      * Note: We use the descriptor in the key as we could have multiple descriptors for the same record schema, and multiple record schemas for the same descriptor.
      *
-     * The outer (writer schema) level is equality-keyed until M3-11 makes it identity-keyed. The inner (descriptor) level
-     * is an [IdentityFirstCache]: record descriptors are mostly stable instances, but a generic record (`Box<T>`)
-     * obtained through a fresh top-level serializer is an equal-but-distinct instance per call (M3-06).
+     * The outer (writer schema) level is equality-keyed until the decoders read `AvroSchema`, when it becomes
+     * identity-keyed. The inner (descriptor) level is an [IdentityFirstCache]: record descriptors are mostly stable
+     * instances, but a generic record (`Box<T>`) obtained through a fresh top-level serializer is an equal-but-distinct
+     * instance per call.
      */
     private val fieldCache: Cache<Schema, IdentityFirstCache<SerialDescriptor, SerializationWorkflow>> = WeakKeyCache()
 
@@ -40,9 +41,9 @@ internal class RecordResolver(
      * `(writerSchema, classDescriptor)` pairs, matched by **identity**.
      *
      * [resolveFields] is called once per record *instance*, so decoding a 100k-element array of records used to
-     * perform 200k [fieldCache] lookups (two per record; before M3-06 each one was a `ReferenceQueue.poll()`, a
-     * `Key.Lookup` allocation and a `ConcurrentHashMap` lookup) for a workflow that was already resolved for the first element.
-     * A homogeneous collection or a nested record tree only ever cycles through a handful of pairs, so a tiny
+     * perform 200k [fieldCache] lookups (two per record; when `WeakKeyCache` was JVM-only, each one was a
+     * `ReferenceQueue.poll()`, a `Key.Lookup` allocation and a `ConcurrentHashMap` lookup) for a workflow that was already
+     * resolved for the first element. A homogeneous collection or a nested record tree only ever cycles through a handful of pairs, so a tiny
      * identity-keyed cache turns almost all of those calls into a few reference comparisons and no allocation.
      *
      * Concurrency: the array is immutable once published, replaced wholesale by a copy-on-write assignment, and

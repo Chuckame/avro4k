@@ -12,7 +12,7 @@ import kotlin.native.concurrent.TransferMode
 import kotlin.native.concurrent.Worker
 import kotlin.test.Test
 
-/** Concurrency smoke tests of the equality-mode table and of [IdentityFirstCache] on native threads (M3-06). */
+/** Concurrency smoke tests of the equality-mode table and of [IdentityFirstCache] on native threads. */
 @OptIn(ObsoleteWorkersApi::class, ExperimentalAtomicApi::class)
 class WeakKeyCacheNativeTest {
     private data class Key(val id: Int)

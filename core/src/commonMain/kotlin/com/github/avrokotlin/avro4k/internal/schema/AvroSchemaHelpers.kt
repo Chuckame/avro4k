@@ -15,7 +15,7 @@ import com.github.avrokotlin.avro4k.toJsonElement
 
 /*
  * The helpers that the runtime (encoders, decoders, resolvers), the serializers and the schema visitors use on Apache's
- * `Schema`, ported to [AvroSchema] (M3-07). Each one keeps the name and the semantics of the Apache-typed helper it
+ * `Schema`, ported to [AvroSchema]. Each one keeps the name and the semantics of the Apache-typed helper it
  * replaces, so switching a call site is an import swap; the few deliberate differences are called out in the KDoc.
  * The complete inventory, with the call sites and what was not ported, is in `docs/plans/notes/m3-07.md`.
  *
@@ -125,7 +125,7 @@ private fun AvroSchema.wrongKind(prefix: String): RuntimeException = RuntimeExce
 
 // ---- names and aliases ----
 
-/** A record, an enum or a fixed. Was `@InternalAvro4kApi public` on Apache's `Schema` only for Confluent (M3-12). */
+/** A record, an enum or a fixed. Was `@InternalAvro4kApi public` on Apache's `Schema` only for Confluent. */
 internal fun AvroSchema.isNamedSchema(): Boolean = this is NamedSchema
 
 /** [aliases] for a named schema, an empty set for any other one (never throws). Allocates, like [aliases]. */

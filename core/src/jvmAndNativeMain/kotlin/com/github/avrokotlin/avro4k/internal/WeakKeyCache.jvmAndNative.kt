@@ -6,7 +6,7 @@ import com.github.avrokotlin.avro4k.InternalAvro4kApi
  * The [CopyOnWriteWeakTable] in equality mode — the same code as [WeakIdentityKeyCache], matching keys with
  * `hashCode`/`equals` instead of identity. See there for the concurrency, visibility and reclamation argument.
  *
- * Replaces the pre-M3 JVM-only `ConcurrentHashMap` + `WeakReference` + `ReferenceQueue` implementation, whose every
+ * Replaces the former JVM-only `ConcurrentHashMap` + `WeakReference` + `ReferenceQueue` implementation, whose every
  * lookup allocated a `Key.Lookup` wrapper that escaped into `ConcurrentHashMap.get`.
  */
 @InternalAvro4kApi

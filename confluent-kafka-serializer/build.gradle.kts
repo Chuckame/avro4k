@@ -8,7 +8,7 @@ description = "Avro4k's module to enable (de)serializing kotlin classes and othe
 
 dependencies {
     implementation(project(":core"))
-    // M3-03: CoreBridge.kt converts with its toAvro4k() / toApacheSchema() once core speaks AvroSchema (M3-12)
+    // CoreBridge.kt converts with its toAvro4k() / toApacheSchema() once core's public API speaks AvroSchema
     implementation(project(":apache-interop"))
     implementation(kotlin("reflect"))
 

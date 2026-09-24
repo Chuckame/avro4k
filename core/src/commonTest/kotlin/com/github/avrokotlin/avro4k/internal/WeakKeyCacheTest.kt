@@ -9,7 +9,7 @@ import kotlin.test.Test
 
 /**
  * The equality-keyed cache's contract, on every platform (JVM and native: the copy-on-write table in equality mode; JS: a
- * strong `HashMap`). Moved from `jvmTest` in M3-06; the JVM-only GC and concurrency checks are in `WeakKeyCacheJvmTest`.
+ * strong `HashMap`). Moved from `jvmTest`; the JVM-only GC and concurrency checks are in `WeakKeyCacheJvmTest`.
  */
 class WeakKeyCacheTest {
     private data class Key(val name: String)

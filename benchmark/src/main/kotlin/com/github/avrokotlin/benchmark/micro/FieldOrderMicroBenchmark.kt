@@ -90,7 +90,7 @@ internal class FieldOrderMicroBenchmark {
  *
  * The mismatching writer schema is built through the Apache API, then handed to core through
  * [com.github.avrokotlin.benchmark.internal.toCoreSchema] (an identity until core's public API
- * speaks `AvroSchema`, M3-12). The [Schema.Field] instances have
+ * speaks `AvroSchema`). The [Schema.Field] instances have
  * to be recreated: a field belongs to exactly one record schema and cannot be shared.
  */
 private fun Schema.withFieldOrder(newOrder: Iterable<Int>): Schema =

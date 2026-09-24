@@ -76,7 +76,8 @@ internal data class SmallRecordList(val values: List<SmallRecord>)
 
 /**
  * Two collection fields per record, so decoding alternates between two collection serializers on every record: the
- * worst case for a cache that only remembers the last collection serializer it saw (C3's, since replaced).
+ * worst case for a cache that only remembers the last collection serializer it saw (such a one-slot cache once existed,
+ * since replaced by decoding the collection blocks in the decoder).
  */
 @Serializable
 internal data class TwoCollectionsRecord(val longs: List<Long>, val flags: List<Boolean>)

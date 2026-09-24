@@ -39,8 +39,8 @@ import java.util.IdentityHashMap
 import java.util.concurrent.atomic.AtomicReference
 import com.github.avrokotlin.avro4k.toJsonElement as avroSchemaToJson
 
-// The conversions between Apache's Schema and avro4k's AvroSchema. Hosted in core (JVM only) from M3-05 until M3-14, so
-// core can convert at its public boundaries while its internals move to AvroSchema; apache-interop's public
+// The conversions between Apache's Schema and avro4k's AvroSchema. Hosted in core (JVM only) until core drops its Apache
+// dependency, so core can convert at its public boundaries while its internals move to AvroSchema; apache-interop's public
 // toAvro4k()/toApacheSchema() delegate here. See docs/plans/notes/m3-05.md.
 //
 // ## Pairing ("two-way seeding")
@@ -118,15 +118,15 @@ public fun apacheToAvro4kUncached(schema: Schema): AvroSchema = ApacheToAvro4k(c
 public fun avro4kToApache(schema: AvroSchema): Schema = avro4kToApache(schema, keepUnknownLogicalTypes = false)
 
 /**
- * [avro4kToApache] for the schemas core generates (`Avro.schema()`, M3-09), cached and paired the same way, which also
+ * [avro4kToApache] for the schemas core generates (`Avro.schema()`), cached and paired the same way, which also
  * keeps the logical types that Apache does not know, like avro4k's own `char` or a user serializer's custom one.
  *
  * Apache's parser, which the json route goes through, drops a logical type it does not know (its `getLogicalType()` is
- * null, only the `logicalType` prop is left), while the schemas core built directly with Apache's API before M3-09 had
- * them, and core's runtime still reads them from Apache's `getLogicalType()` until M3-11. So each node whose logical type
- * Apache does not know gets it back, exactly as the former generation set it (`LogicalType(name).addToSchema`). A known
- * logical type that Apache rejects as invalid stays dropped, as Apache would, since the former generation could not
- * produce one.
+ * null, only the `logicalType` prop is left), while the schemas core used to build directly with Apache's API had them,
+ * and core's runtime still reads them from Apache's `getLogicalType()` until the encoders and decoders read `AvroSchema`.
+ * So each node whose logical type Apache does not know gets it back, exactly as the former generation set it
+ * (`LogicalType(name).addToSchema`). A known logical type that Apache rejects as invalid stays dropped, as Apache would,
+ * since the former generation could not produce one.
  */
 internal fun avro4kToApacheKeepingUnknownLogicalTypes(schema: AvroSchema): Schema = avro4kToApache(schema, keepUnknownLogicalTypes = true)
 

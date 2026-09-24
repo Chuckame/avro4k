@@ -17,7 +17,7 @@ import com.github.avrokotlin.benchmark.internal.specific.Clients as SpecificClie
  * Apache's **specific** data model: generated `SpecificRecord` classes plus `SpecificData`.
  *
  * This is the fastest thing Apache offers, and the configuration performance-minded Apache users
- * actually deploy - which is exactly why it has to be in the suite. Until A7 avro4k was compared
+ * actually deploy - which is exactly why it has to be in the suite. Before it was added avro4k was compared
  * against `ReflectData`, the *slowest* Apache data model and the one Apache excludes from its own
  * fast read path, which flattered the comparison.
  *

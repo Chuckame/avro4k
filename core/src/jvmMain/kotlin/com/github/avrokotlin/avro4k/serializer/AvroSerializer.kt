@@ -184,8 +184,8 @@ internal fun interface AvroSchemaSupplier {
 }
 
 /**
- * The schema of this supplier as avro4k's [AvroSchema], for the schema generation, which builds [AvroSchema]s since M3-09
- * while the public [AvroSchemaSupplier.getSchema] still returns Apache's `Schema` until M3-12.
+ * The schema of this supplier as avro4k's [AvroSchema], for the schema generation, which builds [AvroSchema]s while the
+ * public [AvroSchemaSupplier.getSchema] still returns Apache's `Schema`, until core's public API switches to `AvroSchema`.
  *
  * Converted with the **uncached** converter: `getSchema` may create a new schema on each call (most built-in serializers
  * do), and a key created per call must not go in the identity caches (`WeakIdentityKeyCache`'s KDoc). It runs once per

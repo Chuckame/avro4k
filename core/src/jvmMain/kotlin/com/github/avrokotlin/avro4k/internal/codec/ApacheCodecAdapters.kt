@@ -15,8 +15,8 @@ import java.nio.ByteBuffer
 // - Apache over ABI ([ApacheEncoderOverAbi], [ApacheDecoderOverAbi]): only for `validateSerialization` on avro4k's
 //   own codecs, which wraps Apache's `ValidatingEncoder`/`ValidatingDecoder` around them.
 //
-// JVM-only by nature. `validateSerialization` gets a common implementation in M3-18, and these adapters move to
-// `apache-interop` in M3-14.
+// JVM-only by nature. `validateSerialization` is to get a common implementation, and these adapters are to move to
+// `apache-interop` when core drops its Apache dependency.
 
 /** Wraps this encoder in Apache's `ValidatingEncoder`, which checks every call against [writerSchema]. */
 internal fun AvroBinaryEncoder.validating(writerSchema: Schema): AvroBinaryEncoder =

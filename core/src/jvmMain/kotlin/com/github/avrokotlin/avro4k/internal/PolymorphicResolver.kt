@@ -10,7 +10,7 @@ internal class PolymorphicResolver(
 ) {
     /**
      * Read per polymorphic value. Identity-first: non-generic sealed descriptors are stable instances, but a generic sealed
-     * hierarchy obtained through a fresh top-level serializer is an equal-but-distinct instance per call (M3-06).
+     * hierarchy obtained through a fresh top-level serializer is an equal-but-distinct instance per call.
      */
     private val cache = IdentityFirstCache<SerialDescriptor, Map<String, String>>()
 

@@ -59,7 +59,7 @@ internal object ApacheAvro {
     }
 
     // -----------------------------------------------------------------------------------------
-    // The fast reader (A6)
+    // The fast reader
     //
     // Apache 1.12 ships a second, faster read path: `FastReaderBuilder` pre-compiles a schema into
     // a tree of closures instead of walking the schema per datum. `GenericDatumReader.read` picks it
@@ -88,8 +88,8 @@ internal object ApacheAvro {
     /**
      * The two `GenericData` instances the fast-reader comparison reads through.
      *
-     * Two instances rather than one mutated from `@Setup`, for two reasons. First, the A5 rule about
-     * never mutating JVM-wide state from a benchmark: neither of these is `GenericData.get()`.
+     * Two instances rather than one mutated from `@Setup`, for two reasons. First, the rule about
+     * never mutating JVM-wide state from a benchmark (see [reflectData]): neither of these is `GenericData.get()`.
      * Second, `GenericDatumReader` caches the fast reader it built on first use
      * (`this.fastDatumReader`), so flipping the flag on a shared instance between `@Param` values
      * would leave already-built readers on the path they were born with. One instance per setting
@@ -98,7 +98,7 @@ internal object ApacheAvro {
      * They must be *exactly* `GenericData` - see [FastReaderBuilder.isSupportedData] above - so
      * neither may become a subclass. [genericDatumReader] asserts that on every use.
      *
-     * The two `ReflectData` instances of A5 cost 40% of Apache's write throughput through the static
+     * Two `ReflectData` instances once cost 40% of Apache's write throughput through the static
      * `ACCESSOR_CACHE`; `GenericData` has no such cache (it has no field accessors to cache), and
      * nothing here writes through them, so the same trap does not apply.
      *
@@ -165,7 +165,7 @@ internal object ApacheAvro {
     private const val FAST_READER_CLASS_PREFIX = "org.apache.avro.io.FastReaderBuilder"
 
     // -----------------------------------------------------------------------------------------
-    // `SpecificData` + generated `SpecificRecord` classes (A7)
+    // `SpecificData` + generated `SpecificRecord` classes
     //
     // The fastest data model Apache offers: the record classes are generated ahead of time from the
     // schema, so there is no reflection on the hot path and no per-datum schema inference. It is

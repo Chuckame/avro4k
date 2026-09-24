@@ -26,7 +26,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 
 /**
- * The model's members read once per value by encoders and decoders (M3-04): stored [AvroSchema.type] and
+ * The model's members read once per value by encoders and decoders: stored [AvroSchema.type] and
  * [AvroSchema.logicalTypeName], and the O(1) enum symbol and record field lookups.
  */
 class AvroSchemaHotPathTest {

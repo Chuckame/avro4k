@@ -25,7 +25,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
 /**
- * M3-10: known vectors of the Parsing Canonical Form and the CRC-64-AVRO fingerprint, on every platform. Every expected
+ * Known vectors of the Parsing Canonical Form and the CRC-64-AVRO fingerprint, on every platform. Every expected
  * value was computed once on the JVM with Apache Avro 1.12.1's `SchemaNormalization` (`toParsingForm`,
  * `parsingFingerprint64`, `parsingFingerprint("CRC-64-AVRO", …)`, `fingerprint64`) from the equivalent JSON schema,
  * written next to each case, and pasted here as literals. The JVM differential test (`SchemaFingerprintDifferentialTest`)

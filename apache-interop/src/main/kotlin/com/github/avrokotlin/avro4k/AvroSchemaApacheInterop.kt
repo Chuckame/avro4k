@@ -4,8 +4,8 @@ import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import org.apache.avro.Schema
 
-// The conversion itself lives in core until M3-14 (docs/plans/notes/m3-05.md), so that core can convert at its own
-// public boundaries meanwhile.
+// The conversion itself lives in core until core drops its Apache dependency (docs/plans/notes/m3-05.md), so that core
+// can convert at its own public boundaries meanwhile.
 
 /**
  * Converts this Apache Avro schema to avro4k's multiplatform [AvroSchema].

@@ -9,7 +9,7 @@ import org.apache.avro.io.DecoderFactory
  * Proves, before anything is measured, that the libraries being compared are doing the same job.
  *
  * A benchmark that compares three libraries is only meaningful if all three describe the data the
- * same way and put the same bytes on the wire. Until A5 nothing checked that, and the consequence
+ * same way and put the same bytes on the wire. Before this gate nothing checked that, and the consequence
  * was not a wrong number but a *missing* one: nine read benchmarks threw in `@Setup`, JMH dropped
  * them, and the report simply had no row for them. This gate turns that class of problem into a
  * loud failure at setup time.

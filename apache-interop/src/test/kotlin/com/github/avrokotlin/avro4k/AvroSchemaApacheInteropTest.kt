@@ -94,8 +94,8 @@ class AvroSchemaApacheInteropTest : FunSpec({
     }
 
     test("core's int defaults are int json nodes, as Apache's parser builds them") {
-        // Apache's field equality compares the default json nodes, including their type. Core built its int defaults as big
-        // integer nodes until M3-09; since then, Avro.schema() is the Apache form of an AvroSchema, parsed from its json.
+        // Apache's field equality compares the default json nodes, including their type. Core used to build its int defaults
+        // as big integer nodes; now Avro.schema() is the Apache form of an AvroSchema, parsed from its json.
         val field = Avro.schema(Everything.serializer()).getField("withDefault")
         Accessor.defaultValue(field).isInt shouldBe true
         field.defaultVal() shouldBe 42

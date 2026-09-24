@@ -52,15 +52,15 @@ import org.apache.avro.generic.GenericData
 import java.math.BigDecimal
 
 /**
- * M3-08: missing fields are decoded from their json default by [JsonDefaultDecoder], instead of converting the json to
+ * Missing fields are decoded from their json default by [JsonDefaultDecoder], instead of converting the json to
  * Apache `GenericData` values and decoding those with the generic decoder.
  *
  * The differential tests pin the new decoder to that former path, kept here as the oracle: [formerConvert] is the
  * conversion `RecordResolver` used to do, and [AvroValueGenericDecoder] the decoder it fed. They must agree on every
  * value, and fail together.
  *
- * The oracle carries exactly the changes the Avro specification required afterwards (M3-08 follow-up, each marked
- * "spec:" in [formerConvert]): bytes and fixed defaults map code points 0-255 to bytes, a fixed default is padded or
+ * The oracle carries exactly the changes the Avro specification required afterwards (each marked "spec:" in
+ * [formerConvert]): bytes and fixed defaults map code points 0-255 to bytes, a fixed default is padded or
  * truncated to its size, and a char default is its code. The other spec changes (union branch selection, `"null"` on a
  * non-nullable string) are pinned against Apache Java by `AvroDefaultSpecTest`.
  */

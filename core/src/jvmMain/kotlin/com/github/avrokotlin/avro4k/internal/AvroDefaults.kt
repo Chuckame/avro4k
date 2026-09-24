@@ -21,8 +21,9 @@ import kotlinx.serialization.json.booleanOrNull
 import org.apache.avro.Schema
 import com.github.avrokotlin.avro4k.internal.schema.asSchemaList as avroSchemaList
 
-// The rules for field default values, shared by the schema generation (on AvroSchema, since M3-09) and by the decoding of a
-// field missing from the writer schema (still on Apache's Schema until M3-11, which deletes the Apache-typed variants below).
+// The rules for field default values, shared by the schema generation (on AvroSchema) and by the decoding of a field
+// missing from the writer schema (still on Apache's Schema until the decoders read AvroSchema; the Apache-typed variants
+// below go away then).
 // Each rule is written once, over the kind of schema (AvroSchema.Type) and plain facts about the field's schema; the two
 // variants of each function only walk their own schema model and delegate to it.
 
@@ -40,7 +41,7 @@ internal fun AvroDefault.toFieldDefault(fieldSchema: AvroSchema): JsonElement =
         isChar = fieldSchema.avroSchemaList().any { it.logicalTypeName == CHAR_LOGICAL_TYPE_NAME }
     )
 
-/** [toFieldDefault] for an Apache schema: the decoder's reader schema until M3-11, which deletes this variant. */
+/** [toFieldDefault] for an Apache schema: the decoder's reader schema, until the decoders read `AvroSchema`. */
 internal fun AvroDefault.toFieldDefault(fieldSchema: Schema): JsonElement =
     toFieldDefault(
         isNullable = fieldSchema.isNullable,
@@ -120,7 +121,7 @@ internal fun JsonElement.isValidDefaultFor(
         else -> isValidDefaultForLeaf(schema.type, allowAnyCodePoint)
     }
 
-/** [isValidDefaultFor] for an Apache schema: the decoder's reader schema until M3-11, which deletes this variant. */
+/** [isValidDefaultFor] for an Apache schema: the decoder's reader schema, until the decoders read `AvroSchema`. */
 internal fun JsonElement.isValidDefaultFor(
     schema: Schema,
     allowAnyCodePoint: Boolean = false,
@@ -195,7 +196,7 @@ internal fun AvroSchema.resolveDefaultBranch(value: JsonElement): AvroSchema {
     return types.firstOrNull { value.isValidDefaultFor(it) } ?: throw noCompatibleBranchError(toSchemaJsonString(), value)
 }
 
-/** [resolveDefaultBranch] for an Apache schema: the decoder's reader schema until M3-11, which deletes this variant. */
+/** [resolveDefaultBranch] for an Apache schema: the decoder's reader schema, until the decoders read `AvroSchema`. */
 internal fun Schema.resolveDefaultBranch(value: JsonElement): Schema {
     if (type != Schema.Type.UNION) return this
     return types.firstOrNull { value.isValidDefaultFor(it) } ?: throw noCompatibleBranchError(toString(), value)

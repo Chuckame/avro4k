@@ -44,7 +44,7 @@ internal object SerializerLocatorMiddleware {
      *
      * Why `when` chains of `===` over these static finals, rather than a map: `apply` runs on every encoded and
      * decoded value and nearly always misses. Measured by `benchmark/.../micro/IdentityLookupMicroBenchmark.kt`
-     * (see benchmark/README.md, "Results — M2"): per lookup, the `when` chain costs 0.75 ns on a miss, an
+     * (see benchmark/README.md, "Intercepted-serializer lookup"): per lookup, the `when` chain costs 0.75 ns on a miss, an
      * `IdentityHashMap` 1.24 ns, and a linear `===` scan over an array 2.39 ns — the JIT compares against the static
      * finals as constants. It is also platform-neutral and allocation-free, and keeps identity semantics (`===`, never
      * `equals`: a plain `when (x) { A -> }` would compare with `equals`).

@@ -12,7 +12,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-/** JVM-only checks of the equality-mode table (M3-06): collectability and concurrency. */
+/** JVM-only checks of the equality-mode table: collectability and concurrency. */
 internal class WeakKeyCacheJvmTest : StringSpec({
     "entries whose key was collected are dropped when the table is rebuilt, live ones are kept" {
         val cache = WeakKeyCache<EqualKey, String>()
