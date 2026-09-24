@@ -84,8 +84,13 @@
   2. `./gradlew actionsBeforeCommit`
   Pass: all green; `git diff --exit-code core/api apache-interop/api` clean, except in units marked **api**, where the diff is
   reviewed; kotlin-generator's golden sources unchanged under `CI=true`.
-- **`ACC+KMP`** = `ACC` + `./gradlew :core:check`: `allTests` (jvm, jsNode, jsBrowser, macosArm64, iosSimulatorArm64) plus the
-  test binaries of every target, including `androidNativeArm32`.
+- **`ACC+KMP`** = `ACC` + `./gradlew :core:check` (`allTests`: jvm, jsNode, jsBrowser, macosArm64, iosSimulatorArm64) **+ the test
+  binaries of the targets with no runner on this host**, which `:core:check` does *not* link (found by M3-10):
+  `./gradlew :core:androidNativeArm32TestBinaries :core:androidNativeArm64TestBinaries :core:androidNativeX86TestBinaries
+  :core:androidNativeX64TestBinaries :core:linuxArm64TestBinaries :core:iosArm64TestBinaries :core:watchosArm32TestBinaries
+  :core:watchosArm64TestBinaries :core:watchosDeviceArm64TestBinaries :core:tvosArm64TestBinaries`. Units before M3-10 did
+  not run this; M3-10 linked all 10 on a tree containing every earlier unit, so nothing slipped through. Also: Kotlin/Native
+  rejects `,` in backticked test names.
 
 ## 2. How core switches from Apache `Schema` to `AvroSchema`
 
