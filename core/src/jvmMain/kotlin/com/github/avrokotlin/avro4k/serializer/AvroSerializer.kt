@@ -1,16 +1,19 @@
 package com.github.avrokotlin.avro4k.serializer
 
+import com.github.avrokotlin.avro4k.AvroAlias
 import com.github.avrokotlin.avro4k.AvroConfiguration
 import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroDecoder
+import com.github.avrokotlin.avro4k.AvroDoc
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroStringable
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.apacheToAvro4kUncached
+import com.github.avrokotlin.avro4k.internal.findAnnotation
 import com.github.avrokotlin.avro4k.internal.findElementAnnotation
-import com.github.avrokotlin.avro4k.internal.namespace
+import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SealedSerializationApi
@@ -150,11 +153,24 @@ public val ElementLocation.fixed: AvroFixed?
     get() = findAnnotation()
 
 /**
- * Creates a fixed schema from the [AvroFixed] annotation.
+ * Creates a fixed schema from the [AvroFixed] annotation, found at [elementLocation]. Its name depends on where the annotation is:
+ * - on a **value class's own property**: the fixed is named after the value class's serial name (so `@SerialName` sets it,
+ *   and a serial name without a dot means no namespace, as for records). The value class's [AvroAlias] and [AvroDoc] are the
+ *   fixed's aliases (relative to its namespace, as for records) and doc.
+ * - on a **data class property**: the fixed is named after the property's element name, in the namespace of the record's full
+ *   name (e.g. `com.example.MyRecord.myField`), so that two records' fields never have the same fixed name.
  */
 @ExperimentalAvro4kApi
-public fun AvroFixed.createSchema(elementLocation: ElementLocation): Schema =
-    Schema.createFixed(elementLocation.descriptor.getElementName(elementLocation.elementIndex), null, elementLocation.descriptor.namespace, size)
+public fun AvroFixed.createSchema(elementLocation: ElementLocation): Schema {
+    val descriptor = elementLocation.descriptor
+    if (descriptor.isInline) {
+        // A name with a dot is a full name for Apache, which then ignores the namespace argument
+        return Schema.createFixed(descriptor.nonNullSerialName, descriptor.findAnnotation<AvroDoc>()?.value, null, size).also { fixed ->
+            descriptor.findAnnotation<AvroAlias>()?.value?.forEach { fixed.addAlias(it) }
+        }
+    }
+    return Schema.createFixed(descriptor.getElementName(elementLocation.elementIndex), null, descriptor.nonNullSerialName, size)
+}
 
 @ExperimentalAvro4kApi
 public data class ElementLocation

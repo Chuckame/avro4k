@@ -70,8 +70,8 @@ internal class SchemaFingerprintDifferentialTest : StringSpec({
         }
     }
 
-    "every resource schema parses: all 51 are compared, none is excluded" {
-        resources.size shouldBe 51
+    "every resource schema parses: all 52 are compared, none is excluded" {
+        resources.size shouldBe 52
     }
 
     "the resource schemas have Apache's canonical form and fingerprint" {

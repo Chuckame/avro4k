@@ -26,7 +26,7 @@ internal class BigDecimalSchemaTest : FunSpec({
 
     test("support BigDecimal decimal logical types as fixed") {
         AvroAssertions.assertThat<DecimalFixedTest>()
-            .generatesSchema(LogicalTypes.decimal(5, 3).addToSchema(Schema.createFixed("field", null, null, 5)))
+            .generatesSchema(LogicalTypes.decimal(5, 3).addToSchema(Schema.createFixed("DecimalFixedTest", null, null, 5)))
     }
 
     test("BigDecimal as fixed without @AvroDecimal fails") {

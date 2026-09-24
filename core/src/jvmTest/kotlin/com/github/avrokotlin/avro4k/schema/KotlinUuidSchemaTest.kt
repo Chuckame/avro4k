@@ -37,7 +37,7 @@ internal class KotlinUuidSchemaTest : FunSpec({
 
     test("support kotlin.uuid.Uuid logical types as fixed") {
         AvroAssertions.assertThat<KotlinUuidTestFixed>()
-            .generatesSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("com.github.avrokotlin.avro4k.schema.KotlinUuidSchemaTest.uuidFixed", null, null, 16)))
+            .generatesSchema(LogicalTypes.uuid().addToSchema(Schema.createFixed("com.github.avrokotlin.avro4k.schema.KotlinUuidSchemaTest.KotlinUuidTestFixed", null, null, 16)))
     }
 
     test("fails when @AvroFixed has bad size") {

@@ -29,17 +29,22 @@ public annotation class AvroProp(
  * - a record's field when annotated on a data class property
  * - a record when annotated on a data class or object
  * - an enum type when annotated on an enum class
+ * - a fixed type when annotated on a value class whose property is annotated with [AvroFixed]
  *
- * Only works with classes (data, enum & object types) and class properties (not enum values). Ignored in value classes.
+ * Only works with classes (data, enum, object & value types) and class properties (not enum values).
+ * Ignored on other value classes and on value class properties.
  */
 @SerialInfo
 @Target(AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)
 public annotation class AvroDoc(val value: String)
 
 /**
- * Adds aliases to a field of a record. It helps to allow having different names for the same field for better compatibility when changing a schema.
+ * Adds aliases to a field of a record, or to a named type: a record, an enum, or a fixed when annotated on a value class
+ * whose property is annotated with [AvroFixed]. It helps to allow having different names for the same field or type for
+ * better compatibility when changing a schema. A type's alias without a namespace is resolved in the type's namespace.
  *
- * Only works with classes (data, enum & object types) and class properties (not enum values). Ignored in value classes.
+ * Only works with classes (data, enum, object & value types) and class properties (not enum values).
+ * Ignored on other value classes and on value class properties.
  *
  * @param value The aliases for the annotated property. Note that the given aliases won't be changed by the configured [AvroConfiguration.fieldNamingStrategy].
  */
@@ -89,6 +94,13 @@ public annotation class AvroDecimal(
  * Indicates that the annotated property should be encoded as an Avro fixed type.
  *
  * Only works with [ByteArray], [String] and [java.math.BigDecimal] property types.
+ *
+ * The fixed type's name depends on where the annotation is:
+ * - on a value class's property: the value class's serial name (set it with `@SerialName`), with the value class's
+ *   [AvroAlias] and [AvroDoc] as the fixed's aliases and doc.
+ * - on a data class property: the property's name, in the namespace of the record's full name (`<record full name>.<property>`).
+ *
+ * The fixed type created by [java.util.UUID], [kotlin.uuid.Uuid] and [java.math.BigDecimal] serializers follows the same naming.
  *
  * @param size The number of bytes of the fixed type. Note that smaller values will be padded with 0s during encoding, but not unpadded when decoding.
  */

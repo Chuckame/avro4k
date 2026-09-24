@@ -27,7 +27,7 @@ internal class AvroFixedEncodingTest : StringSpec({
 
     "support fixed on string value classes" {
         AvroAssertions.assertThat<FixedNestedStringField>()
-            .generatesSchema(Path("/fixed_string.json"))
+            .generatesSchema(Path("/fixed_string_value_class.json"))
 
         val schema = Avro.apacheSchema<FixedNestedStringField>().fields[0].schema()
         AvroAssertions.assertThat(FixedNestedStringField(FixedStringValueClass("1234567")))

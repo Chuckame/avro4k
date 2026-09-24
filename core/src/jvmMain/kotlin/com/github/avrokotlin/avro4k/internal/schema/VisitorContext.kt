@@ -44,7 +44,8 @@ internal data class VisitorContext(
      * name. The generation used to build an enum or a fixed anew at each use, equal instances that the json route of
      * `Avro.schema()` (M3-09) could not pair one by one with the single Apache node its parser shares. Two *different*
      * named schemas with the same full name cannot be written as json at all: the second one would silently read as the
-     * first (e.g. a fixed of another size), so it is rejected.
+     * first (e.g. a fixed of another size), so it is rejected, with a message that starts like Apache's `Schema.Parser` one
+     * (`Can't redefine: <full name>`).
      *
      * Cold path (once per generated schema): the structural `==` below only runs when a full name is met again with
      * another instance, and it is what tells an equal duplicate from a conflict.
@@ -67,7 +68,7 @@ internal data class VisitorContext(
         val existing = resolvedSchemas.getOrPut(schema.fullName) { schema }
         if (existing === schema || existing.isEqualTo(schema)) return existing
         throw AvroSchemaGenerationException(
-            "Two different named schemas have the same full name '${schema.fullName}': ${existing.toSchemaJsonStringOrName()} and " +
+            "Can't redefine: ${schema.fullName}. Two different named schemas have this full name: ${existing.toSchemaJsonStringOrName()} and " +
                 "${schema.toSchemaJsonStringOrName()}. A name can only define one type in a schema."
         )
     }

@@ -23,6 +23,7 @@ import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.SerialName
@@ -57,6 +58,7 @@ internal class SchemaGenerationTest : StringSpec({
         schema.fields[1].schema shouldBeSameInstanceAs schema.fields[0].schema
         (schema.fields[2].schema as AvroSchema.UnionSchema).types[1] shouldBeSameInstanceAs schema.fields[0].schema
         // A fixed is created anew by its serializer's getSchema() at each use: the one of `same.B` is the one of `same.A`
+        // (the same value class, so the same fixed name)
         val fixedOfA = (schema.fields[3].schema as AvroSchema.RecordSchema).fields.single().schema
         val fixedOfB = (schema.fields[4].schema as AvroSchema.RecordSchema).fields.single().schema
         fixedOfA.fullName shouldBe "same.hash"
@@ -65,7 +67,7 @@ internal class SchemaGenerationTest : StringSpec({
 
     "two different named types with the same full name are rejected, as json cannot tell them apart" {
         shouldThrow<SerializationException> { Avro.apacheSchema<ConflictingFixed>() }
-            .message shouldContain "Two different named schemas have the same full name"
+            .message shouldStartWith "Can't redefine: ns.hash. Two different named schemas have this full name: "
     }
 
     "the Apache form keeps the logical types that Apache does not know, as the former generation set them" {
@@ -129,13 +131,20 @@ internal class SchemaGenerationTest : StringSpec({
     @Serializable
     @SerialName("same.A")
     private data class SameFixedA(
-        @AvroFixed(4) val hash: ByteArray,
+        val hash: SameHash,
     )
 
     @Serializable
     @SerialName("same.B")
     private data class SameFixedB(
-        @AvroFixed(4) val hash: ByteArray,
+        val hash: SameHash,
+    )
+
+    @JvmInline
+    @Serializable
+    @SerialName("same.hash")
+    private value class SameHash(
+        @AvroFixed(4) val value: ByteArray,
     )
 
     @Serializable
@@ -148,13 +157,27 @@ internal class SchemaGenerationTest : StringSpec({
     @Serializable
     @SerialName("ns.A")
     private data class FixedHolderA(
-        @AvroFixed(4) val hash: ByteArray,
+        val hash: Hash4,
     )
 
     @Serializable
     @SerialName("ns.B")
     private data class FixedHolderB(
-        @AvroFixed(8) val hash: ByteArray,
+        val hash: Hash8,
+    )
+
+    @JvmInline
+    @Serializable
+    @SerialName("ns.hash")
+    private value class Hash4(
+        @AvroFixed(4) val value: ByteArray,
+    )
+
+    @JvmInline
+    @Serializable
+    @SerialName("ns.hash")
+    private value class Hash8(
+        @AvroFixed(8) val value: ByteArray,
     )
 
     @Serializable

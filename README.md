@@ -546,7 +546,8 @@ yourAvroInstance.schema<MyData>()
 
 ## Add documentation to a schema
 
-You may want to add documentation to a schema to provide more information about a field or a named type (only RECORD and ENUM for the moment).
+You may want to add documentation to a schema to provide more information about a field or a named type (RECORD, ENUM, and FIXED through a value class, see
+[Change type name (FIXED)](#change-type-name-fixed)).
 
 > [!WARNING]
 > Do not use `@org.apache.avro.reflect.AvroDoc` as this annotation is not visible by Avro4k.
@@ -823,7 +824,8 @@ data class MyData(
 ## Add aliases
 
 To be able of reading from different written schemas, or able of writing to different schemas, you can add aliases to a named type (record, enum) field by annotating it
-with `@AvroAlias`. The given aliases may contain the full name of the alias type or only the name.
+with `@AvroAlias`. The given aliases may contain the full name of the alias type or only the name. A FIXED type gets aliases through its value class, see
+[Change type name (FIXED)](#change-type-name-fixed).
 
 > [Avro spec link](https://avro.apache.org/docs/1.12.1/specification/#aliases)
 
@@ -957,11 +959,60 @@ package my.package
 data class MyData(val myField: String)
 ```
 
-## Change type name (FIXED only)
+## Change type name (FIXED)
 
-> [!WARNING]
-> For the moment, it is not possible to manually change the namespace or the name of a FIXED type as the type name is coming from the field name and the namespace from the
-> enclosing data class package.
+A FIXED type in Avro has a name and a namespace, like RECORD and ENUM. Avro4k names it depending on where `@AvroFixed` is:
+
+- **On a value class's property**: the FIXED is named after the value class, so `@SerialName` on the value class changes its full name, exactly like for records (a
+  serial name without a dot means no namespace). `@AvroAlias` and `@AvroDoc` on the value class are the FIXED's aliases and documentation. An alias without a namespace is
+  in the FIXED's namespace.
+- **On a data class property**: the FIXED is named after the property, in a namespace that is the full name of the data class: `<record full name>.<property name>`. Two
+  records can then each have a fixed field with the same name and a different size.
+
+When both are present (the data class property is annotated with `@AvroFixed` and its type is such a value class), the data class property's annotation wins, and so does its
+naming.
+
+The same naming applies to the fixed types of `java.util.UUID`, `kotlin.uuid.Uuid` and `java.math.BigDecimal` with `@AvroFixed`. The `fixed(12)` of the durations
+(`java.time.Duration`, `java.time.Period`, `kotlin.time.Duration`, `AvroDuration`) is not concerned, as it is not created from `@AvroFixed`.
+
+```kotlin
+package my.package
+
+@JvmInline
+@Serializable
+@SerialName("my.package.Sha256")
+@AvroAlias("LegacySha256")
+@AvroDoc("A SHA-256 hash")
+value class Hash(@AvroFixed(32) val bytes: ByteArray)
+
+@Serializable
+data class MyData(
+    val hash: Hash, // fixed "my.package.Sha256", with the alias "my.package.LegacySha256"
+    @AvroFixed(16) val id: ByteArray, // fixed "my.package.MyData.id"
+)
+```
+
+> [!NOTE]
+> This impacts only the schema generation: avro4k reads and writes a fixed by its size, whatever its name.
+>
+> Two different fixed types (e.g. of different sizes) with the same full name fail the schema generation with `Can't redefine: <full name>`, as Apache Avro does.
+
+### Keep a previous fixed name
+
+To keep the exact name of an existing fixed type, for example to stay compatible with the schemas already registered in a schema registry, wrap the field in a value class
+named with the previous full name:
+
+```kotlin
+@JvmInline
+@Serializable
+@SerialName("my.package.id") // the previous full name
+value class Id(@AvroFixed(16) val bytes: ByteArray)
+
+@Serializable
+data class MyData(val id: Id)
+```
+
+Or, to adopt a new name while staying compatible, add the previous full name as an alias with `@AvroAlias("my.package.id")` on the value class.
 
 ## Set a custom schema
 

@@ -49,7 +49,8 @@ internal class ClassVisitor(
             }
         schema = resolved as? RecordSchema
             ?: throw AvroSchemaGenerationException(
-                "The record '${descriptor.nonNullSerialName}' has the same full name as another named schema: ${resolved.toSchemaJsonStringOrName()}"
+                "Can't redefine: ${descriptor.nonNullSerialName}. The record '${descriptor.nonNullSerialName}' has the same full name as another named schema: " +
+                    resolved.toSchemaJsonStringOrName()
             )
         this.fields = fields
     }

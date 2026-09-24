@@ -7,6 +7,7 @@
       "type": {
         "type": "fixed",
         "name": "mystring",
+        "namespace": "Fixed",
         "size": 7
       }
     }

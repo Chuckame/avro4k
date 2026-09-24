@@ -34,7 +34,6 @@ internal inline fun <reified T : Annotation> SerialDescriptor.findElementAnnotat
 
 @OptIn(ExperimentalSerializationApi::class)
 internal val SerialDescriptor.nonNullSerialName: String get() = nonNullOriginal.serialName
-internal val SerialDescriptor.namespace: String? get() = serialName.substringBeforeLast('.', "").takeIf { it.isNotEmpty() }
 
 internal fun Schema.asSchemaList(): List<Schema> {
     if (!isUnion) return listOf(this)

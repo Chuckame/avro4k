@@ -175,7 +175,8 @@ internal class LogicalTypesEncodingTest : StringSpec({
                     ),
                     Conversions.DecimalConversion().toFixed(
                         BigDecimal("123.45"),
-                        SchemaBuilder.fixed("com.github.avrokotlin.avro4k.encoding.LogicalTypesEncodingTest.decimalFixedNullable").size(42),
+                        // named <record full name>.<field>: the Apache writer picks the union branch by full name
+                        SchemaBuilder.fixed("com.github.avrokotlin.avro4k.encoding.LogicalTypesEncodingTest.NullableLogicalTypes.decimalFixedNullable").size(42),
                         org.apache.avro.LogicalTypes.decimal(8, 2)
                     ),
                     Conversions.BigDecimalConversion().toBytes(
@@ -191,7 +192,7 @@ internal class LogicalTypesEncodingTest : StringSpec({
                     "123e4567-e89b-12d3-a456-426614174000",
                     Conversions.UUIDConversion().toFixed(
                         UUID.fromString("123e4567-e89b-12d3-a456-426614174001"),
-                        SchemaBuilder.fixed("uuidFixed").namespace("com.github.avrokotlin.avro4k.encoding.LogicalTypesEncodingTest").size(16),
+                        SchemaBuilder.fixed("uuidFixed").namespace("com.github.avrokotlin.avro4k.encoding.LogicalTypesEncodingTest.NullableLogicalTypes").size(16),
                         org.apache.avro.LogicalTypes.uuid()
                     ),
                     "123e4567-e89b-12d3-a456-426614174002",
