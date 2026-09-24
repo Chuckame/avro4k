@@ -2,8 +2,8 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDefault
+import com.github.avrokotlin.avro4k.internal.decoder.resolveDefaultBranch
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
-import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.json.Json
@@ -12,13 +12,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.double
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.long
 import org.apache.avro.Schema
-import org.apache.avro.generic.GenericData
 
 /**
  * Capacity of the per-[RecordResolver] inline cache. Sized to comfortably hold the record types of a deeply
@@ -26,6 +20,9 @@ import org.apache.avro.generic.GenericData
  * staying small enough that a miss-free lookup is a handful of reference comparisons.
  */
 private const val INLINE_CACHE_CAPACITY = 16
+
+private val EMPTY_JSON_ARRAY = JsonArray(emptyList())
+private val EMPTY_JSON_OBJECT = JsonObject(emptyMap())
 
 internal class RecordResolver(
     private val avro: Avro,
@@ -192,10 +189,11 @@ internal class RecordResolver(
 
                 decodingSteps +=
                     if (readerDefaultAnnotation != null) {
+                        val defaultValue = readerDefaultAnnotation.parseValueToJson()
                         DecodingStep.GetDefaultValue(
                             elementIndex = elementIndex,
-                            schema = readerField.schema(),
-                            defaultValue = readerDefaultAnnotation.parseValueToGenericData(readerField.schema())
+                            schema = readerField.schema().resolveDefaultBranch(defaultValue),
+                            defaultValue = defaultValue
                         )
                     } else if (classDescriptor.isElementOptional(elementIndex)) {
                         // There is already a kotlin default value for this element, so we can skip it.
@@ -205,19 +203,19 @@ internal class RecordResolver(
                         DecodingStep.GetDefaultValue(
                             elementIndex = elementIndex,
                             schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.NULL },
-                            defaultValue = null
+                            defaultValue = JsonNull
                         )
                     } else if (avro.configuration.implicitEmptyCollections && readerField.schema().isTypeOf(Schema.Type.ARRAY)) {
                         DecodingStep.GetDefaultValue(
                             elementIndex = elementIndex,
                             schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.ARRAY },
-                            defaultValue = emptyList<Any>()
+                            defaultValue = EMPTY_JSON_ARRAY
                         )
                     } else if (avro.configuration.implicitEmptyCollections && readerField.schema().isTypeOf(Schema.Type.MAP)) {
                         DecodingStep.GetDefaultValue(
                             elementIndex = elementIndex,
                             schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.MAP },
-                            defaultValue = emptyMap<String, Any>()
+                            defaultValue = EMPTY_JSON_OBJECT
                         )
                     } else {
                         DecodingStep.MissingElementValueFailure(elementIndex)
@@ -341,8 +339,14 @@ internal sealed interface DecodingStep {
      */
     data class GetDefaultValue(
         override val elementIndex: Int,
+        /**
+         * The reader field's schema, or its branch matching [defaultValue] when it is a union.
+         */
         override val schema: Schema,
-        val defaultValue: Any?,
+        /**
+         * Decoded by [com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder] each time the element is read.
+         */
+        val defaultValue: JsonElement,
     ) : DecodingStep, ValidatedDecodingStep
 
     /**
@@ -370,95 +374,15 @@ internal sealed interface DecodingStep {
     ) : DecodingStep
 }
 
-private fun AvroDefault.parseValueToGenericData(schema: Schema): Any? {
+/**
+ * The default as json, exactly as the schema generation reads it: a value that looks like json is parsed, anything else
+ * is a string.
+ */
+private fun AvroDefault.parseValueToJson(): JsonElement {
     if (value.isStartingAsJson()) {
-        return Json.parseToJsonElement(value).convertDefaultToObject(schema)
+        return Json.parseToJsonElement(value)
     }
-    return JsonPrimitive(value).convertDefaultToObject(schema)
-}
-
-private fun JsonElement.convertDefaultToObject(schema: Schema): Any? =
-    when (this) {
-        is JsonArray ->
-            when (schema.type) {
-                Schema.Type.ARRAY -> this.map { it.convertDefaultToObject(schema.elementType) }
-                Schema.Type.UNION -> this.convertDefaultToObject(schema.resolveUnion(this, Schema.Type.ARRAY))
-                else -> throw SerializationException("Not a valid array value for schema $schema: $this")
-            }
-
-        is JsonNull -> null
-
-        is JsonObject ->
-            when (schema.type) {
-                Schema.Type.RECORD -> {
-                    GenericData.Record(schema).apply {
-                        entries.forEach { (fieldName, value) ->
-                            val schemaField = schema.getField(fieldName)
-                            put(schemaField.pos(), value.convertDefaultToObject(schemaField.schema()))
-                        }
-                    }
-                }
-
-                Schema.Type.MAP -> entries.associate { (key, value) -> key to value.convertDefaultToObject(schema.valueType) }
-
-                Schema.Type.UNION -> this.convertDefaultToObject(schema.resolveUnion(this, Schema.Type.RECORD, Schema.Type.MAP))
-
-                else -> throw SerializationException("Not a valid record value for schema $schema: $this")
-            }
-
-        is JsonPrimitive ->
-            when (schema.type) {
-                Schema.Type.BYTES -> this.content.toByteArray()
-
-                Schema.Type.FIXED -> GenericData.Fixed(schema, this.content.toByteArray())
-
-                Schema.Type.STRING -> this.content
-
-                Schema.Type.ENUM -> this.content
-
-                Schema.Type.BOOLEAN -> this.boolean
-
-                Schema.Type.INT ->
-                    when (schema.logicalType?.name) {
-                        CHAR_LOGICAL_TYPE_NAME -> this.content.single().code
-                        else -> this.int
-                    }
-
-                Schema.Type.LONG -> this.long
-
-                Schema.Type.FLOAT -> this.float
-
-                Schema.Type.DOUBLE -> this.double
-
-                Schema.Type.UNION ->
-                    this.convertDefaultToObject(
-                        schema.resolveUnion(
-                            this,
-                            Schema.Type.BYTES,
-                            Schema.Type.FIXED,
-                            Schema.Type.STRING,
-                            Schema.Type.ENUM,
-                            Schema.Type.BOOLEAN,
-                            Schema.Type.INT,
-                            Schema.Type.LONG,
-                            Schema.Type.FLOAT,
-                            Schema.Type.DOUBLE
-                        )
-                    )
-
-                else -> throw SerializationException("Not a valid primitive value for schema $schema: $this")
-            }
-    }
-
-private fun Schema.resolveUnion(
-    value: JsonElement?,
-    vararg expectedTypes: Schema.Type,
-): Schema {
-    val index = types.indexOfFirst { it.type in expectedTypes }
-    if (index < 0) {
-        throw SerializationException("Union type does not contain one of ${expectedTypes.asList()}, unable to convert default value '$value' for schema $this")
-    }
-    return types[index]
+    return JsonPrimitive(value)
 }
 
 private fun Schema.findFieldNamedOrAliasedAs(name: String): Schema.Field? =
