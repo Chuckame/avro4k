@@ -108,6 +108,9 @@ public fun <T> Avro.decodeFromGenericDataWith(
 public val AvroDecoder.apacheWriterSchema: Schema
     get() = currentWriterSchema
 
+/** The decoder's fixed value, as bytes. M3-12: `decodeFixed()` (it returns a `ByteArray` there). */
+public fun AvroDecoder.decodeFixedBytes(): ByteArray = decodeFixed().bytes()
+
 /**
  * Stubs the writer schema of a mockk-mocked decoder. Kept here rather than as `every { decoder.currentWriterSchema }` in the
  * tests, because the stubbed value must have core's type. M3-12: `returns writerSchema.toAvro4k()`.

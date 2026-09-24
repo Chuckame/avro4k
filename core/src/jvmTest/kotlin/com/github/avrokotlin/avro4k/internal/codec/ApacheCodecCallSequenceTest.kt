@@ -3,9 +3,11 @@ package com.github.avrokotlin.avro4k.internal.codec
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroFixed
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.decodeFixedBytes
+import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.internal.decodeWithApacheDecoder
 import com.github.avrokotlin.avro4k.internal.encodeWithApacheEncoder
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.KSerializer
@@ -70,17 +72,17 @@ internal class ApacheCodecCallSequenceTest : StringSpec({
         val avro = Avro { validateSerialization = validate }
 
         "encoder call sequence, all types (validate=$validate)" {
-            recordEncoding(avro, avro.schema<CallSequenceRecord>(), serializer<CallSequenceRecord>(), value) shouldBe EXPECTED_ENCODE_ALL
+            recordEncoding(avro, avro.apacheSchema<CallSequenceRecord>(), serializer<CallSequenceRecord>(), value) shouldBe EXPECTED_ENCODE_ALL
         }
 
         "decoder call sequence, all types (validate=$validate)" {
-            val bytes = Avro.encodeToByteArray(avro.schema<CallSequenceRecord>(), serializer<CallSequenceRecord>(), value)
-            recordDecoding(avro, avro.schema<CallSequenceRecord>(), serializer<CallSequenceRecord>(), bytes) shouldBe EXPECTED_DECODE_ALL
+            val bytes = Avro.encodeWith(avro.apacheSchema<CallSequenceRecord>(), serializer<CallSequenceRecord>(), value)
+            recordDecoding(avro, avro.apacheSchema<CallSequenceRecord>(), serializer<CallSequenceRecord>(), bytes) shouldBe EXPECTED_DECODE_ALL
         }
 
         "decoder call sequence, skipping every writer field but one (validate=$validate)" {
-            val bytes = Avro.encodeToByteArray(avro.schema<CallSequenceRecord>(), serializer<CallSequenceRecord>(), value)
-            recordDecoding(avro, avro.schema<CallSequenceRecord>(), serializer<CallSequenceSubset>(), bytes) shouldBe EXPECTED_DECODE_SKIP
+            val bytes = Avro.encodeWith(avro.apacheSchema<CallSequenceRecord>(), serializer<CallSequenceRecord>(), value)
+            recordDecoding(avro, avro.apacheSchema<CallSequenceRecord>(), serializer<CallSequenceSubset>(), bytes) shouldBe EXPECTED_DECODE_SKIP
         }
 
         "encoder call sequence, bytes and char as STRING (validate=$validate)" {
@@ -88,7 +90,7 @@ internal class ApacheCodecCallSequenceTest : StringSpec({
         }
 
         "decoder call sequence, bytes, char and fixed from STRING (validate=$validate)" {
-            val bytes = Avro.encodeToByteArray(stringsWriterSchema, serializer<StringTypedRecord>(), stringsValue)
+            val bytes = Avro.encodeWith(stringsWriterSchema, serializer<StringTypedRecord>(), stringsValue)
             recordDecoding(avro, stringsWriterSchema, serializer<StringTypedRecord>(), bytes) shouldBe EXPECTED_DECODE_STRINGS
         }
     }
@@ -135,7 +137,7 @@ internal class ApacheCodecCallSequenceTest : StringSpec({
         @Serializable(with = FixedAsBytesSerializer::class) val fixed: ByteArray,
     )
 
-    /** Decodes through `decodeFixed()`, so a STRING writer schema reaches the `GenericData.Fixed` branch. */
+    /** Decodes as a fixed value (`decodeFixedBytes`), so a STRING writer schema reaches the `GenericData.Fixed` branch. */
     private object FixedAsBytesSerializer : KSerializer<ByteArray> {
         override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FixedAsBytes", PrimitiveKind.STRING)
 
@@ -146,7 +148,7 @@ internal class ApacheCodecCallSequenceTest : StringSpec({
             encoder.encodeSerializableValue(ByteArraySerializer(), value)
         }
 
-        override fun deserialize(decoder: Decoder): ByteArray = (decoder as AvroDecoder).decodeFixed().bytes()
+        override fun deserialize(decoder: Decoder): ByteArray = (decoder as AvroDecoder).decodeFixedBytes()
     }
 }
 
