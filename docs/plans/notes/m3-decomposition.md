@@ -65,6 +65,10 @@
 
 ## 1. Rules every M3 brief carries, on top of the locked decisions
 
+- **Never rename a public API** (user rule, 2026-09-24). v3 changes *types* where the locked decisions require it (Apache
+  `Schema` → `AvroSchema` in signatures), never names: `Avro.decodeFromByteArray`, `encodeToByteArray`, `schema`, … keep their
+  names and shapes. Any other public-name or public-shape change needs the user's explicit approval first; a unit that seems to
+  need one stops and reports. Test-only and `internal` helpers (e.g. the test bridge's `encodeWith`) are not public API.
 - **Per-value boundary.** No unit adds an `AvroSchema`↔`Schema` conversion per value, except the named M3-11→12 facade
   (identity-cached, §2). Per-call and per-descriptor conversions are allowed only through the identity caches. Fresh-per-call
   schemas (e.g. `getSchema()` results) use the **uncached** converter (`WeakIdentityKeyCache` KDoc: "a key created per call is
