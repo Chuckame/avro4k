@@ -74,8 +74,10 @@
 - **Shared state** (decision log, 2026-09-23, C3 rows): shared caches immutable or CAS-based; per-operation state on the
   decoder/encoder; anything else designed away.
 - **Test count:** each unit records the exact `:core:jvmTest` count before and after; every change is listed in `notes/m3-XX.md`.
-- **`ACC`**, the acceptance command of every unit:
-  `./gradlew :core:jvmTest :apache-interop:test :confluent-kafka-serializer:test :kotlin-generator:test :gradle-plugin:test :benchmark:compileKotlin apiCheck spotlessApply actionsBeforeCommit`.
+- **`ACC`**, the acceptance of every unit, as **two** invocations (Gradle 9 rejects `apiCheck` and `apiDump` — pulled in by
+  `actionsBeforeCommit` — in the same run; found by M3-01):
+  1. `./gradlew :core:jvmTest :apache-interop:test :confluent-kafka-serializer:test :kotlin-generator:test :gradle-plugin:test :benchmark:compileKotlin apiCheck spotlessApply`
+  2. `./gradlew actionsBeforeCommit`
   Pass: all green; `git diff --exit-code core/api apache-interop/api` clean, except in units marked **api**, where the diff is
   reviewed; kotlin-generator's golden sources unchanged under `CI=true`.
 - **`ACC+KMP`** = `ACC` + `./gradlew :core:check`: `allTests` (jvm, jsNode, jsBrowser, macosArm64, iosSimulatorArm64) plus the
