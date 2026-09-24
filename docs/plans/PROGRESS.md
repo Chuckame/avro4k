@@ -7,9 +7,34 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1 and M2 are complete.** M2 lives on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
-names collide with the existing `kmp` branch). **M3 is decomposed** into 17 units in [`notes/m3-decomposition.md`](notes/m3-decomposition.md) — follow its §10 batches
-and carry its §1 rules into every brief. Batch 1 (M3-01/02/03) done. M3-04 done. Next: **batch 2** — M3-05 ∥ M3-07 (perf-neutral), then M3-06 alone + its A/B.
+**M0, M1 and M2 are complete. M3 is in progress** on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
+batches, and its §1 rules in every brief. Done: M3-01, 02, 03, 04, 06, 07.
+
+### Resume here (session handoff, 2026-09-24)
+
+1. **M3-06's A/B was launched but may not have finished.** Outputs: `benchmark/build/ab-m306/{before,after}-{1,2,3,eaon}-{poly,nested,schema}.txt`
+   (gitignored; `-1..3` are EA-off, `-eaon` EA-on). Base = a worktree at `../avro4k-m306-base` on `f9defb4`; after = `213b585`.
+   If any file is missing or `run.sh`'s log lacks `ALL DONE`, rerun: `caffeinate -i benchmark/build/ab-m306/run.sh` (recreate the
+   base worktree with `git worktree add ../avro4k-m306-base f9defb4` if needed; stop idle Gradle daemons first; **nothing else may
+   run meanwhile**). Families: `micro\.PolymorphicMicroBenchmark` `shapeCount=1000` (headline: `readPolymorphic` B/op should drop),
+   `micro\.NestedRecordMicroBenchmark` `depth=8` (guard), `micro\.SchemaInferenceMicroBenchmark` (record `coldInference`/`newAvroInstance`,
+   do not gate). Record as an "M3-06" subsection under "Results — M3" in `benchmark/README.md`, update the M3-06 row, then
+   `git worktree remove ../avro4k-m306-base`. Use a per-fork breakdown if any row's error bar exceeds ~10% (see the M3-02 row).
+2. **M3-05 is unfinished**, preserved as `80d0979` on branch `worktree-agent-aa16ca3e4bd66fec9` (based on `c3149f0`, **not merged,
+   unverified**): the converter `git mv`'d to `core/src/jvmMain/.../internal/AvroSchemaApacheConversion.kt` (+422), the one-line
+   `apache-interop` delegates, and `AvroSchemaApacheIdentityTest` (+303). Missing: acceptance, the seeding mutation check, the
+   GC-collectability test, the uncached-entry-point test, and `notes/m3-05.md`. Either rebase that branch onto `v3/m2-foundation`
+   and finish it with a fresh agent (brief = decomposition §3 M3-05 + the collectability requirement: the two identity caches
+   hold A→B and B→A, so the note must argue why the weak keys stay collectable), or redo it. M3-06 changed
+   `WeakIdentityKeyCache`'s internals (now over `CopyOnWriteWeakTable`) but not its API, so a rebase should be clean.
+3. **Then** M3-08 (alone; the GenericData APIs are *kept* for M3-19), batch 3 (M3-09 ∥ M3-10), M3-11 → M3-12 (one A/B together,
+   **re-check M3-02's `complex` read @1 watch item**), M3-18 → M3-19, M3-13 → M3-14 → M3-15, M3-16, M3-17.
+
+**Process rules learned in M3 so far** (details in the decision log): at most 2 concurrent agents on this 16 GB host; `ACC` is two
+Gradle invocations; agents never use `git stash`; after merging parallel units, rerun earlier units' structural greps (M3-01's is
+in `notes/m3-01.md`); **never rename a public API**; benchmark A/Bs run only on an idle machine under `caffeinate -i`; an agent
+stopped by an API limit keeps its worktree — check it before re-briefing.
 
 M1 shipped C2, C3, C9 and the C5 `readBytes()` fix. Read the two measurement findings in
 `benchmark/README.md` → "Results — M1" before doing any further perf work: **JVM `gc.alloc.rate.norm`
@@ -55,6 +80,8 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M3-03 · downstream bridges | done | `v3/m2-foundation` | `0b88cda` | `CoreBridge.kt` in confluent (29 direct calls → 0) and benchmark (77 → 25, all inside `@Benchmark` methods, typed `CoreSchema`); confluent 72 = 72. Traps for M3-12/B7 listed. See [`notes/m3-03.md`](notes/m3-03.md) |
 | M3-04 · model readiness | done | `v3/m2-foundation` | `bc89db4` | stored `AvroSchema.type`; `logicalTypeName` on `AvroSchema`, computed once; O(1) enum symbol index; lazy, lock-checked, `@Volatile`-published record field index (name + alias); `FixedSchema.size: Int`. Cached fields excluded from equals/hashCode. jvmTest 791 → 800 (+9 common tests, also on js/native). `core.api` +14/−21 (never-released model; mangled `FixedSchema` names gone). See [`notes/m3-04.md`](notes/m3-04.md) |
 | M3-07 · `AvroSchema` helper layer | done | `v3/m2-foundation` | `9c5e70e` | 25 helpers ported (internal, allocation-free; `getIndexTyped` returns `-1`, not `Int?`), ~20 deliberately not ported — full inventory with call sites in [`notes/m3-07.md`](notes/m3-07.md). `AvroBinaryDecoder.skip(AvroSchema)`, mutation-verified. jvmTest 800 → 843; js 90, native 91. Differential test pinned to a frozen copy of the Apache helpers |
+| M3-06 · common caches, identity-first | done (A/B pending) | `v3/m2-foundation` | `213b585` | `WeakKeyCache` → common `expect class` (same FQN/ABI) over a shared `CopyOnWriteWeakTable` (identity or equality mode); JS = strong `HashMap`. New `IdentityFirstCache` (inline `getOrPut`), seeding only the canonical instance — mutation-verified (fresh-instance seeding grew the identity layer to 1001). `Avro.schemaCache`, `RecordResolver` inner, `PolymorphicResolver` → identity-first; `EnumResolver` → `WeakIdentityKeyCache`. **Hit path allocation-free** (javap). jvmTest 843 → 857; js 102, native 105. JVM equality cache may now recompute on a racing miss (allowed by `Cache`). See [`notes/m3-06.md`](notes/m3-06.md) |
+| M3-05 · converter hosted in core | in progress | `worktree-agent-aa16ca3e4bd66fec9` | `80d0979` (WIP) | interrupted by an API limit; see "Resume here" |
 | M3 · B3 core → `commonMain`, Jackson dropped | todo | — | — | split into M3-05 … M3-15 |
 | M3 · B4 serializer split | todo | — | — | — |
 | M3 re-baseline + review | todo | — | — | **regressions hide here** |
