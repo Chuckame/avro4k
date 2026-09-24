@@ -255,6 +255,11 @@ the generic parts of `ArrayEncodingTest`/`AvroAssertions`) to `apache-interop`, 
 list them in the note and keep the set minimal. Fix the ledger's `ArrayGenericDecoder` nullable-union backlog bug while here (own
 commit if it grows). Deps: M3-11, M3-12 (the trees are flipped to `AvroSchema` internals by M3-11). Before M3-14. `ACC` + review
 the api diffs of both modules. Perf: generic tree is unbenchmarked; not covered.
+**Amended after M3-08 (2026-09-24):** (1) `RecordGenericDecoder` now hands defaults to core's `JsonDefaultDecoder`, so the minimal
+`@InternalAvro4kApi` set includes it (or a `decodeDefault` entry point) and `DecodingStep`. (2) User remark: Confluent keeps its own
+`GenericData`/Java-value layer (`Generic{Record,Fixed,Enum}KSerializer`, `Utf8`/`ByteBuffer` serializers, and `getAnySchema`'s
+schema inference from runtime values). Since Confluent already depends on `apache-interop`, decide here whether those move next to
+the generic trees and are shared, instead of keeping two copies — details in `notes/m3-08.md`.
 
 ## 4. B2 decisions
 
