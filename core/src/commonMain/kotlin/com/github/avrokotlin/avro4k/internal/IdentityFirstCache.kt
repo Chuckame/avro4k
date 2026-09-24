@@ -6,7 +6,7 @@ package com.github.avrokotlin.avro4k.internal
  * only; an **equality** layer ([WeakKeyCache]) behind it is the source of truth, and keeps equal-but-distinct instances
  * mapping to one value.
  *
- * Why both (`docs/plans/notes/b6.md`): generated serializers of plain classes, enums and objects are singletons, so
+ * Why both: generated serializers of plain classes, enums and objects are singletons, so
  * their descriptors are stable instances; but `serializer<List<Foo>>()`, `ListSerializer(…)`, `MapSerializer(…)`,
  * nullable and generic-class serializers return a **fresh** descriptor on every call, equal (same hash) to the previous
  * one. Identity alone would recompute, and hand out a fresh value, on every call for those.

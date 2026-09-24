@@ -36,7 +36,7 @@ import com.github.avrokotlin.benchmark.internal.Stranger as KotlinStranger
  * The `BigDecimal` one is the only one with a measurable consequence, and it is disclosed rather
  * than hidden: the specific model stores the already-stringified balance, so its `write` does not
  * re-`toString()` a `BigDecimal` per record the way avro4k's does. One field out of twenty in
- * `complex`; `simple` and `lists` have no such field. See docs/plans/notes/a7.md.
+ * `complex`; `simple` and `lists` have no such field.
  */
 internal fun KotlinClients.toSpecific(): Clients = Clients(clients.map { it.toSpecific() })
 

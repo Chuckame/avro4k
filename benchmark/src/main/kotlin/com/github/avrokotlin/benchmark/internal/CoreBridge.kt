@@ -20,8 +20,8 @@ import org.apache.avro.Schema
  * Rules:
  * - a `@Benchmark` method is never edited to go through here. Its schema arguments are fields typed [CoreSchema], so
  *   the measured call sites compile unchanged once the alias points at `AvroSchema`;
- * - outside `@Benchmark` methods, nothing calls a schema-typed core entry point directly. The grep that checks it, and
- *   the list of measured call sites, are in docs/plans/notes/m3-03.md.
+ * - outside `@Benchmark` methods, nothing calls a schema-typed core entry point directly. Nothing enforces it but
+ *   review: a grep of this module for those calls must only find `@Benchmark` methods and this file.
  */
 
 /**

@@ -56,7 +56,8 @@ internal class ApacheAvroSpecificBenchmark : SerializationBenchmark() {
     override fun prepareBinaryData() {
         data = Avro.encodeWith(schema, clients)
         // Proves on this exact reader that the fast reader really engaged, before anything is
-        // measured. `isFastReaderEnabled()` alone is not proof - see docs/plans/notes/a6.md.
+        // measured. `isFastReaderEnabled()` alone is not proof: the reader builds its fast reader
+        // lazily, on its first read (see [ApacheAvro.assertFastReaderInEffect]).
         ApacheAvro.assertFastReaderInEffect(reader, data, fastReader = true)
     }
 

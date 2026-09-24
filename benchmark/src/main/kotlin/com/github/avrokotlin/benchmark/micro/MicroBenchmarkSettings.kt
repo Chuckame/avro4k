@@ -5,7 +5,7 @@ package com.github.avrokotlin.benchmark.micro
  *
  * They are deliberately shorter than the end-to-end suite (5x1s warmup + 5x**3s** measurement).
  * These benchmarks are *attribution instruments*: their primary metric is `gc.alloc.rate.norm`,
- * which converges in two or three iterations (see `docs/plans/notes/a2.md`). Measurement is
+ * which converges in two or three iterations. Measurement is
  * therefore cut to 5x1s, which keeps the whole 39-combination suite around 10 minutes.
  *
  * Warmup is **not** cut: these methods are small enough that 3 warmup iterations left the

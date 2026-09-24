@@ -17,7 +17,6 @@ import com.github.avrokotlin.avro4k.toJsonElement
  * The helpers that the runtime (encoders, decoders, resolvers), the serializers and the schema visitors use on Apache's
  * `Schema`, ported to [AvroSchema]. Each one keeps the name and the semantics of the Apache-typed helper it
  * replaces, so switching a call site is an import swap; the few deliberate differences are called out in the KDoc.
- * The complete inventory, with the call sites and what was not ported, is in `docs/plans/notes/m3-07.md`.
  *
  * Hot-path rules (they run per value once the runtime reads `AvroSchema`):
  * - never `==`, `indexOf` or `contains` on an `AvroSchema` or a `Field` (structural walks): kinds are compared through

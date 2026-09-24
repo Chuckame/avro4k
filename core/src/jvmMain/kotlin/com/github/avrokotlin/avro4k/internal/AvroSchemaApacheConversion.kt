@@ -41,7 +41,7 @@ import com.github.avrokotlin.avro4k.toJsonElement as avroSchemaToJson
 
 // The conversions between Apache's Schema and avro4k's AvroSchema. Hosted in core (JVM only) until core drops its Apache
 // dependency, so core can convert at its public boundaries while its internals move to AvroSchema; apache-interop's public
-// toAvro4k()/toApacheSchema() delegate here. See docs/plans/notes/m3-05.md.
+// toAvro4k()/toApacheSchema() delegate here.
 //
 // ## Pairing ("two-way seeding")
 //

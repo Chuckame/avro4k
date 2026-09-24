@@ -17,8 +17,7 @@ import org.apache.avro.io.DecoderFactory
  * tree of closures rather than walking it per datum - and `GenericDatumReader.read` uses it whenever
  * `data.isFastReaderEnabled()`. It exists for `GenericData` and `SpecificData` **only**:
  * `FastReaderBuilder.isSupportedData` is an exact-class check, so `ReflectData` can never have it
- * and the three `ApacheAvroReflect*` benchmarks have no fast variant to offer. See [ApacheAvro] and
- * docs/plans/notes/a6.md.
+ * and the three `ApacheAvroReflect*` benchmarks have no fast variant to offer. See [ApacheAvro].
  *
  * This is deliberately a class of its own rather than a `fastReader` `@Param` on
  * [ApacheAvroReflectBenchmark]: on that class the parameter could not do anything, and a row

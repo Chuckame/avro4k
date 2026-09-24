@@ -5,9 +5,8 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 
 internal class EnumResolver {
     /**
-     * Identity-keyed: generated enum serializers are singletons, so their descriptors are stable instances (see
-     * `docs/plans/notes/b6.md`). A rare equal-but-distinct instance (e.g. a nullable wrapper reaching the
-     * schema visitor) only costs a recomputation and an entry that is dropped once the instance is collected.
+     * Identity-keyed: generated enum serializers are singletons, so their descriptors are stable instances. A rare
+     * equal-but-distinct instance (e.g. a nullable wrapper reaching the schema visitor) only costs a recomputation and an entry that is dropped once the instance is collected.
      */
     private val defaultIndexCache = WeakIdentityKeyCache<SerialDescriptor, EnumDefault>()
 

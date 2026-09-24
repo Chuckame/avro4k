@@ -157,9 +157,8 @@ val generateSpecificRecords = tasks.register("generateSpecificRecords") {
             // `StringType.String` rather than the compiler's `CharSequence` default: this is the
             // setting that makes the decoded specific model comparable to avro4k's (which decodes
             // into `String`), and it *costs* Apache - `Utf8` is cheaper to produce than `String`.
-            // See docs/plans/notes/a7.md. It adds an `avro.java.string` property, one of the four
-            // object-mapping hints the equivalence gate's schema comparison deliberately ignores, and it
-            // does not reach the wire.
+            // It adds an `avro.java.string` property, one of the four object-mapping hints the
+            // equivalence gate's schema comparison deliberately ignores, and it does not reach the wire.
             compiler.setStringType(org.apache.avro.generic.GenericData.StringType.String)
             compiler.compileToDestination(file, target)
         }

@@ -17,7 +17,8 @@ import org.apache.avro.Schema
  * Each helper's KDoc says what its body becomes "after the switch".
  *
  * Rule: a test never calls a schema-typed core entry point directly (`Avro.schema`, `encodeToByteArray(schema, …)`,
- * `currentWriterSchema`, …). The grep that checks it is in docs/plans/notes/m3-01.md.
+ * `currentWriterSchema`, …). Nothing enforces it but review: a grep of `core/src/jvmTest` for those calls must only
+ * find this file (and the codec tests, which take no schema).
  */
 
 // ---------------------------------------------------------------------------------------------------------------------

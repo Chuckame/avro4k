@@ -33,9 +33,9 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
  *
  * **Only for a bounded set of long-lived keys.** Because a put is O(capacity), a cache fed an unbounded stream of new
  * keys degrades to quadratic inserts. In identity mode, schemas and generated serial descriptors are fine; a key
- * created per call is not (e.g. `serializer<List<Foo>>().descriptor` is a fresh instance on every call — see
- * `docs/plans/notes/b6.md`). In equality mode the bound is on *distinct-by-equality* live keys: a fresh instance equal
- * to a stored one hits instead of inserting.
+ * created per call is not (e.g. `serializer<List<Foo>>().descriptor` is a fresh instance on every call). In equality
+ * mode the bound is on *distinct-by-equality* live keys: a fresh instance equal to a stored one hits instead of
+ * inserting.
  *
  * ## Why a hand-written table, and why one for both platforms
  *

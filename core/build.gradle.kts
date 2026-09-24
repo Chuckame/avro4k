@@ -82,7 +82,7 @@ kotlin {
             dependencies {
                 // toAvro4k()/toApacheSchema() for the Apache-oracle suite. apache-interop depends back on core: that edge
                 // would add core's own jar next to its jvmMain classes (duplicate classes), so it is excluded and the
-                // tests only ever see the in-tree jvmMain output. See docs/plans/notes/m3-01.md.
+                // tests only ever see the in-tree jvmMain output.
                 implementation(project(":apache-interop")) {
                     exclude(group = project.group.toString(), module = project.name)
                 }

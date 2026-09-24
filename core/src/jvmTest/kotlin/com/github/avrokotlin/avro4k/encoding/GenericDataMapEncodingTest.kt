@@ -32,7 +32,7 @@ import java.math.BigDecimal
  * unchanged.
  *
  * The decoder must also report the map's value schema as `currentWriterSchema` while positioned on a
- * value: it used to report the key's `string` schema for both (see docs/plans/notes/c9.md).
+ * value: it used to report the key's `string` schema for both.
  */
 internal class GenericDataMapEncodingTest : StringSpec({
     "encodes map entries into generic data preserving the insertion order" {

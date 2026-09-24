@@ -22,8 +22,8 @@ import org.apache.avro.generic.GenericFixed
  * sites stay as they are.
  *
  * Rule: no other file of this module calls a schema-typed core entry point directly (`Avro.schema`, `currentWriterSchema`,
- * `decodeFixed`, the Apache encoder/decoder entry points, …) or spells core's schema type in an override. The grep that
- * checks it is in docs/plans/notes/m3-03.md.
+ * `decodeFixed`, the Apache encoder/decoder entry points, …) or spells core's schema type in an override. Nothing
+ * enforces it but review: a grep of this module for those calls must only find this file.
  */
 
 // ---------------------------------------------------------------------------------------------------------------------

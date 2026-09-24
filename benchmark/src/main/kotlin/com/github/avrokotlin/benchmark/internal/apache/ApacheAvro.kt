@@ -74,9 +74,8 @@ internal object ApacheAvro {
     // That is an exact-class check, and `isFastReaderEnabled()` is
     // `fastReaderEnabled && FastReaderBuilder.isSupportedData(this)` - so calling
     // `reflectData.setFastReaderEnabled(true)` sets a field that is then ignored, and
-    // `isFastReaderEnabled()` still answers `false`. Verified against 1.12.1, see
-    // docs/plans/notes/a6.md. The exact-class check also rules out `DeclarationOrderReflectData`
-    // and any other subclass, so the fast reader is measured on the one data model that does
+    // `isFastReaderEnabled()` still answers `false`. Verified against 1.12.1. The exact-class
+    // check also rules out `DeclarationOrderReflectData` and any other subclass, so the fast reader is measured on the one data model that does
     // support it: plain `GenericData`.
     //
     // Note also that the flag defaults to **true**
@@ -173,8 +172,7 @@ internal object ApacheAvro {
     // to `true` - it gets it without configuring anything.
     //
     // The generated classes live in `internal/specific`, are produced by
-    // `:benchmark:generateSpecificRecords` from `Avro.schema<T>()`, and are never hand-edited. See
-    // docs/plans/notes/a7.md.
+    // `:benchmark:generateSpecificRecords` from `Avro.schema<T>()`, and are never hand-edited.
     // -----------------------------------------------------------------------------------------
 
     /**
@@ -239,7 +237,7 @@ internal object ApacheAvro {
             "This version of Apache Avro supports the fast reader for ${REFLECT_DATA.javaClass.name}. " +
                 "It did not in 1.12.1, which is why ApacheAvroGenericFastReaderBenchmark measures plain " +
                 "GenericData instead. Add a `fastReader` @Param to the ApacheAvroReflect* benchmarks and " +
-                "delete this check - see docs/plans/notes/a6.md."
+                "delete this check."
         }
     }
 }
@@ -272,7 +270,7 @@ private class DeclarationOrderReflectData : ReflectData() {
     // `complex` write** (358k -> 606k ops/s @ 1 client) — but no Apache user gets that, so measuring
     // it would report Apache as faster than it is. The stock lookup stays. Recorded here because it
     // is the single largest item in Apache's write profile and a future session should not have to
-    // rediscover it: see docs/plans/notes/a5.md.
+    // rediscover it.
 
     /**
      * `GenericData.newMap` returns a `java.util.HashMap`, so a decoded Avro map comes back in hash

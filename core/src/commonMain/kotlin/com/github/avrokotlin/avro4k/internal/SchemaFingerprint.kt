@@ -18,7 +18,7 @@ import com.github.avrokotlin.avro4k.internal.schema.getName
  * Spec: https://avro.apache.org/docs/1.12.1/specification/#parsing-canonical-form-for-schemas and
  * https://avro.apache.org/docs/1.12.1/specification/#schema-fingerprints. Where Apache's output and the spec text could
  * differ, Apache's output wins: single-object encoding and schema registries need byte compatibility with the JVM
- * ecosystem. The rules and the (non-)deviations are listed in docs/plans/notes/m3-10.md.
+ * ecosystem. The rules applied are listed below.
  *
  * Cold code: a fingerprint walks the whole schema. Callers memoize per schema instance (`AvroSingleObject` will, once it
  * uses this fingerprint instead of Apache's).

@@ -37,8 +37,9 @@ import java.math.BigDecimal
  * Java as the oracle: avro4k and Apache's resolving `GenericDatumReader` decode the same bytes with the reader schema
  * avro4k generates, and both results must encode back to the same bytes with that schema.
  *
- * See `docs/plans/notes/m3-08.md`, "Validation against the Avro specification", for the rules and how the other Avro
- * implementations behave.
+ * Where the spec is silent (a fixed default of the wrong length is padded or truncated) or the Avro implementations
+ * disagree (bytes defaults: Java, C#, C++ and JS map code points 0-255 to bytes as the spec says, Python, Ruby, PHP and
+ * Rust use UTF-8), avro4k follows the spec and Apache Java: its users interoperate mostly with the JVM.
  */
 internal class AvroDefaultSpecTest : StringSpec({
     "bytes defaults map each code point 0-255 to a byte" {
