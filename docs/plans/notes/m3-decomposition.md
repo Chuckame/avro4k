@@ -181,6 +181,11 @@ BigIntegerNode pin test in `apache-interop` (`AvroSchemaApacheInteropTest.kt:101
 so its int defaults become `IntNode`. Perf: schema generation is cold; `SchemaInferenceMicroBenchmark` warm unchanged by
 construction; cold gets slower (JSON round trip), not gated. **Risk:** prop ordering in `toString(true)` comparisons.
 
+**Amended after M3-08's spec validation (2026-09-24):** also port `J/internal/AvroDefaults.kt` (`toFieldDefault`,
+`isValidDefaultFor`, `resolveDefaultBranch`) to `AvroSchema`, keeping the bytes/fixed 0-255 rule generation-only. Then make
+`RecordJsonDefaultDecoder` fill a nested record's missing field from the reader schema's `Field.defaultValue` (S4; S5 for nested
+values), as Apache Java, C#, JS, Python, Ruby, PHP and Rust do. See `notes/m3-08.md`.
+
 **M3-10 · CRC-64-AVRO + Parsing Canonical Form in common** (pulled from B5, Q3). New `C/internal/SchemaFingerprint.kt` +
 `commonTest`s; a `jvmTest` differential test against `SchemaNormalization.parsingFingerprint64` over the 51
 `core/src/jvmTest/resources` schemas plus generated ones. Deps: M3-04. Not api. Batch 3. `ACC+KMP`. Perf: cold, memoized.
