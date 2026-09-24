@@ -69,6 +69,9 @@
   `Schema` → `AvroSchema` in signatures), never names: `Avro.decodeFromByteArray`, `encodeToByteArray`, `schema`, … keep their
   names and shapes. Any other public-name or public-shape change needs the user's explicit approval first; a unit that seems to
   need one stops and reports. Test-only and `internal` helpers (e.g. the test bridge's `encodeWith`) are not public API.
+- **No plan step codes in source code** (user rule, 2026-09-25, "VERY important"): never write M3-XX, B6, C2, A5, "batch 3"… in
+  comments, KDoc, test names, strings or build scripts; they belong only in `docs/plans/`. Explain the reason in plain words. Every
+  agent diff is grepped for it before merging.
 - **Per-value boundary.** No unit adds an `AvroSchema`↔`Schema` conversion per value, except the named M3-11→12 facade
   (identity-cached, §2). Per-call and per-descriptor conversions are allowed only through the identity caches. Fresh-per-call
   schemas (e.g. `getSchema()` results) use the **uncached** converter (`WeakIdentityKeyCache` KDoc: "a key created per call is

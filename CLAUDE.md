@@ -18,6 +18,8 @@ cherry-pick, not a base to merge.
 
 ## Working rules
 
+- **Never write plan step codes (M1, M3-09, B6, C2, A5, …) in source code** — comments, KDoc, test
+  names, strings, build scripts. They live only in `docs/plans/`; explain the *why* in plain words instead.
 - Benchmarks are strictly serialized — never run two benchmark tasks concurrently, on any machine.
 - Nothing is "done" until `PROGRESS.md` is updated **and committed**.
 - Measured numbers go into `benchmark/README.md` in the same commit as the change that produced
