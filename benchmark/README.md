@@ -411,6 +411,36 @@ two serializers, the worst case, which no benchmark covered. The wrapper is gone
   `ListSerializer` per call, so a guaranteed miss) and concurrent decoding of different types, which evicted each
   other from the shared slot.
 
+## Results — M3
+
+### M3-02: own codec ABI (`b0f3946` before, `8bab850` after)
+
+2026-09-24, same machine/JDK. Interleaved before/after **three times**, plus one EA-off invocation per side; each invocation
+3 forks × 5 iterations. "sep" = every "after" invocation above (or below) every "before" one. Means of the 3 EA-on
+invocations:
+
+| | B/op before → after | ops/s before → after | EA-off ops/s | sep |
+|---|---|---|---|---|
+| `simple` read @25 | 11,440 → **8,640** (−24.5%) | 107,961 → **154,892** (+43.5%) | +12.4% | Y |
+| `simple` read @500 | 222,353 → **166,353** (−25.2%) | 6,229 → **8,313** (+33.5%) | +6.4% | Y |
+| `simple` read @1 | 741 → 704 | 2,534,362 → 2,845,455 (+12.3%) | +2.4% | Y |
+| `simple` write @1 | 280 → **184** (−34%) | +9.8% | +0.3% | Y |
+| `StringField` writeNonNull | 520 → **432** (−17%) | +12.1% | +7.4% | Y |
+| `StringField` writeNullable | 552 → **464** (−16%) | +4.9% | +5.3% | Y |
+| `writeLongs` @100k | 214 → **126** (−41%) | +1.2% | +0.8% | n |
+| `complex` write @1 / @200 | 1,637 → 1,544 / ≈ | +4.5% / +3.3% | +7.1% / +4.1% | Y / Y |
+| `complex` read @15 / @200, `readLongs`, `StringField` reads | ≈ | within ±1.4% | within ±3.3% | n |
+| **`complex` read @1** | 5,808 → 5,813 | 242,272 → **208,159 (−14.1%)** | **+2.1%** | **Y** |
+
+- **The win is the removed per-value wrappers**: `Utf8` on every string/bytes read (`simple`'s record has a bytes field:
+  −25% B/op, up to +43% throughput) and the intermediate array + copy on writes.
+- **`complex` read @1 is a JVM-only JIT effect, accepted provisionally and on the watch list.** Its forks are bimodal —
+  ~180–190k or ~235–265k ops/s. Before, 7 of 9 forks landed fast; after, 4 of 9, and the fast mode itself is ~7% lower
+  (236–248k vs 254–266k). The slow mode equals the EA-off throughput, where M3-02 is **+2.1%**, and allocation is
+  unchanged: after M3-02 the JIT's escape analysis succeeds less often on this tiny payload, rather than more work being
+  done. It does not appear at 15 or 200 clients. Per M1, EA-off describes the product on JS/native; **re-check this row in
+  the M3-11+12 A/B and the M3-17 re-baseline**, and investigate with JIT logs if it persists.
+
 ## Run the benchmark locally
 
 Just execute the benchmark:
