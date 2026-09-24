@@ -4,9 +4,9 @@ package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroStringable
-import com.github.avrokotlin.avro4k.decodeFromByteArray
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.decodeWith
 import com.github.avrokotlin.avro4k.encodeToBytesUsingApacheLib
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.Serializable
@@ -38,22 +38,22 @@ internal class KotlinInstantDecodingTest : StringSpec({
         LogicalTypes.timestampMillis().addToSchema(schema)
 
         val bytes = encodeToBytesUsingApacheLib(schema, instantMillis)
-        val decoded = Avro.decodeFromByteArray<Instant>(schema, bytes)
+        val decoded = Avro.decodeWith<Instant>(schema, bytes)
 
         decoded shouldBe instant
     }
 
     "decode nullable kotlin.time.Instant" {
-        val schema = Avro.schema<Instant?>()
+        val schema = Avro.apacheSchema<Instant?>()
 
         // With value
         val bytesWithValue = encodeToBytesUsingApacheLib(schema, instantMillis)
-        val decodedWithValue = Avro.decodeFromByteArray<Instant?>(schema, bytesWithValue)
+        val decodedWithValue = Avro.decodeWith<Instant?>(schema, bytesWithValue)
         decodedWithValue shouldBe instant
 
         // With null
         val bytesWithNull = encodeToBytesUsingApacheLib(schema, null)
-        val decodedWithNull = Avro.decodeFromByteArray<Instant?>(schema, bytesWithNull)
+        val decodedWithNull = Avro.decodeWith<Instant?>(schema, bytesWithNull)
         decodedWithNull shouldBe null
     }
 
@@ -62,7 +62,7 @@ internal class KotlinInstantDecodingTest : StringSpec({
         LogicalTypes.timestampMicros().addToSchema(schema)
 
         val bytes = encodeToBytesUsingApacheLib(schema, instantMicros)
-        val decoded = Avro.decodeFromByteArray<Instant>(schema, bytes)
+        val decoded = Avro.decodeWith<Instant>(schema, bytes)
 
         decoded shouldBe instantWithMicros
     }
@@ -72,7 +72,7 @@ internal class KotlinInstantDecodingTest : StringSpec({
         LogicalTypes.timestampNanos().addToSchema(schema)
 
         val bytes = encodeToBytesUsingApacheLib(schema, instantNanos)
-        val decoded = Avro.decodeFromByteArray<Instant>(schema, bytes)
+        val decoded = Avro.decodeWith<Instant>(schema, bytes)
 
         decoded shouldBe instantWithNanos
     }
@@ -82,7 +82,7 @@ internal class KotlinInstantDecodingTest : StringSpec({
         LogicalTypes.timestampMillis().addToSchema(schema)
 
         val bytes = encodeToBytesUsingApacheLib(schema, negativeMillis)
-        val decoded = Avro.decodeFromByteArray<Instant>(schema, bytes)
+        val decoded = Avro.decodeWith<Instant>(schema, bytes)
 
         decoded shouldBe Instant.fromEpochSeconds(-1, 123_000_000)
     }
@@ -92,7 +92,7 @@ internal class KotlinInstantDecodingTest : StringSpec({
         LogicalTypes.timestampMicros().addToSchema(schema)
 
         val bytes = encodeToBytesUsingApacheLib(schema, negativeMicros)
-        val decoded = Avro.decodeFromByteArray<Instant>(schema, bytes)
+        val decoded = Avro.decodeWith<Instant>(schema, bytes)
 
         decoded shouldBe Instant.fromEpochSeconds(-1, 123_456_000)
     }
@@ -102,7 +102,7 @@ internal class KotlinInstantDecodingTest : StringSpec({
         LogicalTypes.timestampNanos().addToSchema(schema)
 
         val bytes = encodeToBytesUsingApacheLib(schema, negativeNanos)
-        val decoded = Avro.decodeFromByteArray<Instant>(schema, bytes)
+        val decoded = Avro.decodeWith<Instant>(schema, bytes)
 
         decoded shouldBe Instant.fromEpochSeconds(-1, 123_456_789)
     }
@@ -111,7 +111,7 @@ internal class KotlinInstantDecodingTest : StringSpec({
         val schema = Schema.create(Schema.Type.STRING)
 
         val bytes = encodeToBytesUsingApacheLib(schema, instant.toString())
-        val decoded = Avro.decodeFromByteArray<Instant>(schema, bytes)
+        val decoded = Avro.decodeWith<Instant>(schema, bytes)
 
         decoded shouldBe instant
     }
@@ -120,23 +120,23 @@ internal class KotlinInstantDecodingTest : StringSpec({
         val schema = Schema.create(Schema.Type.LONG)
 
         val bytes = encodeToBytesUsingApacheLib(schema, instantMillis)
-        val decoded = Avro.decodeFromByteArray<Instant>(schema, bytes)
+        val decoded = Avro.decodeWith<Instant>(schema, bytes)
 
         decoded shouldBe instant
     }
 
     "decode kotlin.time.Instant from array" {
         val instant2 = Instant.fromEpochSeconds(1577882097)
-        val schema = Avro.schema<List<Instant>>()
+        val schema = Avro.apacheSchema<List<Instant>>()
 
         val bytes = encodeToBytesUsingApacheLib(schema, listOf(instantMillis, 1577882097000L))
-        val decoded = Avro.decodeFromByteArray<List<Instant>>(schema, bytes)
+        val decoded = Avro.decodeWith<List<Instant>>(schema, bytes)
 
         decoded shouldBe listOf(instant, instant2)
     }
 
     "decode kotlin.time.Instant from record" {
-        val schema = Avro.schema<InstantRecord>()
+        val schema = Avro.apacheSchema<InstantRecord>()
         val bytes = encodeToBytesUsingApacheLib(
             schema,
             GenericData.Record(schema).apply {
@@ -145,7 +145,7 @@ internal class KotlinInstantDecodingTest : StringSpec({
             }
         )
 
-        val decoded = Avro.decodeFromByteArray<InstantRecord>(schema, bytes)
+        val decoded = Avro.decodeWith<InstantRecord>(schema, bytes)
 
         decoded shouldBe InstantRecord(instant, instant.toString())
     }

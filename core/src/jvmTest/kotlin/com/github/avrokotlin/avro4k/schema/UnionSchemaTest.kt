@@ -5,8 +5,8 @@ package com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroDefault
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.serialization.Serializable
@@ -18,7 +18,7 @@ import kotlin.io.path.Path
 internal class SealedClassSchemaTest : StringSpec({
     "should throw error when no implementation for an abstract class" {
         shouldThrow<AvroSchemaGenerationException> {
-            Avro.schema(Operation.Binary.serializer())
+            Avro.apacheSchema(Operation.Binary.serializer())
         }
     }
 

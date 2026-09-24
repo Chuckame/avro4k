@@ -1,14 +1,17 @@
 package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.CoreSchema
 import com.github.avrokotlin.avro4k.SomeEnum
 import com.github.avrokotlin.avro4k.ValueClassWithGenericField
-import com.github.avrokotlin.avro4k.encodeToByteArray
-import com.github.avrokotlin.avro4k.internal.copy
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.copy
+import com.github.avrokotlin.avro4k.decodeWith
+import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
-import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.serializer.AnySerializer
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
+import com.github.avrokotlin.avro4k.stubWriterSchema
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.should
 import io.kotest.matchers.shouldBe
@@ -54,7 +57,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             every { decoder.avro } returns Avro
-            every { decoder.currentWriterSchema } returns Schema.createUnion()
+            decoder.stubWriterSchema(Schema.createUnion())
 
             assertThrows<UnsupportedOperationException> { AnySerializer().deserialize(decoder) }
         }
@@ -62,7 +65,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             every { decoder.avro } returns Avro
-            every { decoder.currentWriterSchema } returns Schema.create(Schema.Type.NULL)
+            decoder.stubWriterSchema(Schema.create(Schema.Type.NULL))
 
             assertThrows<UnsupportedOperationException> { AnySerializer().deserialize(decoder) }
         }
@@ -94,133 +97,133 @@ class AnySerializerTest : StringSpec() {
         }
         "should be able to encode an ArrayList" {
             val value = ArrayList(listOf(42, null))
-            val schema = Avro.schema<List<Int?>>()
-            val expectedOutputBytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<List<Int?>>()
+            val expectedOutputBytes = Avro.encodeWith(schema, value)
 
-            Avro.encodeToByteArray(schema, AnySerializer(), value) shouldBe expectedOutputBytes
+            Avro.encodeWith(schema, AnySerializer(), value) shouldBe expectedOutputBytes
         }
         "should be able to encode a listOf" {
             val value = listOf(42, null)
-            val schema = Avro.schema<List<Int?>>()
-            val expectedOutputBytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<List<Int?>>()
+            val expectedOutputBytes = Avro.encodeWith(schema, value)
 
-            Avro.encodeToByteArray(schema, AnySerializer(), value) shouldBe expectedOutputBytes
+            Avro.encodeWith(schema, AnySerializer(), value) shouldBe expectedOutputBytes
         }
         "should be able to encode a custom list type" {
             class CustomList : ArrayList<Int?>(listOf(42, null))
 
             val value = CustomList()
-            val schema = Avro.schema<List<Int?>>()
-            val expectedOutputBytes = Avro.encodeToByteArray(schema, listOf(42, null))
+            val schema = Avro.apacheSchema<List<Int?>>()
+            val expectedOutputBytes = Avro.encodeWith(schema, listOf(42, null))
 
-            Avro.encodeToByteArray(schema, AnySerializer(), value) shouldBe expectedOutputBytes
+            Avro.encodeWith(schema, AnySerializer(), value) shouldBe expectedOutputBytes
         }
         "should be able to encode a map" {
             val value = mapOf(17 to "toto", 42 to null)
-            val schema = Avro.schema<Map<Int, String?>>()
-            val expectedOutputBytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<Map<Int, String?>>()
+            val expectedOutputBytes = Avro.encodeWith(schema, value)
 
-            Avro.encodeToByteArray(schema, AnySerializer(), value) shouldBe expectedOutputBytes
+            Avro.encodeWith(schema, AnySerializer(), value) shouldBe expectedOutputBytes
         }
         "should be able to encode a custom map type" {
             class CustomMap : HashMap<Int, String?>(mapOf(17 to "toto", 42 to null))
 
             val value = CustomMap()
-            val schema = Avro.schema<Map<Int, String?>>()
-            val expectedOutputBytes = Avro.encodeToByteArray(schema, mapOf(17 to "toto", 42 to null))
+            val schema = Avro.apacheSchema<Map<Int, String?>>()
+            val expectedOutputBytes = Avro.encodeWith(schema, mapOf(17 to "toto", 42 to null))
 
-            Avro.encodeToByteArray(schema, AnySerializer(), value) shouldBe expectedOutputBytes
+            Avro.encodeWith(schema, AnySerializer(), value) shouldBe expectedOutputBytes
         }
         "should be able to encode a custom parameterized class as record type" {
             val value = SerializableGenericType("Hello")
-            val schema = Avro.schema<SerializableGenericType<String?>>()
-            val expectedOutputBytes = Avro.encodeToByteArray(schema, value)
-            Avro.encodeToByteArray(schema, AnySerializer(), value) shouldBe expectedOutputBytes
+            val schema = Avro.apacheSchema<SerializableGenericType<String?>>()
+            val expectedOutputBytes = Avro.encodeWith(schema, value)
+            Avro.encodeWith(schema, AnySerializer(), value) shouldBe expectedOutputBytes
         }
         "should be able to encode a custom parameterized inline type" {
             val value = ValueClassWithGenericField("Hello")
-            val schema = Avro.schema<ValueClassWithGenericField<String?>>()
-            val expectedOutputBytes = Avro.encodeToByteArray(schema, value)
-            Avro.encodeToByteArray(schema, AnySerializer(), value) shouldBe expectedOutputBytes
+            val schema = Avro.apacheSchema<ValueClassWithGenericField<String?>>()
+            val expectedOutputBytes = Avro.encodeWith(schema, value)
+            Avro.encodeWith(schema, AnySerializer(), value) shouldBe expectedOutputBytes
         }
         "deserializing a BOOLEAN schema should return a Boolean" {
             val value = true
-            val schema = Avro.schema<Boolean>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<Boolean>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing an INT schema should return an Int" {
             val value = 42
-            val schema = Avro.schema<Int>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<Int>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a LONG schema should return a Long" {
             val value = 123456789L
-            val schema = Avro.schema<Long>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<Long>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a FLOAT schema should return a Float" {
             val value = 3.14f
-            val schema = Avro.schema<Float>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<Float>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a DOUBLE schema should return a Double" {
             val value = 2.71828
-            val schema = Avro.schema<Double>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<Double>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a STRING schema should return a String" {
             val value = "Hello"
-            val schema = Avro.schema<String>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<String>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a ENUM schema should return a String" {
-            val schema = Avro.schema<SomeEnum>()
-            val bytes = Avro.encodeToByteArray(schema, SomeEnum.B)
+            val schema = Avro.apacheSchema<SomeEnum>()
+            val bytes = Avro.encodeWith(schema, SomeEnum.B)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe "B"
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe "B"
         }
         "deserializing a BYTES schema should return a ByteArray" {
             val value = byteArrayOf(1, 5, -3, 27, 0)
-            val schema = Avro.schema<ByteArray>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<ByteArray>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a FIXED schema should return a ByteArray" {
             val value = byteArrayOf(45, -100, 0, 17, 33)
             val schema = Schema.createFixed("TheFixed", null, null, 5)
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing an ARRAY schema should return a List" {
             // The polymorphic type helps to allow deserializing many scalar types
             val value = listOf(PolymorphicType.A(33), null, PolymorphicType.C(123456789L), PolymorphicType.B("Hello"))
-            val schema = Avro.schema<List<PolymorphicType?>>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<List<PolymorphicType?>>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe listOf(33, null, 123456789L, "Hello")
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe listOf(33, null, 123456789L, "Hello")
         }
         "deserializing an ARRAY schema with a custom DeserializationStrategy should return the custom type" {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            every { decoder.currentWriterSchema } returns Avro.schema<List<PolymorphicType?>>()
+            decoder.stubWriterSchema(Avro.apacheSchema<List<PolymorphicType?>>())
             val serializer =
                 object : AnySerializer() {
-                    override fun SerializersModule.resolveArrayDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.resolveArrayDeserializationStrategy(writerSchema: CoreSchema) =
                         fallbackSerializer
                 }
 
@@ -236,10 +239,10 @@ class AnySerializerTest : StringSpec() {
                     PolymorphicType.B("World") to PolymorphicType.A(42),
                     PolymorphicType.A(0) to PolymorphicType.C(987654321L)
                 )
-            val schema = Avro.schema<Map<String, PolymorphicType?>>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<Map<String, PolymorphicType?>>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe
                 mapOf(
                     "33" to null,
                     "123456789" to "Hello",
@@ -251,10 +254,10 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            every { decoder.currentWriterSchema } returns Avro.schema<Map<String, String>>()
+            decoder.stubWriterSchema(Avro.apacheSchema<Map<String, String>>())
             val serializer =
                 object : AnySerializer() {
-                    override fun SerializersModule.resolveMapDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.resolveMapDeserializationStrategy(writerSchema: CoreSchema) =
                         fallbackSerializer
                 }
 
@@ -268,10 +271,10 @@ class AnySerializerTest : StringSpec() {
                     firstField = "Hello",
                     secondField = 42
                 )
-            val schema = Avro.schema<RecordType>()
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val schema = Avro.apacheSchema<RecordType>()
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe
                 mapOf(
                     "firstField" to "Hello",
                     "secondField" to 42
@@ -281,10 +284,10 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            every { decoder.currentWriterSchema } returns Avro.schema<RecordType>()
+            decoder.stubWriterSchema(Avro.apacheSchema<RecordType>())
             val serializer =
                 object : AnySerializer() {
-                    override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: CoreSchema) =
                         fallbackSerializer
                 }
 
@@ -296,10 +299,10 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            every { decoder.currentWriterSchema } returns Avro.schema<SomeEnum>()
+            decoder.stubWriterSchema(Avro.apacheSchema<SomeEnum>())
             val serializer =
                 object : AnySerializer() {
-                    override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: CoreSchema) =
                         fallbackSerializer
                 }
 
@@ -311,10 +314,10 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            every { decoder.currentWriterSchema } returns Schema.createFixed("the.name", null, null, 5)
+            decoder.stubWriterSchema(Schema.createFixed("the.name", null, null, 5))
             val serializer =
                 object : AnySerializer() {
-                    override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: CoreSchema) =
                         fallbackSerializer
                 }
 
@@ -329,16 +332,16 @@ class AnySerializerTest : StringSpec() {
             every { decoder.serializersModule } returns EmptySerializersModule()
             val serializer =
                 object : AnySerializer() {
-                    override fun SerializersModule.preResolveDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.preResolveDeserializationStrategy(writerSchema: CoreSchema) =
                         fallbackSerializer
 
-                    override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: CoreSchema) =
                         serializerThatShouldNotBeUsed
 
-                    override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: CoreSchema) =
                         serializerThatShouldNotBeUsed
 
-                    override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: Schema) =
+                    override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: CoreSchema) =
                         serializerThatShouldNotBeUsed
                 }
 
@@ -360,79 +363,79 @@ class AnySerializerTest : StringSpec() {
                     setLogicalTypeSerializer("my-awesome-logical-type", MyAwesomeLogicalTypeSerializer())
                 }
             val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "my-awesome-logical-type")
-            val bytes = Avro.encodeToByteArray(schema, "Hello")
+            val bytes = Avro.encodeWith(schema, "Hello")
 
-            customizedAvro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe "MyAwesomeLogicalType: Hello"
+            customizedAvro.decodeWith(schema, AnySerializer(), bytes) shouldBe "MyAwesomeLogicalType: Hello"
         }
         "deserializing a schema with an unknown logicalType should return the corresponding schema's type" {
             val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "unknown-logical-type")
             val value = "value"
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'duration' should return an AvroDuration" {
             val schema = Schema.createFixed("time.Duration", null, null, 12).copy(logicalTypeName = "duration")
             val value = AvroDuration(1u, 2u, 3u)
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'uuid' should return an UUID" {
             val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid")
             val value = UUID.randomUUID()
-            val bytes = Avro.encodeToByteArray(schema, value.toString())
+            val bytes = Avro.encodeWith(schema, value.toString())
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'decimal' should return a BigDecimal" {
             val schema = Schema.create(Schema.Type.BYTES).copy(logicalType = LogicalTypes.decimal(4, 2))
             val value = BigDecimal("12.12")
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'big-decimal' should return a BigDecimal" {
             val schema = Schema.create(Schema.Type.BYTES).copy(logicalType = LogicalTypes.bigDecimal())
             val value = BigDecimal("12.12")
-            val bytes = Avro.encodeToByteArray(schema, value)
+            val bytes = Avro.encodeWith(schema, value)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'date' should return a LocalDate" {
             val schema = Schema.create(Schema.Type.INT).copy(logicalTypeName = "date")
             val value = LocalDate.now()
-            val bytes = Avro.encodeToByteArray(schema, value.toEpochDay())
+            val bytes = Avro.encodeWith(schema, value.toEpochDay())
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'time-millis' should return a LocalTime" {
             val schema = Schema.create(Schema.Type.INT).copy(logicalTypeName = "time-millis")
             val value = LocalTime.now().truncatedTo(ChronoUnit.MILLIS)
-            val bytes = Avro.encodeToByteArray(schema, value.toNanoOfDay() / 1_000_000)
+            val bytes = Avro.encodeWith(schema, value.toNanoOfDay() / 1_000_000)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'time-micros' should return a LocalTime" {
             val schema = Schema.create(Schema.Type.LONG).copy(logicalTypeName = "time-micros")
             val value = LocalTime.now().truncatedTo(ChronoUnit.MICROS)
-            val bytes = Avro.encodeToByteArray(schema, value.toNanoOfDay() / 1_000)
+            val bytes = Avro.encodeWith(schema, value.toNanoOfDay() / 1_000)
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'timestamp-millis' should return a LocalTime" {
             val schema = Schema.create(Schema.Type.LONG).copy(logicalTypeName = "timestamp-millis")
             val value = Instant.now().truncatedTo(ChronoUnit.MILLIS)
-            val bytes = Avro.encodeToByteArray(schema, value.toEpochMilli())
+            val bytes = Avro.encodeWith(schema, value.toEpochMilli())
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
         "deserializing a schema with the logicalType 'timestamp-micros' should return a LocalTime" {
             val schema = Schema.create(Schema.Type.LONG).copy(logicalTypeName = "timestamp-micros")
             val value = Instant.now().truncatedTo(ChronoUnit.MICROS)
-            val bytes = Avro.encodeToByteArray(schema, ChronoUnit.MICROS.between(Instant.EPOCH, value))
+            val bytes = Avro.encodeWith(schema, ChronoUnit.MICROS.between(Instant.EPOCH, value))
 
-            Avro.decodeFromByteArray(schema, AnySerializer(), bytes) shouldBe value
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
     }
 

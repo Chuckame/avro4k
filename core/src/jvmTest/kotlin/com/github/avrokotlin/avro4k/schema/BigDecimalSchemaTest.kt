@@ -4,9 +4,9 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroFixed
-import com.github.avrokotlin.avro4k.internal.copy
-import com.github.avrokotlin.avro4k.internal.nullable
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.copy
+import com.github.avrokotlin.avro4k.nullable
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
@@ -31,7 +31,7 @@ internal class BigDecimalSchemaTest : FunSpec({
 
     test("BigDecimal as fixed without @AvroDecimal fails") {
         shouldThrow<SerializationException> {
-            Avro.schema<DecimalFixedFailingTest>()
+            Avro.apacheSchema<DecimalFixedFailingTest>()
         }
     }
 
@@ -41,8 +41,8 @@ internal class BigDecimalSchemaTest : FunSpec({
     }
 
     test("BigDecimal generates big-decimal logical type") {
-        Avro.schema<BigDecimal>() shouldBe Schema.create(Schema.Type.BYTES).copy(logicalTypeName = "big-decimal")
-        Avro.schema<BigDecimalTest>() shouldBe Schema.create(Schema.Type.BYTES).copy(logicalTypeName = "big-decimal")
+        Avro.apacheSchema<BigDecimal>() shouldBe Schema.create(Schema.Type.BYTES).copy(logicalTypeName = "big-decimal")
+        Avro.apacheSchema<BigDecimalTest>() shouldBe Schema.create(Schema.Type.BYTES).copy(logicalTypeName = "big-decimal")
     }
 }) {
     @JvmInline

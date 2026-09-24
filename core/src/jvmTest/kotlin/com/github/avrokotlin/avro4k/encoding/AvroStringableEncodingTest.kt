@@ -4,7 +4,7 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroStringable
-import com.github.avrokotlin.avro4k.internal.nullable
+import com.github.avrokotlin.avro4k.nullable
 import com.github.avrokotlin.avro4k.record
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe

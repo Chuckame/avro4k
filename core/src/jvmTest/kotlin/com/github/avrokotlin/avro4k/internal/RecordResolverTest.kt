@@ -1,6 +1,7 @@
 package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.apacheSchema
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
@@ -20,7 +21,7 @@ import java.util.concurrent.TimeUnit
 internal class RecordResolverTest : StringSpec({
     val exactDescriptor = TwoFields.serializer().descriptor
     val reorderedDescriptor = TwoFieldsReordered.serializer().descriptor
-    val exactSchema = Avro.schema(exactDescriptor)
+    val exactSchema = Avro.apacheSchema(exactDescriptor)
     val reorderedSchema = recordSchema("ReorderedWriter", """{"name":"b","type":"string"},{"name":"a","type":"int"}""")
 
     "returns the very same workflow instance for repeated calls with the same pair" {

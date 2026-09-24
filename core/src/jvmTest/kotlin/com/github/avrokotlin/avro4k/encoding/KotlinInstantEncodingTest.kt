@@ -5,10 +5,10 @@ package com.github.avrokotlin.avro4k.encoding
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroStringable
-import com.github.avrokotlin.avro4k.encodeToByteArray
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.encodeToBytesUsingApacheLib
+import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.record
-import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIMESTAMP_MICROS
 import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS
 import io.kotest.assertions.throwables.shouldThrow
@@ -51,7 +51,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
     }
 
     "encode nullable kotlin.time.Instant" {
-        val schema = Avro.schema<Instant?>()
+        val schema = Avro.apacheSchema<Instant?>()
 
         // With value
         val encodedWithValue = Avro.encodeToByteArray(instant as Instant?)
@@ -68,7 +68,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val schema = SchemaBuilder.builder().longType()
         LogicalTypes.timestampMicros().addToSchema(schema)
 
-        val encoded = Avro.encodeToByteArray<Instant>(schema, instantWithMicros)
+        val encoded = Avro.encodeWith<Instant>(schema, instantWithMicros)
         val expectedBytes = encodeToBytesUsingApacheLib(schema, instantMicros)
 
         encoded shouldBe expectedBytes
@@ -78,7 +78,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val schema = SchemaBuilder.builder().longType()
         LogicalTypes.timestampNanos().addToSchema(schema)
 
-        val encoded = Avro.encodeToByteArray<Instant>(schema, instantWithNanos)
+        val encoded = Avro.encodeWith<Instant>(schema, instantWithNanos)
         val expectedBytes = encodeToBytesUsingApacheLib(schema, instantNanos)
 
         encoded shouldBe expectedBytes
@@ -88,7 +88,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val schema = SchemaBuilder.builder().longType()
         LogicalTypes.timestampMillis().addToSchema(schema)
 
-        val encoded = Avro.encodeToByteArray<Instant>(schema, preEpochFractionalInstant)
+        val encoded = Avro.encodeWith<Instant>(schema, preEpochFractionalInstant)
         val expectedBytes = encodeToBytesUsingApacheLib(schema, preEpochMillis)
 
         encoded shouldBe expectedBytes
@@ -98,7 +98,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val schema = SchemaBuilder.builder().longType()
         LogicalTypes.timestampMicros().addToSchema(schema)
 
-        val encoded = Avro.encodeToByteArray<Instant>(schema, preEpochFractionalInstant)
+        val encoded = Avro.encodeWith<Instant>(schema, preEpochFractionalInstant)
         val expectedBytes = encodeToBytesUsingApacheLib(schema, preEpochMicros)
 
         encoded shouldBe expectedBytes
@@ -108,7 +108,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val schema = SchemaBuilder.builder().longType()
         LogicalTypes.timestampNanos().addToSchema(schema)
 
-        val encoded = Avro.encodeToByteArray<Instant>(schema, preEpochFractionalInstant)
+        val encoded = Avro.encodeWith<Instant>(schema, preEpochFractionalInstant)
         val expectedBytes = encodeToBytesUsingApacheLib(schema, preEpochNanos)
 
         encoded shouldBe expectedBytes
@@ -120,7 +120,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val outOfRangeInstant = Instant.parse("2262-04-12T00:00:00Z")
 
         shouldThrow<SerializationException> {
-            Avro.encodeToByteArray<Instant>(schema, outOfRangeInstant)
+            Avro.encodeWith<Instant>(schema, outOfRangeInstant)
         }
     }
 
@@ -130,7 +130,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val outOfRangeInstant = Instant.fromEpochSeconds(Long.MAX_VALUE / 1_000L + 1)
 
         shouldThrow<SerializationException> {
-            Avro.encodeToByteArray<Instant>(schema, outOfRangeInstant)
+            Avro.encodeWith<Instant>(schema, outOfRangeInstant)
         }
     }
 
@@ -140,7 +140,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val outOfRangeInstant = Instant.fromEpochSeconds(Long.MAX_VALUE / 1_000_000L + 1)
 
         shouldThrow<SerializationException> {
-            Avro.encodeToByteArray<Instant>(schema, outOfRangeInstant)
+            Avro.encodeWith<Instant>(schema, outOfRangeInstant)
         }
     }
 
@@ -153,7 +153,7 @@ internal class KotlinInstantEncodingTest : StringSpec({
         val instant2 = Instant.fromEpochSeconds(1577882097)
         val data = listOf(instant, instant2)
 
-        val schema = Avro.schema<List<Instant>>()
+        val schema = Avro.apacheSchema<List<Instant>>()
         val encoded = Avro.encodeToByteArray(data)
         val expectedBytes = encodeToBytesUsingApacheLib(schema, listOf(instantMillis, 1577882097000L))
 
@@ -166,14 +166,14 @@ internal class KotlinInstantEncodingTest : StringSpec({
     }
 
     "generate schema with timestamp-millis logical type" {
-        val schema = Avro.schema<Instant>()
+        val schema = Avro.apacheSchema<Instant>()
 
         schema.type shouldBe Schema.Type.LONG
         schema.logicalType.name shouldBe LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS
     }
 
     "generate schema for record with Instant fields" {
-        val schema = Avro.schema<InstantRecord>()
+        val schema = Avro.apacheSchema<InstantRecord>()
 
         val instantField = schema.getField("instant")
         instantField.schema().type shouldBe Schema.Type.LONG

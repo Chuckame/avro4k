@@ -3,9 +3,11 @@ package com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
-import com.github.avrokotlin.avro4k.internal.nullable
+import com.github.avrokotlin.avro4k.CoreSchema
+import com.github.avrokotlin.avro4k.nullable
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
 import com.github.avrokotlin.avro4k.serializer.SchemaSupplierContext
+import com.github.avrokotlin.avro4k.toCoreSchema
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -44,8 +46,8 @@ internal class AvroCustomSchemaTest : StringSpec({
     private object CustomSchemaSerializer : AvroSerializer<String>("CustomSchema") {
         val SCHEMA = Schema.createUnion(Schema.createFixed("testFixed", "doc", "namespace", 10))
 
-        override fun getSchema(context: SchemaSupplierContext): Schema {
-            return SCHEMA
+        override fun getSchema(context: SchemaSupplierContext): CoreSchema {
+            return SCHEMA.toCoreSchema()
         }
 
         override fun serializeAvro(

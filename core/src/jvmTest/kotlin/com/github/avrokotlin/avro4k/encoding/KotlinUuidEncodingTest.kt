@@ -5,9 +5,9 @@ package com.github.avrokotlin.avro4k.encoding
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroFixed
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.encodeToBytesUsingApacheLib
 import com.github.avrokotlin.avro4k.record
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.Serializable
@@ -29,7 +29,7 @@ internal class KotlinUuidEncodingTest : StringSpec({
     }
 
     "encode nullable kotlin.uuid.Uuid as string" {
-        val schema = Avro.schema<Uuid?>()
+        val schema = Avro.apacheSchema<Uuid?>()
 
         // With value
         val encodedWithValue = Avro.encodeToByteArray(uuid as Uuid?)
@@ -54,7 +54,7 @@ internal class KotlinUuidEncodingTest : StringSpec({
         val uuid2 = Uuid.parse("123e4567-e89b-12d3-a456-426614174001")
         val data = listOf(uuid, uuid2)
 
-        val schema = Avro.schema<List<Uuid>>()
+        val schema = Avro.apacheSchema<List<Uuid>>()
         val encoded = Avro.encodeToByteArray(data)
         val expectedBytes = encodeToBytesUsingApacheLib(schema, listOf(uuidString, uuid2.toString()))
 

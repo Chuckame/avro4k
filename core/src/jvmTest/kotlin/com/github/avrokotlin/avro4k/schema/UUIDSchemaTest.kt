@@ -3,8 +3,8 @@ package com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroFixed
-import com.github.avrokotlin.avro4k.internal.nullable
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.nullable
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import kotlinx.serialization.Contextual
@@ -32,7 +32,7 @@ internal class UUIDSchemaTest : FunSpec({
 
     test("fails when @AvroFixed has bad size") {
         shouldThrow<SerializationException> {
-            Avro.schema<UUIDTestFailingFixed>()
+            Avro.apacheSchema<UUIDTestFailingFixed>()
         }
     }
 }) {

@@ -5,7 +5,7 @@ import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroEnumDefault
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroProp
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.apacheSchema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.serialization.SerialName
@@ -60,18 +60,18 @@ internal class AvroPropsSchemaTest : StringSpec({
             val basicRecordWithProps: BasicRecordWithProps,
         )
         shouldThrow<SerializationException> {
-            Avro.schema<SimpleDataClass>().toString()
+            Avro.apacheSchema<SimpleDataClass>().toString()
         }
     }
     "forbid adding props to a named schema in a value class" {
         shouldThrow<SerializationException> {
-            Avro.schema<ValueClassWithProps<BasicRecord>>().toString()
+            Avro.apacheSchema<ValueClassWithProps<BasicRecord>>().toString()
         }
         shouldThrow<SerializationException> {
-            Avro.schema<ValueClassWithProps<EnumAnnotated>>().toString()
+            Avro.apacheSchema<ValueClassWithProps<EnumAnnotated>>().toString()
         }
         shouldThrow<SerializationException> {
-            Avro.schema<FixedValueClassWithProps>().toString()
+            Avro.apacheSchema<FixedValueClassWithProps>().toString()
         }
     }
 }) {

@@ -2,9 +2,10 @@ package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
-import com.github.avrokotlin.avro4k.decodeFromGenericData
-import com.github.avrokotlin.avro4k.encodeToGenericData
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.apacheWriterSchema
+import com.github.avrokotlin.avro4k.decodeFromGenericDataWith
+import com.github.avrokotlin.avro4k.encodeToGenericDataWith
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContainExactly
@@ -33,13 +34,12 @@ import java.math.BigDecimal
  * The decoder must also report the map's value schema as `currentWriterSchema` while positioned on a
  * value: it used to report the key's `string` schema for both (see docs/plans/notes/c9.md).
  */
-@Suppress("DEPRECATION")
 internal class GenericDataMapEncodingTest : StringSpec({
     "encodes map entries into generic data preserving the insertion order" {
         val value = linkedMapOf("z" to 1, "a" to 2, "m" to 3)
         val serializer = MapSerializer(String.serializer(), Int.serializer())
 
-        val encoded = Avro.encodeToGenericData(Avro.schema(serializer), serializer, value)
+        val encoded = Avro.encodeToGenericDataWith(Avro.apacheSchema(serializer), serializer, value)
 
         encoded as Map<*, *>
         encoded.keys.map { it.toString() } shouldContainExactly listOf("z", "a", "m")
@@ -49,33 +49,33 @@ internal class GenericDataMapEncodingTest : StringSpec({
     "round-trips a map of nullable values through generic data" {
         val value = linkedMapOf("first" to "a", "nulled" to null, "last" to "z")
         val serializer = MapSerializer(String.serializer(), String.serializer().nullable)
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, value)
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, value)
         encoded as Map<*, *>
         encoded.keys.map { it.toString() } shouldContainExactly listOf("first", "nulled", "last")
         encoded["nulled"] shouldBe null
 
-        Avro.decodeFromGenericData(schema, serializer, encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, serializer, encoded) shouldBe value
     }
 
     "round-trips an empty map through generic data" {
         val serializer = MapSerializer(String.serializer(), Int.serializer())
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, emptyMap())
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, emptyMap())
         encoded shouldBe emptyMap<String, Int>()
 
-        Avro.decodeFromGenericData(schema, serializer, encoded) shouldBe emptyMap()
+        Avro.decodeFromGenericDataWith(schema, serializer, encoded) shouldBe emptyMap()
     }
 
     "round-trips a map nested in a record through generic data" {
         val value = RecordWithMap("before", linkedMapOf("k1" to 1, "k2" to 2), "after")
-        val schema = Avro.schema(RecordWithMap.serializer())
+        val schema = Avro.apacheSchema(RecordWithMap.serializer())
 
-        val encoded = Avro.encodeToGenericData(schema, RecordWithMap.serializer(), value)
+        val encoded = Avro.encodeToGenericDataWith(schema, RecordWithMap.serializer(), value)
 
-        Avro.decodeFromGenericData(schema, RecordWithMap.serializer(), encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, RecordWithMap.serializer(), encoded) shouldBe value
     }
 
     "round-trips a map whose values are nested maps through generic data" {
@@ -85,11 +85,11 @@ internal class GenericDataMapEncodingTest : StringSpec({
                 "b" to linkedMapOf("z" to linkedMapOf("deeper" to 2, "deepest" to 3))
             )
         val serializer = MapSerializer(String.serializer(), MapSerializer(String.serializer(), MapSerializer(String.serializer(), Int.serializer())))
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, value)
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, value)
 
-        Avro.decodeFromGenericData(schema, serializer, encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, serializer, encoded) shouldBe value
     }
 
     "round-trips a map whose values are nullable nested maps through generic data" {
@@ -99,21 +99,21 @@ internal class GenericDataMapEncodingTest : StringSpec({
                 "nulled" to null
             )
         val serializer = MapSerializer(String.serializer(), MapSerializer(String.serializer(), MapSerializer(String.serializer(), Int.serializer())).nullable)
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, value)
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, value)
 
-        Avro.decodeFromGenericData(schema, serializer, encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, serializer, encoded) shouldBe value
     }
 
     "round-trips a map whose values are lists through generic data" {
         val value = linkedMapOf("a" to listOf(1, 2, 3), "empty" to emptyList(), "b" to listOf(4))
         val serializer = MapSerializer(String.serializer(), ListSerializer(Int.serializer()))
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, value)
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, value)
 
-        Avro.decodeFromGenericData(schema, serializer, encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, serializer, encoded) shouldBe value
     }
 
     "decodes a map whose values are plain lists of logical-typed elements" {
@@ -121,12 +121,12 @@ internal class GenericDataMapEncodingTest : StringSpec({
         // from the map's value position, and the decimal element serializer then reads its element type.
         val expected = linkedMapOf("a" to listOf(DecimalHolder(BigDecimal("1.50")), DecimalHolder(BigDecimal("-2.25"))))
         val serializer = MapSerializer(String.serializer(), ListSerializer(DecimalHolder.serializer()))
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, expected) as Map<*, *>
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, expected) as Map<*, *>
         val withPlainLists = encoded.mapValues { (_, list) -> ArrayList(list as Collection<*>) }
 
-        Avro.decodeFromGenericData(schema, serializer, withPlainLists) shouldBe expected
+        Avro.decodeFromGenericDataWith(schema, serializer, withPlainLists) shouldBe expected
     }
 
     "round-trips a map whose values are records through generic data" {
@@ -136,11 +136,11 @@ internal class GenericDataMapEncodingTest : StringSpec({
                 "second" to RecordWithMap("b2", emptyMap(), "a2")
             )
         val serializer = MapSerializer(String.serializer(), RecordWithMap.serializer())
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, value)
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, value)
 
-        Avro.decodeFromGenericData(schema, serializer, encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, serializer, encoded) shouldBe value
     }
 
     "round-trips a map whose values are polymorphic through generic data" {
@@ -151,21 +151,21 @@ internal class GenericDataMapEncodingTest : StringSpec({
                 "none" to SealedValue.Nothing
             )
         val serializer = MapSerializer(String.serializer(), SealedValue.serializer())
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, value)
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, value)
 
-        Avro.decodeFromGenericData(schema, serializer, encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, serializer, encoded) shouldBe value
     }
 
     "round-trips a map whose values are logical-typed through generic data" {
         val value = linkedMapOf("price" to DecimalHolder(BigDecimal("12.34")), "discount" to DecimalHolder(BigDecimal("-0.50")))
         val serializer = MapSerializer(String.serializer(), DecimalHolder.serializer())
-        val schema = Avro.schema(serializer)
+        val schema = Avro.apacheSchema(serializer)
 
-        val encoded = Avro.encodeToGenericData(schema, serializer, value)
+        val encoded = Avro.encodeToGenericDataWith(schema, serializer, value)
 
-        Avro.decodeFromGenericData(schema, serializer, encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, serializer, encoded) shouldBe value
     }
 
     "reports the key schema then the value schema as the current writer schema" {
@@ -177,24 +177,24 @@ internal class GenericDataMapEncodingTest : StringSpec({
                 SchemaCapturingSerializer(String.serializer(), keySchemas),
                 SchemaCapturingSerializer(Int.serializer(), valueSchemas)
             )
-        val schema = Avro.schema(plainSerializer)
+        val schema = Avro.apacheSchema(plainSerializer)
         val value = linkedMapOf("a" to 1, "b" to 2)
 
-        val encoded = Avro.encodeToGenericData(schema, plainSerializer, value)
+        val encoded = Avro.encodeToGenericDataWith(schema, plainSerializer, value)
 
-        Avro.decodeFromGenericData(schema, capturingSerializer, encoded) shouldBe value
+        Avro.decodeFromGenericDataWith(schema, capturingSerializer, encoded) shouldBe value
         keySchemas shouldContainExactly listOf(Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.STRING))
         valueSchemas shouldContainExactly listOf(schema.valueType, schema.valueType)
     }
 
     "fails when a map key is null" {
         val serializer = MapSerializer(String.serializer().nullable, Int.serializer())
-        val schema = Avro.schema(MapSerializer(String.serializer(), Int.serializer()))
+        val schema = Avro.apacheSchema(MapSerializer(String.serializer(), Int.serializer()))
 
         // the key position always reports the non-nullable string schema, so the generic encoder's own
         // "Map key cannot be null" guard is defensive: AbstractAvroEncoder.encodeNull rejects it first.
         shouldThrow<SerializationException> {
-            Avro.encodeToGenericData(schema, serializer, mapOf(null to 1))
+            Avro.encodeToGenericDataWith(schema, serializer, mapOf(null to 1))
         }.message shouldBe "Cannot encode null value for non-null schema: \"string\""
     }
 }) {
@@ -240,7 +240,7 @@ internal class GenericDataMapEncodingTest : StringSpec({
         ) = delegate.serialize(encoder, value)
 
         override fun deserialize(decoder: Decoder): T {
-            captured += (decoder as AvroDecoder).currentWriterSchema
+            captured += (decoder as AvroDecoder).apacheWriterSchema
             return delegate.deserialize(decoder)
         }
     }

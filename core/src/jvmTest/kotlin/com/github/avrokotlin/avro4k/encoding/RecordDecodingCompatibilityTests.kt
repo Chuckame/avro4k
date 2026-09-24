@@ -2,9 +2,9 @@ package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAlias
-import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToByteArray
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.decodeWith
+import com.github.avrokotlin.avro4k.encodeWith
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.serialization.SerialName
@@ -88,7 +88,7 @@ class RecordDecodingCompatibilityTests : FunSpec() {
         }
         test("should skip written record when absent from reading data class") {
             testCompatibility<ReadDataClass>(
-                Avro.schema<ReadDataClass>(),
+                Avro.apacheSchema<ReadDataClass>(),
                 ReadDataClass("test", 42)
             )
         }
@@ -105,8 +105,8 @@ class RecordDecodingCompatibilityTests : FunSpec() {
                 .name("skippedField").type(skippedSchema).noDefault()
                 .name("secondField").type().intType().noDefault()
                 .endRecord()
-        val encodedBytes = Avro.encodeToByteArray(schema, WrittenDataClass("test", writtenData, 42))
-        val decodedData = Avro.decodeFromByteArray<ReadDataClass>(schema, encodedBytes)
+        val encodedBytes = Avro.encodeWith(schema, WrittenDataClass("test", writtenData, 42))
+        val decodedData = Avro.decodeWith<ReadDataClass>(schema, encodedBytes)
 
         decodedData shouldBe ReadDataClass("test", 42)
     }

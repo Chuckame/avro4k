@@ -5,8 +5,8 @@ import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroStringable
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.record
-import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.serializer.InstantToMicroSerializer
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.serialization.Contextual
@@ -28,7 +28,7 @@ import kotlin.time.toJavaDuration
 
 internal class LogicalTypesEncodingTest : StringSpec({
     "support logical types at root level" {
-        val schema = Avro.schema<LogicalTypes>().fields[0].schema()
+        val schema = Avro.apacheSchema<LogicalTypes>().fields[0].schema()
         AvroAssertions.assertThat(BigDecimal("123.45"))
             .isEncodedAs(
                 Conversions.DecimalConversion().toBytes(
@@ -41,7 +41,7 @@ internal class LogicalTypesEncodingTest : StringSpec({
     }
 
     "support non-nullable logical types" {
-        println(Avro.schema<LogicalTypes>())
+        println(Avro.apacheSchema<LogicalTypes>())
         AvroAssertions.assertThat(
             LogicalTypes(
                 BigDecimal("123.45"),

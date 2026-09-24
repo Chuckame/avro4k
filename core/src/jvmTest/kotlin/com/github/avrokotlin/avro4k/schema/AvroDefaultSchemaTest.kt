@@ -4,7 +4,7 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroDefault
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
@@ -60,8 +60,8 @@ internal class AvroDefaultSchemaTest : FunSpec({
     }
 
     test("schema for data class with @AvroDefault should throw error when array type does not match default value type") {
-        shouldThrow<AvroTypeException> { Avro.schema(BarInvalidArrayType.serializer()) }
-        shouldThrow<AvroTypeException> { Avro.schema(BarInvalidNonArrayType.serializer()) }
+        shouldThrow<AvroTypeException> { Avro.apacheSchema(BarInvalidArrayType.serializer()) }
+        shouldThrow<AvroTypeException> { Avro.apacheSchema(BarInvalidNonArrayType.serializer()) }
     }
 }) {
     @Serializable

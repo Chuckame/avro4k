@@ -30,7 +30,7 @@ internal class AvroObjectContainerTest : StringSpec({
             firstProfile.id.value.toString(),
             "John Doe",
             30,
-            GenericData.EnumSymbol(Avro.schema<GenderEnum>(), "Male"),
+            GenericData.EnumSymbol(Avro.apacheSchema<GenderEnum>(), "Male"),
             null
         )
     val secondProfile =
@@ -46,7 +46,7 @@ internal class AvroObjectContainerTest : StringSpec({
             secondProfile.id.value.toString(),
             "Jane Doe",
             25,
-            GenericData.EnumSymbol(Avro.schema<GenderEnum>(), "Female"),
+            GenericData.EnumSymbol(Avro.apacheSchema<GenderEnum>(), "Female"),
             record(
                 "New York",
                 "USA"
@@ -69,7 +69,7 @@ internal class AvroObjectContainerTest : StringSpec({
                 it.toByteArray()
             }
         // read with apache avro lib
-        val dataFile = DataFileStream<GenericRecord>(bytes.inputStream(), GenericDatumReader(Avro.schema<UserProfile>()))
+        val dataFile = DataFileStream<GenericRecord>(bytes.inputStream(), GenericDatumReader(Avro.apacheSchema<UserProfile>()))
         dataFile.getMetaString("meta-string") shouldBe "awesome string"
         dataFile.getMetaLong("meta-long") shouldBe 42
         dataFile.getMeta("bytes") shouldBe byteArrayOf(1, 3, 2, 42)
@@ -85,9 +85,9 @@ internal class AvroObjectContainerTest : StringSpec({
                 dataFileWriter.setMeta("meta-string", "awesome string")
                 dataFileWriter.setMeta("meta-long", 42)
                 dataFileWriter.setMeta("bytes", byteArrayOf(1, 3, 2, 42))
-                dataFileWriter.create(Avro.schema<UserProfile>(), it)
-                dataFileWriter.append(firstProfileGenericData.createRecord(Avro.schema<UserProfile>()))
-                dataFileWriter.append(secondProfileGenericData.createRecord(Avro.schema<UserProfile>()))
+                dataFileWriter.create(Avro.apacheSchema<UserProfile>(), it)
+                dataFileWriter.append(firstProfileGenericData.createRecord(Avro.apacheSchema<UserProfile>()))
+                dataFileWriter.append(secondProfileGenericData.createRecord(Avro.apacheSchema<UserProfile>()))
                 dataFileWriter.close()
                 it.toByteArray()
             }

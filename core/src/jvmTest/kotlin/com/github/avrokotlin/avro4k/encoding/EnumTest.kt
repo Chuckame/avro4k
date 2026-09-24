@@ -10,11 +10,12 @@ import com.github.avrokotlin.avro4k.AvroEnumDefault
 import com.github.avrokotlin.avro4k.RecordWithGenericField
 import com.github.avrokotlin.avro4k.SomeEnum
 import com.github.avrokotlin.avro4k.ValueClassWithGenericField
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.basicScalarEncodeDecodeTests
-import com.github.avrokotlin.avro4k.encodeToByteArray
+import com.github.avrokotlin.avro4k.decodeWith
 import com.github.avrokotlin.avro4k.encodeToBytesUsingApacheLib
+import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.record
-import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.serializer.UUIDSerializer
 import com.github.avrokotlin.avro4k.testSerializationTypeCompatibility
 import io.kotest.assertions.throwables.shouldThrow
@@ -35,28 +36,28 @@ internal class EnumTest : StringSpec({
 
     "Only allow 1 @AvroEnumDefault at max" {
         shouldThrow<UnsupportedOperationException> {
-            Avro.schema<BadEnumWithManyDefaults>()
+            Avro.apacheSchema<BadEnumWithManyDefaults>()
         }
         shouldThrow<UnsupportedOperationException> {
-            Avro.schema<RecordWithGenericField<BadEnumWithManyDefaults>>()
+            Avro.apacheSchema<RecordWithGenericField<BadEnumWithManyDefaults>>()
         }
         shouldThrow<UnsupportedOperationException> {
-            Avro.schema<ValueClassWithGenericField<BadEnumWithManyDefaults>>()
+            Avro.apacheSchema<ValueClassWithGenericField<BadEnumWithManyDefaults>>()
         }
     }
 
     "Decoding enum with an unknown symbol uses @AvroEnumDefault value" {
-        Avro.schema<EnumV2>() shouldBe
+        Avro.apacheSchema<EnumV2>() shouldBe
             SchemaBuilder.enumeration("Enum")
                 .defaultSymbol("UNKNOWN")
                 .symbols("UNKNOWN", "A", "B")
 
         AvroAssertions.assertThat(EnumV2WrapperRecord(EnumV2.B))
-            .isEncodedAs(record(GenericData.EnumSymbol(Avro.schema<EnumV2>(), "B")))
+            .isEncodedAs(record(GenericData.EnumSymbol(Avro.apacheSchema<EnumV2>(), "B")))
             .isDecodedAs(EnumV1WrapperRecord(EnumV1.UNKNOWN))
 
         AvroAssertions.assertThat(EnumV2.B)
-            .isEncodedAs(GenericData.EnumSymbol(Avro.schema<EnumV2>(), "B"))
+            .isEncodedAs(GenericData.EnumSymbol(Avro.apacheSchema<EnumV2>(), "B"))
             .isDecodedAs(EnumV1.UNKNOWN)
     }
 
@@ -65,7 +66,7 @@ internal class EnumTest : StringSpec({
 
         val bytes = encodeToBytesUsingApacheLib(schema, GenericData.EnumSymbol(schema, "X"))
         shouldThrow<SerializationException> {
-            Avro.decodeFromByteArray(schema, EnumV1WithoutDefault.serializer(), bytes)
+            Avro.decodeWith(schema, EnumV1WithoutDefault.serializer(), bytes)
         }
     }
 
@@ -73,7 +74,7 @@ internal class EnumTest : StringSpec({
         val schema = SchemaBuilder.enumeration("Enum").defaultSymbol("Z").symbols("X", "Z")
 
         shouldThrow<SerializationException> {
-            Avro.encodeToByteArray(schema, EnumV1WithoutDefault.A)
+            Avro.encodeWith(schema, EnumV1WithoutDefault.A)
         }
     }
 
@@ -81,7 +82,7 @@ internal class EnumTest : StringSpec({
         val schema = SchemaBuilder.enumeration("WrongName").symbols("A")
 
         shouldThrow<SerializationException> {
-            Avro.encodeToByteArray(schema, EnumV1WithoutDefault.A)
+            Avro.encodeWith(schema, EnumV1WithoutDefault.A)
         }
     }
 

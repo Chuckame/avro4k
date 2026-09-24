@@ -22,14 +22,14 @@ internal class OptionalKotlinInstantClasspathTest : StringSpec({
 
 public object OptionalKotlinInstantRuntimeProbe {
     @JvmStatic
-    public fun loadDefaultAndGenerateStringSchema(): String = Avro.schema<String>().toString()
+    public fun loadDefaultAndGenerateStringSchema(): String = Avro.apacheSchema<String>().toString()
 
     @JvmStatic
     public fun encodeAndDecodeInt(): Int {
         val serializer = Int.serializer()
-        val schema = Avro.schema(serializer.descriptor)
-        val bytes = Avro.encodeToByteArray(schema, serializer, 42)
-        return Avro.decodeFromByteArray(schema, serializer, bytes)
+        val schema = Avro.apacheSchema(serializer.descriptor)
+        val bytes = Avro.encodeWith(schema, serializer, 42)
+        return Avro.decodeWith(schema, serializer, bytes)
     }
 }
 

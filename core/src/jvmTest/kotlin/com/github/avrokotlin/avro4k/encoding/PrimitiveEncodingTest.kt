@@ -3,7 +3,8 @@ package com.github.avrokotlin.avro4k.encoding
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.basicScalarEncodeDecodeTests
-import com.github.avrokotlin.avro4k.internal.copy
+import com.github.avrokotlin.avro4k.copy
+import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.testSerializationTypeCompatibility
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -100,7 +101,7 @@ internal class PrimitiveEncodingTest : StringSpec({
     ).forEach { (type, serializer) ->
         "null can be encoded to non-nullable avro type $type" {
             shouldThrow<SerializationException> {
-                Avro.encodeToByteArray(Schema.create(type), serializer.nullable, null)
+                Avro.encodeWith(Schema.create(type), serializer.nullable, null)
             }
         }
     }

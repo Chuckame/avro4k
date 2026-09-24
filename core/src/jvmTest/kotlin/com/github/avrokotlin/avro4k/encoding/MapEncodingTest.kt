@@ -13,9 +13,9 @@ import com.github.avrokotlin.avro4k.WrappedInt
 import com.github.avrokotlin.avro4k.WrappedLong
 import com.github.avrokotlin.avro4k.WrappedShort
 import com.github.avrokotlin.avro4k.WrappedString
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.record
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import kotlinx.serialization.Contextual
@@ -182,27 +182,27 @@ internal class MapEncodingTest : FunSpec({
 
     test("should fail on nullable key") {
         shouldThrow<AvroSchemaGenerationException> {
-            Avro.schema(GenericMapForTests.serializer(String.serializer().nullable))
+            Avro.apacheSchema(GenericMapForTests.serializer(String.serializer().nullable))
         }
     }
     test("should fail on non-stringable key type: record") {
         shouldThrow<AvroSchemaGenerationException> {
-            Avro.schema(GenericMapForTests.serializer(DataRecord.serializer()))
+            Avro.apacheSchema(GenericMapForTests.serializer(DataRecord.serializer()))
         }
     }
     test("should fail on non-stringable key type: map") {
         shouldThrow<AvroSchemaGenerationException> {
-            Avro.schema(GenericMapForTests.serializer(MapSerializer(String.serializer(), String.serializer())))
+            Avro.apacheSchema(GenericMapForTests.serializer(MapSerializer(String.serializer(), String.serializer())))
         }
     }
     test("should fail on non-stringable key type: array") {
         shouldThrow<AvroSchemaGenerationException> {
-            Avro.schema(GenericMapForTests.serializer(ListSerializer(String.serializer())))
+            Avro.apacheSchema(GenericMapForTests.serializer(ListSerializer(String.serializer())))
         }
     }
     test("should fail on non-stringable key type: bytes") {
         shouldThrow<AvroSchemaGenerationException> {
-            Avro.schema(GenericMapForTests.serializer(ListSerializer(Byte.serializer())))
+            Avro.apacheSchema(GenericMapForTests.serializer(ListSerializer(Byte.serializer())))
         }
     }
 }) {

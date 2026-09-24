@@ -4,9 +4,9 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroDefault
 import com.github.avrokotlin.avro4k.WrappedInt
-import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.internal.nullable
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.decodeWith
+import com.github.avrokotlin.avro4k.nullable
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import kotlinx.serialization.SerialName
@@ -82,7 +82,7 @@ internal class ImplicitConfigSchemaTest : FunSpec({
             }
         val bytes = avro.encodeToByteArray(EmptyType)
         shouldThrow<SerializationException> {
-            avro.decodeFromByteArray<ImplicitNulls>(writerSchema = avro.schema<EmptyType>(), bytes)
+            avro.decodeWith<ImplicitNulls>(writerSchema = avro.apacheSchema<EmptyType>(), bytes)
         }
     }
 
@@ -126,7 +126,7 @@ internal class ImplicitConfigSchemaTest : FunSpec({
             }
         val bytes = avro.encodeToByteArray(EmptyCollectionType)
         shouldThrow<SerializationException> {
-            avro.decodeFromByteArray<ImplicitEmptyCollections>(writerSchema = avro.schema<EmptyCollectionType>(), bytes)
+            avro.decodeWith<ImplicitEmptyCollections>(writerSchema = avro.apacheSchema<EmptyCollectionType>(), bytes)
         }
     }
 }) {

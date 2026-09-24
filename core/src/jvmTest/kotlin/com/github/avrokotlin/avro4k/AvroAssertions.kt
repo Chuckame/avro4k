@@ -1,6 +1,5 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.nullable
 import io.kotest.assertions.Actual
 import io.kotest.assertions.Expected
 import io.kotest.assertions.createAssertionError
@@ -37,7 +36,7 @@ internal class AvroEncodingAssertions<T>(
     }
 
     fun generatesSchema(expectedSchema: Schema): AvroEncodingAssertions<T> {
-        avro.schema(serializer).toString(true) shouldBe expectedSchema.toString(true)
+        avro.apacheSchema(serializer).toString(true) shouldBe expectedSchema.toString(true)
         return this
     }
 
@@ -52,7 +51,7 @@ internal class AvroEncodingAssertions<T>(
     fun isEncodedAs(
         expectedEncodedGenericValue: Any?,
         expectedDecodedValue: T = valueToEncode,
-        writerSchema: Schema = avro.schema(serializer),
+        writerSchema: Schema = avro.apacheSchema(serializer),
         decodedComparator: (actual: T, expected: T) -> Unit = { a, b -> a shouldBe b },
     ): AvroEncodingAssertions<T> {
         val actualEncodedBytes = avro4kEncode(valueToEncode, writerSchema)
@@ -79,7 +78,7 @@ internal class AvroEncodingAssertions<T>(
     inline fun <reified R> isDecodedAs(
         expected: R,
         serializer: KSerializer<R> = avro.serializersModule.serializer<R>(),
-        writerSchema: Schema = avro.schema(this.serializer),
+        writerSchema: Schema = avro.apacheSchema(this.serializer),
     ) {
         val encodedBytes = avro4kEncode(valueToEncode, writerSchema)
 
@@ -93,15 +92,14 @@ internal class AvroEncodingAssertions<T>(
         value: T,
         schema: Schema,
     ): ByteArray {
-        return avro.encodeToByteArray(schema, serializer, value)
+        return avro.encodeWith(schema, serializer, value)
     }
 
     private fun avro4kGenericEncode(
         value: T,
         schema: Schema,
     ): Any? {
-        @Suppress("DEPRECATION")
-        return avro.encodeToGenericData(schema, serializer, value)
+        return avro.encodeToGenericDataWith(schema, serializer, value)
     }
 
     private fun <R> avro4kDecode(
@@ -109,7 +107,7 @@ internal class AvroEncodingAssertions<T>(
         writerSchema: Schema,
         serializer: KSerializer<R>,
     ): R {
-        return avro.decodeFromByteArray(writerSchema, serializer, bytes)
+        return avro.decodeWith(writerSchema, serializer, bytes)
     }
 
     private fun avroApacheEncode(
@@ -172,7 +170,7 @@ internal open class AvroSchemaAssertions<T>(
     }
 
     fun generatesSchema(expectedSchema: Schema) {
-        avro.schema(serializer).toString(true) shouldBe expectedSchema.toString(true)
+        avro.apacheSchema(serializer).toString(true) shouldBe expectedSchema.toString(true)
         generatedSchema = expectedSchema
     }
 
@@ -222,25 +220,25 @@ internal inline fun <reified T : Any> StringSpecRootScope.basicScalarEncodeDecod
     apacheCompatibleValue: Any? = value,
 ) {
     "support runtime ${expectedSchema.type} type ${value::class.qualifiedName} serialization" {
-        Avro.schema<T>() shouldBe expectedSchema
+        Avro.apacheSchema<T>() shouldBe expectedSchema
         testEncodeDecode(expectedSchema, value, apacheCompatibleValue = apacheCompatibleValue)
 
-        Avro.schema<ValueClassWithGenericField<T>>() shouldBe expectedSchema
+        Avro.apacheSchema<ValueClassWithGenericField<T>>() shouldBe expectedSchema
         testEncodeDecode(expectedSchema, ValueClassWithGenericField(value), apacheCompatibleValue = apacheCompatibleValue)
     }
     "support runtime ${expectedSchema.type} type ${value::class.qualifiedName} serialization as nullable" {
-        Avro.schema<T?>() shouldBe expectedSchema.nullable
+        Avro.apacheSchema<T?>() shouldBe expectedSchema.nullable
         testEncodeDecode<T?>(expectedSchema.nullable, value, apacheCompatibleValue = apacheCompatibleValue)
         testEncodeDecode<T?>(expectedSchema.nullable, null)
 
-        Avro.schema<ValueClassWithGenericField<T?>>() shouldBe expectedSchema.nullable
+        Avro.apacheSchema<ValueClassWithGenericField<T?>>() shouldBe expectedSchema.nullable
         testEncodeDecode(expectedSchema.nullable, ValueClassWithGenericField(value), apacheCompatibleValue = apacheCompatibleValue)
         testEncodeDecode(expectedSchema.nullable, ValueClassWithGenericField<T?>(null), apacheCompatibleValue = null)
 
-        Avro.schema<ValueClassWithGenericField<T?>?>() shouldBe expectedSchema.nullable
+        Avro.apacheSchema<ValueClassWithGenericField<T?>?>() shouldBe expectedSchema.nullable
         testEncodeDecode<ValueClassWithGenericField<T?>?>(expectedSchema.nullable, null)
 
-        Avro.schema<ValueClassWithGenericField<T>?>() shouldBe expectedSchema.nullable
+        Avro.apacheSchema<ValueClassWithGenericField<T>?>() shouldBe expectedSchema.nullable
         testEncodeDecode<ValueClassWithGenericField<T>?>(expectedSchema.nullable, null)
     }
     "support runtime ${expectedSchema.type} type ${value::class.qualifiedName} in record" {
@@ -248,8 +246,8 @@ internal inline fun <reified T : Any> StringSpecRootScope.basicScalarEncodeDecod
             SchemaBuilder.record("RecordWithGenericField").fields()
                 .name("field").type(expectedSchema).noDefault()
                 .endRecord()
-        Avro.schema<RecordWithGenericField<T>>() shouldBe record
-        Avro.schema<RecordWithGenericField<ValueClassWithGenericField<T>>>() shouldBe record
+        Avro.apacheSchema<RecordWithGenericField<T>>() shouldBe record
+        Avro.apacheSchema<RecordWithGenericField<ValueClassWithGenericField<T>>>() shouldBe record
         testEncodeDecode(
             record,
             RecordWithGenericField(value),
@@ -266,10 +264,10 @@ internal inline fun <reified T : Any> StringSpecRootScope.basicScalarEncodeDecod
             SchemaBuilder.record("RecordWithGenericField").fields()
                 .name("field").type(expectedSchema.nullable).withDefault(null)
                 .endRecord()
-        Avro.schema<RecordWithGenericField<T?>>() shouldBe expectedRecordSchemaNullable
-        Avro.schema<RecordWithGenericField<ValueClassWithGenericField<T?>>>() shouldBe expectedRecordSchemaNullable
-        Avro.schema<RecordWithGenericField<ValueClassWithGenericField<T?>?>>() shouldBe expectedRecordSchemaNullable
-        Avro.schema<RecordWithGenericField<ValueClassWithGenericField<T>?>>() shouldBe expectedRecordSchemaNullable
+        Avro.apacheSchema<RecordWithGenericField<T?>>() shouldBe expectedRecordSchemaNullable
+        Avro.apacheSchema<RecordWithGenericField<ValueClassWithGenericField<T?>>>() shouldBe expectedRecordSchemaNullable
+        Avro.apacheSchema<RecordWithGenericField<ValueClassWithGenericField<T?>?>>() shouldBe expectedRecordSchemaNullable
+        Avro.apacheSchema<RecordWithGenericField<ValueClassWithGenericField<T>?>>() shouldBe expectedRecordSchemaNullable
 
         val recordNullable =
             SchemaBuilder.record("RecordWithGenericField").fields()
@@ -298,55 +296,55 @@ internal inline fun <reified T : Any> StringSpecRootScope.basicScalarEncodeDecod
     }
     "support runtime ${expectedSchema.type} type ${value::class.qualifiedName} in map" {
         val map = SchemaBuilder.map().values(expectedSchema)
-        Avro.schema<Map<String, T>>() shouldBe map
-        Avro.schema<Map<String, ValueClassWithGenericField<T>>>() shouldBe map
-        Avro.schema<Map<T, ValueClassWithGenericField<T>>>() shouldBe map
-        Avro.schema<Map<ValueClassWithGenericField<T>, ValueClassWithGenericField<T>>>() shouldBe map
-        Avro.schema<Map<T, T>>() shouldBe map
-        Avro.schema<Map<ValueClassWithGenericField<T>, T>>() shouldBe map
+        Avro.apacheSchema<Map<String, T>>() shouldBe map
+        Avro.apacheSchema<Map<String, ValueClassWithGenericField<T>>>() shouldBe map
+        Avro.apacheSchema<Map<T, ValueClassWithGenericField<T>>>() shouldBe map
+        Avro.apacheSchema<Map<ValueClassWithGenericField<T>, ValueClassWithGenericField<T>>>() shouldBe map
+        Avro.apacheSchema<Map<T, T>>() shouldBe map
+        Avro.apacheSchema<Map<ValueClassWithGenericField<T>, T>>() shouldBe map
         testEncodeDecode(map, mapOf("key" to value), apacheCompatibleValue = mapOf("key" to apacheCompatibleValue))
         testEncodeDecode(map, mapOf("key" to ValueClassWithGenericField(value)), apacheCompatibleValue = mapOf("key" to apacheCompatibleValue))
 
         val mapNullable = SchemaBuilder.map().values(expectedSchema.nullable)
-        Avro.schema<Map<String, T?>>() shouldBe mapNullable
-        Avro.schema<Map<String, ValueClassWithGenericField<T?>>>() shouldBe mapNullable
-        Avro.schema<Map<String, ValueClassWithGenericField<T?>?>>() shouldBe mapNullable
-        Avro.schema<Map<String, ValueClassWithGenericField<T>?>>() shouldBe mapNullable
-        Avro.schema<Map<T, ValueClassWithGenericField<T?>>>() shouldBe mapNullable
-        Avro.schema<Map<T, ValueClassWithGenericField<T?>?>>() shouldBe mapNullable
-        Avro.schema<Map<T, ValueClassWithGenericField<T>?>>() shouldBe mapNullable
-        Avro.schema<Map<ValueClassWithGenericField<T>, ValueClassWithGenericField<T?>>>() shouldBe mapNullable
-        Avro.schema<Map<ValueClassWithGenericField<T>, ValueClassWithGenericField<T?>?>>() shouldBe mapNullable
-        Avro.schema<Map<ValueClassWithGenericField<T>, ValueClassWithGenericField<T>?>>() shouldBe mapNullable
-        Avro.schema<Map<T, T?>>() shouldBe mapNullable
-        Avro.schema<Map<ValueClassWithGenericField<T>, T?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<String, T?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<String, ValueClassWithGenericField<T?>>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<String, ValueClassWithGenericField<T?>?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<String, ValueClassWithGenericField<T>?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<T, ValueClassWithGenericField<T?>>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<T, ValueClassWithGenericField<T?>?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<T, ValueClassWithGenericField<T>?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<ValueClassWithGenericField<T>, ValueClassWithGenericField<T?>>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<ValueClassWithGenericField<T>, ValueClassWithGenericField<T?>?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<ValueClassWithGenericField<T>, ValueClassWithGenericField<T>?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<T, T?>>() shouldBe mapNullable
+        Avro.apacheSchema<Map<ValueClassWithGenericField<T>, T?>>() shouldBe mapNullable
         testEncodeDecode(mapNullable, mapOf("key" to ValueClassWithGenericField(value)), apacheCompatibleValue = mapOf("key" to apacheCompatibleValue))
         testEncodeDecode(mapNullable, mapOf("key" to ValueClassWithGenericField<T?>(null)), apacheCompatibleValue = mapOf("key" to null))
     }
     "support runtime ${expectedSchema.type} type ${value::class.qualifiedName} in array" {
         val array = SchemaBuilder.array().items(expectedSchema)
-        Avro.schema<List<T>>() shouldBe array
-        Avro.schema<List<ValueClassWithGenericField<T>>>() shouldBe array
-        Avro.schema<Set<T>>() shouldBe array
-        Avro.schema<Set<ValueClassWithGenericField<T>>>() shouldBe array
-        Avro.schema<Array<T>>() shouldBe array
-        Avro.schema<Array<ValueClassWithGenericField<T>>>() shouldBe array
+        Avro.apacheSchema<List<T>>() shouldBe array
+        Avro.apacheSchema<List<ValueClassWithGenericField<T>>>() shouldBe array
+        Avro.apacheSchema<Set<T>>() shouldBe array
+        Avro.apacheSchema<Set<ValueClassWithGenericField<T>>>() shouldBe array
+        Avro.apacheSchema<Array<T>>() shouldBe array
+        Avro.apacheSchema<Array<ValueClassWithGenericField<T>>>() shouldBe array
         testEncodeDecode(array, listOf(value), apacheCompatibleValue = listOf(apacheCompatibleValue))
         testEncodeDecode(array, listOf(ValueClassWithGenericField(value)), apacheCompatibleValue = listOf(apacheCompatibleValue))
 
         val arrayNullable = SchemaBuilder.array().items(expectedSchema.nullable)
-        Avro.schema<List<T?>>() shouldBe arrayNullable
-        Avro.schema<List<ValueClassWithGenericField<T?>>>() shouldBe arrayNullable
-        Avro.schema<List<ValueClassWithGenericField<T?>?>>() shouldBe arrayNullable
-        Avro.schema<List<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
-        Avro.schema<Set<T?>>() shouldBe arrayNullable
-        Avro.schema<Set<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
-        Avro.schema<Set<ValueClassWithGenericField<T?>?>>() shouldBe arrayNullable
-        Avro.schema<Set<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
-        Avro.schema<Array<T?>>() shouldBe arrayNullable
-        Avro.schema<Array<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
-        Avro.schema<Array<ValueClassWithGenericField<T?>?>>() shouldBe arrayNullable
-        Avro.schema<Array<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
+        Avro.apacheSchema<List<T?>>() shouldBe arrayNullable
+        Avro.apacheSchema<List<ValueClassWithGenericField<T?>>>() shouldBe arrayNullable
+        Avro.apacheSchema<List<ValueClassWithGenericField<T?>?>>() shouldBe arrayNullable
+        Avro.apacheSchema<List<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
+        Avro.apacheSchema<Set<T?>>() shouldBe arrayNullable
+        Avro.apacheSchema<Set<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
+        Avro.apacheSchema<Set<ValueClassWithGenericField<T?>?>>() shouldBe arrayNullable
+        Avro.apacheSchema<Set<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
+        Avro.apacheSchema<Array<T?>>() shouldBe arrayNullable
+        Avro.apacheSchema<Array<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
+        Avro.apacheSchema<Array<ValueClassWithGenericField<T?>?>>() shouldBe arrayNullable
+        Avro.apacheSchema<Array<ValueClassWithGenericField<T>?>>() shouldBe arrayNullable
         testEncodeDecode(arrayNullable, listOf(ValueClassWithGenericField(value)), apacheCompatibleValue = listOf(apacheCompatibleValue))
         testEncodeDecode(arrayNullable, listOf(ValueClassWithGenericField<T?>(null)), apacheCompatibleValue = listOf(null))
     }
@@ -357,7 +355,7 @@ internal inline fun <reified T : Any, reified R : Any> StringSpecRootScope.testS
     apacheCompatibleValue: R,
     writerSchema: Schema,
 ) {
-    val originalSchema = Avro.schema<T>()
+    val originalSchema = Avro.apacheSchema<T>()
     "support coercion from ${originalSchema.type} runtime type ${logicalValue::class.qualifiedName} to type ${writerSchema.type}" {
         testEncodeDecode(writerSchema, logicalValue, apacheCompatibleValue = apacheCompatibleValue)
         testEncodeDecode(writerSchema, ValueClassWithGenericField(logicalValue), apacheCompatibleValue = apacheCompatibleValue)
@@ -442,8 +440,8 @@ inline fun <reified T> testEncodeDecode(
     serializer: KSerializer<T> = Avro.serializersModule.serializer<T>(),
     expectedBytes: ByteArray = encodeToBytesUsingApacheLib(schema, apacheCompatibleValue),
 ) {
-    Avro.encodeToByteArray(schema, serializer, toEncode) shouldBe expectedBytes
-    val decodedValue = Avro.decodeFromByteArray(schema, serializer, expectedBytes) as Any?
+    Avro.encodeWith(schema, serializer, toEncode) shouldBe expectedBytes
+    val decodedValue = Avro.decodeWith(schema, serializer, expectedBytes) as Any?
     try {
         decodedValue shouldBe decoded
     } catch (originalError: Throwable) {

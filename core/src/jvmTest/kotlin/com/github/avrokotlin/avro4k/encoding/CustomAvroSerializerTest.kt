@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
+import com.github.avrokotlin.avro4k.CoreSchema
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
 import com.github.avrokotlin.avro4k.serializer.SchemaSupplierContext
 import io.kotest.assertions.throwables.shouldThrow
@@ -16,7 +17,6 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
-import org.apache.avro.Schema
 
 class CustomAvroSerializerTest : StringSpec({
     "Non Avro encoder or decoder should fail" {
@@ -87,7 +87,7 @@ private abstract class BasicSerializer : AvroSerializer<Any>("basic") {
         TODO("Not yet implemented")
     }
 
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): CoreSchema {
         TODO("Not yet implemented")
     }
 }

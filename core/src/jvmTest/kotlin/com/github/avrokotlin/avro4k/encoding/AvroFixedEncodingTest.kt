@@ -3,8 +3,8 @@ package com.github.avrokotlin.avro4k.encoding
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroFixed
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.record
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.serialization.SerialName
@@ -20,7 +20,7 @@ internal class AvroFixedEncodingTest : StringSpec({
         AvroAssertions.assertThat<FixedStringField>()
             .generatesSchema(Path("/fixed_string.json"))
 
-        val schema = Avro.schema<FixedStringField>().fields[0].schema()
+        val schema = Avro.apacheSchema<FixedStringField>().fields[0].schema()
         AvroAssertions.assertThat(FixedStringField("1234567"))
             .isEncodedAs(record(GenericData.Fixed(schema, "1234567".toByteArray())))
     }
@@ -29,31 +29,31 @@ internal class AvroFixedEncodingTest : StringSpec({
         AvroAssertions.assertThat<FixedNestedStringField>()
             .generatesSchema(Path("/fixed_string.json"))
 
-        val schema = Avro.schema<FixedNestedStringField>().fields[0].schema()
+        val schema = Avro.apacheSchema<FixedNestedStringField>().fields[0].schema()
         AvroAssertions.assertThat(FixedNestedStringField(FixedStringValueClass("1234567")))
             .isEncodedAs(record(GenericData.Fixed(schema, "1234567".toByteArray())))
 
         AvroAssertions.assertThat(FixedStringValueClass("1234567"))
-            .isEncodedAs(GenericData.Fixed(Avro.schema<FixedStringValueClass>(), "1234567".toByteArray()))
+            .isEncodedAs(GenericData.Fixed(Avro.apacheSchema<FixedStringValueClass>(), "1234567".toByteArray()))
     }
 
     "support @AvroFixed on ByteArray" {
         AvroAssertions.assertThat(FixedByteArrayField("1234567".toByteArray()))
             .generatesSchema(Path("/fixed_string.json"))
-            .isEncodedAs(record(GenericData.Fixed(Avro.schema<FixedByteArrayField>().fields[0].schema(), "1234567".toByteArray())))
+            .isEncodedAs(record(GenericData.Fixed(Avro.apacheSchema<FixedByteArrayField>().fields[0].schema(), "1234567".toByteArray())))
     }
 
     "top-est @AvroFixed annotation takes precedence over nested @AvroFixed annotations" {
         AvroAssertions.assertThat<FieldPriorToValueClass>()
             .generatesSchema(Path("/fixed_string_5.json"))
 
-        val schema = Avro.schema<FieldPriorToValueClass>().fields[0].schema()
+        val schema = Avro.apacheSchema<FieldPriorToValueClass>().fields[0].schema()
         AvroAssertions.assertThat(FieldPriorToValueClass(FixedStringValueClass("12345")))
             .isEncodedAs(record(GenericData.Fixed(schema, "12345".toByteArray())))
 
         // Not 5 chars fixed
         shouldThrow<SerializationException> {
-            Avro.schema<FieldPriorToValueClass>()
+            Avro.apacheSchema<FieldPriorToValueClass>()
             Avro.encodeToByteArray(FieldPriorToValueClass(FixedStringValueClass("1234567")))
         }
     }

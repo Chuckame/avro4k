@@ -16,8 +16,8 @@ import org.apache.avro.SchemaNormalization
  * been seen.
  */
 internal class AvroSingleObjectFingerprintCacheTest : StringSpec({
-    val schemaA = Avro.schema(RecordA.serializer())
-    val schemaB = Avro.schema(RecordB.serializer())
+    val schemaA = Avro.apacheSchema(RecordA.serializer())
+    val schemaB = Avro.apacheSchema(RecordB.serializer())
     val expectedFingerprintA = SchemaNormalization.parsingFingerprint("CRC-64-AVRO", schemaA)
     val expectedFingerprintB = SchemaNormalization.parsingFingerprint("CRC-64-AVRO", schemaB)
 
@@ -31,8 +31,8 @@ internal class AvroSingleObjectFingerprintCacheTest : StringSpec({
 
     "encoding the same value twice with the same schema produces identical bytes" {
         val format = newFormat()
-        val first = format.encodeToByteArray(schemaA, RecordA.serializer(), RecordA("hello"))
-        val second = format.encodeToByteArray(schemaA, RecordA.serializer(), RecordA("hello"))
+        val first = format.encodeWith(schemaA, RecordA.serializer(), RecordA("hello"))
+        val second = format.encodeWith(schemaA, RecordA.serializer(), RecordA("hello"))
 
         second shouldBe first
         first.fingerprint() shouldBe expectedFingerprintA
@@ -43,8 +43,8 @@ internal class AvroSingleObjectFingerprintCacheTest : StringSpec({
         expectedFingerprintA shouldNotBe expectedFingerprintB
 
         val format = newFormat()
-        val encodedA = format.encodeToByteArray(schemaA, RecordA.serializer(), RecordA("hello"))
-        val encodedB = format.encodeToByteArray(schemaB, RecordB.serializer(), RecordB(42))
+        val encodedA = format.encodeWith(schemaA, RecordA.serializer(), RecordA("hello"))
+        val encodedB = format.encodeWith(schemaB, RecordB.serializer(), RecordB(42))
 
         encodedA.fingerprint() shouldBe expectedFingerprintA
         encodedB.fingerprint() shouldBe expectedFingerprintB
@@ -54,17 +54,17 @@ internal class AvroSingleObjectFingerprintCacheTest : StringSpec({
     "interleaving schemas on the same format instance keeps each fingerprint correct" {
         val format = newFormat()
         repeat(3) {
-            format.encodeToByteArray(schemaA, RecordA.serializer(), RecordA("hello")).fingerprint() shouldBe expectedFingerprintA
-            format.encodeToByteArray(schemaB, RecordB.serializer(), RecordB(42)).fingerprint() shouldBe expectedFingerprintB
+            format.encodeWith(schemaA, RecordA.serializer(), RecordA("hello")).fingerprint() shouldBe expectedFingerprintA
+            format.encodeWith(schemaB, RecordB.serializer(), RecordB(42)).fingerprint() shouldBe expectedFingerprintB
         }
     }
 
     "a memoized fingerprint is still decodable by the schema registry lookup" {
         val format = newFormat()
         // warm the cache up with the other schema first, so a miskeyed cache writes the wrong fingerprint
-        format.encodeToByteArray(schemaB, RecordB.serializer(), RecordB(42))
+        format.encodeWith(schemaB, RecordB.serializer(), RecordB(42))
 
-        val bytes = format.encodeToByteArray(schemaA, RecordA.serializer(), RecordA("hello"))
+        val bytes = format.encodeWith(schemaA, RecordA.serializer(), RecordA("hello"))
         format.decodeFromByteArray(RecordA.serializer(), bytes) shouldBe RecordA("hello")
     }
 
@@ -73,7 +73,7 @@ internal class AvroSingleObjectFingerprintCacheTest : StringSpec({
         val sameSchemaOtherInstance = Schema.Parser().parse(schemaA.toString())
         sameSchemaOtherInstance shouldNotBeSameInstanceAs schemaA
 
-        format.encodeToByteArray(sameSchemaOtherInstance, RecordA.serializer(), RecordA("hello")).fingerprint() shouldBe expectedFingerprintA
+        format.encodeWith(sameSchemaOtherInstance, RecordA.serializer(), RecordA("hello")).fingerprint() shouldBe expectedFingerprintA
     }
 }) {
     @Serializable

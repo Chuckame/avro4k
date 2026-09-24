@@ -2,11 +2,11 @@ package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
+import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.decodeFromSource
-import com.github.avrokotlin.avro4k.encodeToByteArray
-import com.github.avrokotlin.avro4k.internal.nullable
+import com.github.avrokotlin.avro4k.encodeWith
+import com.github.avrokotlin.avro4k.nullable
 import com.github.avrokotlin.avro4k.record
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.io.asSource
@@ -238,7 +238,7 @@ internal class RecordEncodingTest : StringSpec({
         )
 
         shouldThrow<SerializationException> {
-            Avro.encodeToByteArray(Avro.schema<Base>(), Incomplete(true))
+            Avro.encodeWith(Avro.apacheSchema<Base>(), Incomplete(true))
         }
     }
 }) {

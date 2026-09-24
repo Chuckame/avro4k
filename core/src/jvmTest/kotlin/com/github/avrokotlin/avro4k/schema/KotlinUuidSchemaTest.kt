@@ -5,8 +5,8 @@ package com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroFixed
-import com.github.avrokotlin.avro4k.internal.nullable
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.nullable
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
@@ -18,11 +18,11 @@ import kotlin.uuid.Uuid
 
 internal class KotlinUuidSchemaTest : FunSpec({
     test("support kotlin.uuid.Uuid schema as string") {
-        Avro.schema<Uuid>() shouldBe LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING))
+        Avro.apacheSchema<Uuid>() shouldBe LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING))
     }
 
     test("support nullable kotlin.uuid.Uuid schema as string") {
-        Avro.schema<Uuid?>() shouldBe LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING)).nullable
+        Avro.apacheSchema<Uuid?>() shouldBe LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING)).nullable
     }
 
     test("support kotlin.uuid.Uuid logical types as strings") {
@@ -42,7 +42,7 @@ internal class KotlinUuidSchemaTest : FunSpec({
 
     test("fails when @AvroFixed has bad size") {
         shouldThrow<SerializationException> {
-            Avro.schema<KotlinUuidTestFailingFixed>()
+            Avro.apacheSchema<KotlinUuidTestFailingFixed>()
         }
     }
 }) {

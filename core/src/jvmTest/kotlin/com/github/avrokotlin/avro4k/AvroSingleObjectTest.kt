@@ -15,7 +15,7 @@ internal class AvroSingleObjectTest : StringSpec({
             Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS),
             42.0
         )
-    val schema = Avro.schema(OrderEvent.serializer())
+    val schema = Avro.apacheSchema(OrderEvent.serializer())
     val schemas = mapOf(SchemaNormalization.parsingFingerprint64(schema) to schema)
     val avroSingleObject = AvroSingleObject(schemas::get)
 
