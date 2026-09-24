@@ -1,14 +1,16 @@
 package com.github.avrokotlin.avro4k.internal.schema
 
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.Schema
 
 internal class PolymorphicVisitor(
     private val context: VisitorContext,
-    private val onSchemaBuilt: (Schema) -> Unit,
+    private val onSchemaBuilt: (AvroSchema) -> Unit,
 ) : SerialDescriptorPolymorphicVisitor {
-    private val possibleSchemas = mutableListOf<Schema>()
+    private val possibleSchemas = mutableListOf<AvroSchema>()
 
     override fun visitPolymorphicFoundDescriptor(descriptor: SerialDescriptor): SerialDescriptorValueVisitor {
         return ValueVisitor(context) {
@@ -24,7 +26,14 @@ internal class PolymorphicVisitor(
             // flatten the useless union schema
             onSchemaBuilt(possibleSchemas.first())
         } else {
-            onSchemaBuilt(Schema.createUnion(possibleSchemas))
+            onSchemaBuilt(
+                UnionSchema(
+                    possibleSchemas.map {
+                        // Apache's `Schema.createUnion` rejected a nested union with this message
+                        it as? ResolvedSchema ?: throw AvroSchemaGenerationException("Nested union: ${it.toSchemaJsonStringOrName()}")
+                    }
+                )
+            )
         }
     }
 }

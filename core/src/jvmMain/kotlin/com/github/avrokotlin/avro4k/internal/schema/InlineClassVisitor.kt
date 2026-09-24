@@ -1,17 +1,28 @@
 package com.github.avrokotlin.avro4k.internal.schema
 
-import com.github.avrokotlin.avro4k.internal.copy
-import com.github.avrokotlin.avro4k.internal.isNamedSchema
-import com.github.avrokotlin.avro4k.internal.jsonNode
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
+import com.github.avrokotlin.avro4k.AvroSchema.BooleanSchema
+import com.github.avrokotlin.avro4k.AvroSchema.BytesSchema
+import com.github.avrokotlin.avro4k.AvroSchema.DoubleSchema
+import com.github.avrokotlin.avro4k.AvroSchema.FloatSchema
+import com.github.avrokotlin.avro4k.AvroSchema.IntSchema
+import com.github.avrokotlin.avro4k.AvroSchema.LongSchema
+import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
+import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
+import com.github.avrokotlin.avro4k.AvroSchema.NullSchema
+import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
+import com.github.avrokotlin.avro4k.ResolvedSchema
+import com.github.avrokotlin.avro4k.internal.jsonElement
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
 import com.github.avrokotlin.avro4k.serializer.ElementLocation
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.Schema
+import kotlinx.serialization.json.JsonElement
 
 internal class InlineClassVisitor(
     private val context: VisitorContext,
-    private val onSchemaBuilt: (Schema) -> Unit,
+    private val onSchemaBuilt: (AvroSchema) -> Unit,
 ) : SerialDescriptorInlineClassVisitor {
     override fun visitInlineClassElement(
         inlineClassDescriptor: SerialDescriptor,
@@ -31,12 +42,50 @@ internal class InlineClassVisitor(
                                 "Please create your own serializer extending ${AvroSerializer::class.qualifiedName} to add properties to a named schema."
                         )
                     }
-                    generatedSchema.copy(additionalProps = props.associate { it.key to it.jsonNode })
+                    // The last annotation wins for a prop set twice (the element's one over the class' one)
+                    generatedSchema.withAdditionalProps(props.associate { it.key to it.jsonElement })
                 } else {
                     generatedSchema
                 }
 
             onSchemaBuilt(schema)
         }
+    }
+}
+
+/**
+ * A copy of this unnamed schema with [additionalProps] added after its own props, like Apache's `Schema.copy(additionalProps = …)`
+ * did: reserved props and a different value for an existing prop are rejected ([addProp]).
+ *
+ * A union has no props in the model, nor in the json of Apache's model (its props were never written), so it is returned as is.
+ */
+private fun AvroSchema.withAdditionalProps(additionalProps: Map<String, JsonElement>): AvroSchema {
+    // A union, the only schema that is not resolved
+    val resolved = this as? ResolvedSchema ?: return this
+    val props = LinkedHashMap(resolved.props)
+    additionalProps.forEach { (key, value) -> props.addProp(key, value, SCHEMA_RESERVED_PROPS) }
+    return when (resolved) {
+        is BooleanSchema -> resolved.copy(props = props)
+
+        is IntSchema -> resolved.copy(props = props)
+
+        is LongSchema -> resolved.copy(props = props)
+
+        is FloatSchema -> resolved.copy(props = props)
+
+        is DoubleSchema -> resolved.copy(props = props)
+
+        is BytesSchema -> resolved.copy(props = props)
+
+        is StringSchema -> resolved.copy(props = props)
+
+        is NullSchema -> resolved.copy(props = props)
+
+        is ArraySchema -> resolved.copy(props = props)
+
+        is MapSchema -> resolved.copy(props = props)
+
+        // Rejected by the caller with a user-facing message
+        is NamedSchema -> throw IllegalArgumentException("A named schema cannot get additional props: ${resolved.fullName}")
     }
 }

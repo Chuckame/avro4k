@@ -1,8 +1,5 @@
 package com.github.avrokotlin.avro4k.internal
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.node.TextNode
 import com.github.avrokotlin.avro4k.AvroAlias
 import com.github.avrokotlin.avro4k.AvroProp
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
@@ -18,6 +15,9 @@ import kotlinx.serialization.descriptors.elementDescriptors
 import kotlinx.serialization.descriptors.getContextualDescriptor
 import kotlinx.serialization.descriptors.getPolymorphicDescriptors
 import kotlinx.serialization.descriptors.nonNullOriginal
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializerOrNull
 import org.apache.avro.LogicalType
@@ -35,16 +35,6 @@ internal inline fun <reified T : Annotation> SerialDescriptor.findElementAnnotat
 @OptIn(ExperimentalSerializationApi::class)
 internal val SerialDescriptor.nonNullSerialName: String get() = nonNullOriginal.serialName
 internal val SerialDescriptor.namespace: String? get() = serialName.substringBeforeLast('.', "").takeIf { it.isNotEmpty() }
-
-internal val Schema.nullable: Schema
-    get() {
-        if (isNullable) return this
-        return if (isUnion) {
-            Schema.createUnion(listOf(Schema.create(Schema.Type.NULL)) + this.types)
-        } else {
-            Schema.createUnion(Schema.create(Schema.Type.NULL), this)
-        }
-    }
 
 internal fun Schema.asSchemaList(): List<Schema> {
     if (!isUnion) return listOf(this)
@@ -203,14 +193,16 @@ internal fun String.isStartingAsJson(): Boolean {
     return c == '{' || c == '"' || c == '[' || c.isDigit() || this == "null" || this == "true" || this == "false"
 }
 
-private val objectMapper by lazy { ObjectMapper() }
-
-internal val AvroProp.jsonNode: JsonNode
+/**
+ * The value of this prop as json: parsed when it looks like json ([isStartingAsJson]), otherwise a json string, as for
+ * [com.github.avrokotlin.avro4k.AvroDefault] (but numbers are kept as written, not normalized).
+ */
+internal val AvroProp.jsonElement: JsonElement
     get() {
         if (value.isStartingAsJson()) {
-            return objectMapper.readTree(value)
+            return Json.parseToJsonElement(value)
         }
-        return TextNode.valueOf(value)
+        return JsonPrimitive(value)
     }
 
 @OptIn(UnsafeIoApi::class)

@@ -27,6 +27,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.apache.avro.JsonProperties
+import org.apache.avro.LogicalType
+import org.apache.avro.LogicalTypes
 import org.apache.avro.NameValidator
 import org.apache.avro.Schema
 import org.apache.avro.util.internal.Accessor
@@ -113,9 +115,31 @@ public fun apacheToAvro4kUncached(schema: Schema): AvroSchema = ApacheToAvro4k(c
  * created per call.
  */
 @InternalAvro4kApi
-public fun avro4kToApache(schema: AvroSchema): Schema {
+public fun avro4kToApache(schema: AvroSchema): Schema = avro4kToApache(schema, keepUnknownLogicalTypes = false)
+
+/**
+ * [avro4kToApache] for the schemas core generates (`Avro.schema()`, M3-09), cached and paired the same way, which also
+ * keeps the logical types that Apache does not know, like avro4k's own `char` or a user serializer's custom one.
+ *
+ * Apache's parser, which the json route goes through, drops a logical type it does not know (its `getLogicalType()` is
+ * null, only the `logicalType` prop is left), while the schemas core built directly with Apache's API before M3-09 had
+ * them, and core's runtime still reads them from Apache's `getLogicalType()` until M3-11. So each node whose logical type
+ * Apache does not know gets it back, exactly as the former generation set it (`LogicalType(name).addToSchema`). A known
+ * logical type that Apache rejects as invalid stays dropped, as Apache would, since the former generation could not
+ * produce one.
+ */
+internal fun avro4kToApacheKeepingUnknownLogicalTypes(schema: AvroSchema): Schema = avro4kToApache(schema, keepUnknownLogicalTypes = true)
+
+private fun avro4kToApache(
+    schema: AvroSchema,
+    keepUnknownLogicalTypes: Boolean,
+): Schema {
     apacheByAvro4k.pairedWith(schema)?.let { return it }
     val parsed = avro4kToApacheUncached(schema)
+    if (keepUnknownLogicalTypes) {
+        // before seeding, while the parsed nodes are still private to this call
+        parsed.restoreUnknownLogicalTypes(identitySet())
+    }
     val created = ArrayList<Pair<AvroSchema, Schema>>()
     pairParsedNodes(schema, parsed, identitySet(), identitySet(), created)
     return seed(schema, parsed, created, contended = apacheByAvro4k, fresh = avro4kByApache)
@@ -347,6 +371,46 @@ private fun pairParsedNodes(
 }
 
 private fun <T> identitySet(): MutableSet<T> = Collections.newSetFromMap(IdentityHashMap())
+
+/** The logical types Apache Avro 1.12 knows natively (`LogicalTypes.fromSchemaImpl`). */
+private val APACHE_BUILT_IN_LOGICAL_TYPES =
+    setOf(
+        "decimal",
+        "big-decimal",
+        "duration",
+        "uuid",
+        "date",
+        "time-millis",
+        "time-micros",
+        "timestamp-millis",
+        "timestamp-micros",
+        "timestamp-nanos",
+        "local-timestamp-millis",
+        "local-timestamp-micros",
+        "local-timestamp-nanos"
+    )
+
+/** See [avro4kToApacheKeepingUnknownLogicalTypes]. Each node is visited once: named types and recursive records are shared. */
+private fun Schema.restoreUnknownLogicalTypes(visited: MutableSet<Schema>) {
+    if (!visited.add(this)) return
+    val logicalTypeName = getProp(LogicalType.LOGICAL_TYPE_PROP)
+    if (logicalType == null && logicalTypeName != null &&
+        logicalTypeName !in APACHE_BUILT_IN_LOGICAL_TYPES && logicalTypeName !in LogicalTypes.getCustomRegisteredTypes()
+    ) {
+        try {
+            LogicalType(logicalTypeName).addToSchema(this)
+        } catch (_: IllegalArgumentException) {
+            // incompatible with another prop of the schema (e.g. `avro.java.string`): dropped, as Apache does
+        }
+    }
+    when (type) {
+        Schema.Type.RECORD -> fields.forEach { it.schema().restoreUnknownLogicalTypes(visited) }
+        Schema.Type.UNION -> types.forEach { it.restoreUnknownLogicalTypes(visited) }
+        Schema.Type.ARRAY -> elementType.restoreUnknownLogicalTypes(visited)
+        Schema.Type.MAP -> valueType.restoreUnknownLogicalTypes(visited)
+        else -> {}
+    }
+}
 
 private fun Map<String, Any?>.toJsonElementMap(): Map<String, JsonElement> {
     return mapValues { (_, value) -> toJsonElement(value) }

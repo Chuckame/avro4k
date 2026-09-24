@@ -5,6 +5,7 @@ import com.github.avrokotlin.avro4k.internal.EnumResolver
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.PolymorphicResolver
 import com.github.avrokotlin.avro4k.internal.RecordResolver
+import com.github.avrokotlin.avro4k.internal.avro4kToApacheKeepingUnknownLogicalTypes
 import com.github.avrokotlin.avro4k.internal.schema.ValueVisitor
 import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
 import com.github.avrokotlin.avro4k.serializer.JavaStdLibSerializersModule
@@ -43,7 +44,7 @@ public sealed class Avro(
      * or collection descriptors are fresh per call, so identity alone would re-infer the schema on every call (M3-06).
      * `internal` for tests.
      */
-    internal val schemaCache = IdentityFirstCache<SerialDescriptor, Schema>()
+    internal val schemaCache = IdentityFirstCache<SerialDescriptor, GeneratedSchema>()
 
     internal val recordResolver = RecordResolver(this)
     internal val polymorphicResolver = PolymorphicResolver(serializersModule) { schema(it).fullName }
@@ -99,10 +100,23 @@ public sealed class Avro(
      * @see com.github.avrokotlin.avro4k.serializer.AvroSerializer
      */
     public fun schema(descriptor: SerialDescriptor): Schema {
+        return generatedSchema(descriptor).apacheSchema
+    }
+
+    /**
+     * The schema inferred for [descriptor], as avro4k's own [AvroSchema]: the one [schema] returns is its Apache form.
+     * Same cache, same cost: one lookup.
+     */
+    internal fun avroSchema(descriptor: SerialDescriptor): AvroSchema {
+        return generatedSchema(descriptor).avroSchema
+    }
+
+    /** Both forms of the schema inferred for [descriptor], in a single cache entry so that [schema] stays one lookup. */
+    private fun generatedSchema(descriptor: SerialDescriptor): GeneratedSchema {
         return schemaCache.getOrPut(descriptor) {
-            lateinit var output: Schema
+            lateinit var output: AvroSchema
             ValueVisitor(this) { output = it }.visitValue(descriptor)
-            output
+            GeneratedSchema(output)
         }
     }
 
@@ -298,6 +312,18 @@ public class AvroBuilder internal constructor(avro: Avro) {
 
 private class AvroImpl(configuration: AvroConfiguration, serializersModule: SerializersModule) :
     Avro(configuration, serializersModule)
+
+/**
+ * A schema inferred by [Avro.schema], in both forms: the schema generation builds [avroSchema] (M3-09), and [apacheSchema]
+ * is its Apache form, which the public API and the runtime still use until M3-11/M3-12.
+ *
+ * [apacheSchema] is computed once, eagerly, with the identity-cached conversion: every node of both trees is paired with
+ * its counterpart (`avro4kToApache`), so the identity of the Apache schema is stable per cache entry, as it was when the
+ * generation built it directly. Immutable once constructed, so an instance can be shared by all threads.
+ */
+internal class GeneratedSchema(val avroSchema: AvroSchema) {
+    val apacheSchema: Schema = avro4kToApacheKeepingUnknownLogicalTypes(avroSchema)
+}
 
 /**
  * Infers the Avro schema for the given type [T].

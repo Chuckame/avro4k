@@ -1,11 +1,14 @@
 package com.github.avrokotlin.avro4k.internal.schema
 
-import com.github.avrokotlin.avro4k.AvroDefault
-import com.github.avrokotlin.avro4k.internal.asSchemaList
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
+import com.github.avrokotlin.avro4k.AvroSchema.Type
+import com.github.avrokotlin.avro4k.LockableList
+import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.internal.isValidDefaultFor
-import com.github.avrokotlin.avro4k.internal.jsonNode
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.toFieldDefault
+import com.github.avrokotlin.avro4k.isNullable
 import com.github.avrokotlin.avro4k.serializer.ElementLocation
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -13,53 +16,49 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.booleanOrNull
-import org.apache.avro.JsonProperties
-import org.apache.avro.Schema
+import org.apache.avro.AvroTypeException
 
 internal class ClassVisitor(
     descriptor: SerialDescriptor,
     private val context: VisitorContext,
-    private val onSchemaBuilt: (Schema) -> Unit,
+    private val onSchemaBuilt: (AvroSchema) -> Unit,
 ) : SerialDescriptorClassVisitor {
-    private val fields = mutableListOf<Schema.Field>()
-    private val schemaAlreadyResolved: Boolean
-    private val schema: Schema
+    /**
+     * The fields of the record being built, or null when the record was already resolved by an enclosing visit (a
+     * recursive record, or a record used twice): it is registered in [VisitorContext.resolvedSchemas] *before* its fields
+     * are visited, so that they can reference it, and its fields are locked in [endClassVisit] once all of them are added.
+     */
+    private val fields: LockableList<RecordSchema.Field>?
+    private val schema: RecordSchema
 
     init {
-        var schemaAlreadyResolved = true
-        schema =
+        var fields: LockableList<RecordSchema.Field>? = null
+        val resolved =
             context.resolvedSchemas.getOrPut(descriptor.nonNullSerialName) {
-                schemaAlreadyResolved = false
-
                 val annotations = TypeAnnotations(descriptor)
-                val schema =
-                    Schema.createRecord(
-                        // name =
-                        descriptor.nonNullSerialName,
-                        // doc =
-                        annotations.doc?.value,
-                        // namespace =
-                        null,
-                        // isError =
-                        false
-                    )
-                annotations.aliases?.value?.forEach { schema.addAlias(it) }
-                annotations.props.forEach { schema.addProp(it.key, it.jsonNode) }
-                schema
+                val name = namedSchemaName(descriptor.nonNullSerialName)
+                val newFields = LockableList<RecordSchema.Field>()
+                fields = newFields
+                RecordSchema(
+                    name = name,
+                    fields = newFields,
+                    doc = annotations.doc?.value,
+                    aliases = annotations.aliases.toSchemaAliases(name),
+                    props = annotations.props.toSchemaProps(SCHEMA_RESERVED_PROPS)
+                )
             }
-        this.schemaAlreadyResolved = schemaAlreadyResolved
+        schema = resolved as? RecordSchema
+            ?: throw AvroSchemaGenerationException(
+                "The record '${descriptor.nonNullSerialName}' has the same full name as another named schema: ${resolved.toSchemaJsonStringOrName()}"
+            )
+        this.fields = fields
     }
 
     override fun visitClassElement(
         descriptor: SerialDescriptor,
         elementIndex: Int,
     ): SerialDescriptorValueVisitor? {
-        if (schemaAlreadyResolved) {
-            return null
-        }
+        val fields = fields ?: return null
         return ValueVisitor(context.copy(inlinedElements = listOf(ElementLocation(descriptor, elementIndex)))) { fieldSchema ->
             fields.add(
                 createField(
@@ -72,9 +71,8 @@ internal class ClassVisitor(
     }
 
     override fun endClassVisit(descriptor: SerialDescriptor) {
-        if (!schemaAlreadyResolved) {
-            schema.fields = fields
-        }
+        // Locked before anything reads the fields: a record's fields cannot be read, nor looked up by name, before
+        fields?.lock()
         onSchemaBuilt(schema)
     }
 
@@ -90,37 +88,40 @@ internal class ClassVisitor(
     private fun createField(
         fieldName: String,
         annotations: FieldAnnotations,
-        elementSchema: Schema,
-    ): Schema.Field {
+        elementSchema: AvroSchema,
+    ): RecordSchema.Field {
+        validateAvroName(fieldName)
         val (finalSchema, fieldDefault) = getDefaultAndReorderUnionIfNeeded(annotations, elementSchema)
+        if (fieldDefault != null && !fieldDefault.isValidDefaultFor(finalSchema)) {
+            // Apache's `Schema.Field` constructor validated the default, with this exception and message
+            throw AvroTypeException("Invalid default for field $fieldName: $fieldDefault not a ${finalSchema.toSchemaJsonStringOrName()}")
+        }
 
-        val field =
-            Schema.Field(
-                fieldName,
-                finalSchema,
-                annotations.doc?.value,
-                fieldDefault
-            )
-        annotations.aliases?.value?.forEach { field.addAlias(it) }
-        annotations.props.forEach { field.addProp(it.key, it.jsonNode) }
-        return field
+        return RecordSchema.Field(
+            name = fieldName,
+            schema = finalSchema,
+            defaultValue = fieldDefault,
+            doc = annotations.doc?.value,
+            aliases = annotations.aliases?.value?.toCollection(LinkedHashSet()) ?: emptySet(),
+            props = annotations.props.toSchemaProps(FIELD_RESERVED_PROPS)
+        )
     }
 
     private fun getDefaultAndReorderUnionIfNeeded(
         annotations: FieldAnnotations,
-        elementSchema: Schema,
-    ): Pair<Schema, Any?> {
+        elementSchema: AvroSchema,
+    ): Pair<AvroSchema, JsonElement?> {
         val defaultAnnotation = annotations.default
         if (defaultAnnotation == null) {
             if (context.configuration.implicitNulls && elementSchema.isNullable) {
-                return elementSchema.moveToHeadOfUnion { it.type == Schema.Type.NULL } to JsonProperties.NULL_VALUE
+                return elementSchema.moveToHeadOfUnion { it.type === Type.NULL } to JsonNull
             } else if (context.configuration.implicitEmptyCollections) {
                 elementSchema.asSchemaList().forEachIndexed { index, schema ->
-                    if (schema.type == Schema.Type.ARRAY) {
-                        return elementSchema.moveToHeadOfUnion(index) to emptyList<Any>()
+                    if (schema.type === Type.ARRAY) {
+                        return elementSchema.moveToHeadOfUnion(index) to JsonArray(emptyList())
                     }
-                    if (schema.type == Schema.Type.MAP) {
-                        return elementSchema.moveToHeadOfUnion(index) to emptyMap<Any, Any>()
+                    if (schema.type === Type.MAP) {
+                        return elementSchema.moveToHeadOfUnion(index) to JsonObject(emptyMap())
                     }
                 }
             }
@@ -135,82 +136,29 @@ internal class ClassVisitor(
         }
         val orderedSchema =
             when {
-                defaultValue is JsonNull -> elementSchema.moveToHeadOfUnion { it.type == Schema.Type.NULL }
+                defaultValue is JsonNull -> elementSchema.moveToHeadOfUnion { it.type === Type.NULL }
 
-                elementSchema.asSchemaList().any { it.logicalType?.name == CHAR_LOGICAL_TYPE_NAME } ->
-                    elementSchema.moveToHeadOfUnion { it.logicalType?.name == CHAR_LOGICAL_TYPE_NAME }
+                elementSchema.asSchemaList().any { it.logicalTypeName == CHAR_LOGICAL_TYPE_NAME } ->
+                    elementSchema.moveToHeadOfUnion { it.logicalTypeName == CHAR_LOGICAL_TYPE_NAME }
 
                 // default is not null, so let's just put the null schema at the end of the union which should cover the main use cases
-                elementSchema.isNullable -> elementSchema.moveToTailOfUnion { it.type === Schema.Type.NULL }
+                elementSchema.isNullable -> elementSchema.moveToTailOfUnion { it.type === Type.NULL }
 
                 else -> elementSchema
             }
         // The specification reads a union's default from its first branch that matches, but most implementations only ever
         // read it from the first branch: so that branch goes first (e.g. the second subclass of a sealed type).
-        return orderedSchema.moveToHeadOfUnion { defaultValue.isValidDefaultFor(it) } to defaultValue.toAvroObject()
+        return orderedSchema.moveToHeadOfUnion { defaultValue.isValidDefaultFor(it) } to defaultValue
     }
 }
 
-private fun JsonElement.toAvroObject(): Any =
-    when (this) {
-        is JsonNull -> JsonProperties.NULL_VALUE
-
-        is JsonObject -> this.entries.associate { it.key to it.value.toAvroObject() }
-
-        is JsonArray -> this.map { it.toAvroObject() }
-
-        is JsonPrimitive ->
-            when {
-                this.isString -> this.content
-
-                this.booleanOrNull != null -> this.boolean
-
-                else -> {
-                    this.content.toBigDecimal().stripTrailingZeros().let {
-                        if (it.scale() <= 0) {
-                            it.toBigInteger()
-                        } else {
-                            it
-                        }
-                    }
-                }
-            }
+/**
+ * The schema as json for a message, or its name when it cannot be rendered: a recursive record still being built (its
+ * fields are not locked yet) cannot be read.
+ */
+internal fun AvroSchema.toSchemaJsonStringOrName(): String =
+    try {
+        toSchemaJsonString()
+    } catch (_: IllegalStateException) {
+        fullNameForMessages
     }
-
-private fun Schema.moveToHeadOfUnion(predicate: (Schema) -> Boolean): Schema {
-    if (!isUnion) {
-        return this
-    }
-    types.indexOfFirst(predicate).let { index ->
-        if (index <= 0) {
-            return this
-        }
-        return moveToHeadOfUnion(index)
-    }
-}
-
-private fun Schema.moveToHeadOfUnion(typeIndex: Int): Schema {
-    if (!isUnion || typeIndex >= types.size) {
-        return this
-    }
-    return Schema.createUnion(types.toMutableList().apply { add(0, removeAt(typeIndex)) })
-}
-
-private fun Schema.moveToTailOfUnion(predicate: (Schema) -> Boolean): Schema {
-    if (!isUnion) {
-        return this
-    }
-    types.indexOfFirst(predicate).let { index ->
-        if (index == -1) {
-            return this
-        }
-        return moveToTailOfUnion(index)
-    }
-}
-
-private fun Schema.moveToTailOfUnion(typeIndex: Int): Schema {
-    if (!isUnion || typeIndex >= types.size) {
-        return this
-    }
-    return Schema.createUnion(types.toMutableList().apply { add(removeAt(typeIndex)) })
-}

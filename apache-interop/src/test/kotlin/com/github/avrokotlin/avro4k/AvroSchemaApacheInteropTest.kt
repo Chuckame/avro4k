@@ -83,8 +83,8 @@ class AvroSchemaApacheInteropTest : FunSpec({
             test(serializer.descriptor.serialName) {
                 val apacheSchema = Avro.schema(serializer)
                 val avro4k = apacheSchema.convertUncached()
-                // Same json, but compared with a parsed schema: Apache compares defaults by json node type, and core builds some
-                // defaults with a different node type than the parser (see "core's int defaults are big integer json nodes")
+                // Same json, and compared with a parsed schema too: Apache compares defaults by json node type (see "core's int
+                // defaults are int json nodes, as Apache's parser builds them")
                 avro4k.convertUncached().toString() shouldBe apacheSchema.toString()
                 avro4k.convertUncached() shouldBe Schema.Parser().parse(apacheSchema.toString())
                 avro4k.convertUncached().convertUncached() shouldBe avro4k
@@ -93,11 +93,13 @@ class AvroSchemaApacheInteropTest : FunSpec({
         }
     }
 
-    test("core's int defaults are big integer json nodes") {
-        // Why the generated schemas are compared to their parsed json: Apache's field equality compares the default json nodes, including their type
+    test("core's int defaults are int json nodes, as Apache's parser builds them") {
+        // Apache's field equality compares the default json nodes, including their type. Core built its int defaults as big
+        // integer nodes until M3-09; since then, Avro.schema() is the Apache form of an AvroSchema, parsed from its json.
         val field = Avro.schema(Everything.serializer()).getField("withDefault")
-        Accessor.defaultValue(field).isBigInteger shouldBe true
-        field.defaultVal() shouldBe null
+        Accessor.defaultValue(field).isInt shouldBe true
+        field.defaultVal() shouldBe 42
+        Avro.schema(Everything.serializer()) shouldBe Schema.Parser().parse(Avro.schema(Everything.serializer()).toString())
         (Avro.schema(Everything.serializer()).toAvro4k() as AvroSchema.RecordSchema).getFieldByName("withDefault").defaultValue shouldBe JsonPrimitive(42)
     }
 

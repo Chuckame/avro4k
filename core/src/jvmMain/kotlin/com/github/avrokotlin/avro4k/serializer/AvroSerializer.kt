@@ -5,8 +5,10 @@ import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroStringable
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4kUncached
 import com.github.avrokotlin.avro4k.internal.findElementAnnotation
 import com.github.avrokotlin.avro4k.internal.namespace
 import kotlinx.serialization.InternalSerializationApi
@@ -164,6 +166,16 @@ public data class ElementLocation
 internal fun interface AvroSchemaSupplier {
     fun getSchema(context: SchemaSupplierContext): Schema
 }
+
+/**
+ * The schema of this supplier as avro4k's [AvroSchema], for the schema generation, which builds [AvroSchema]s since M3-09
+ * while the public [AvroSchemaSupplier.getSchema] still returns Apache's `Schema` until M3-12.
+ *
+ * Converted with the **uncached** converter: `getSchema` may create a new schema on each call (most built-in serializers
+ * do), and a key created per call must not go in the identity caches (`WeakIdentityKeyCache`'s KDoc). It runs once per
+ * generated schema, a cold path: `Avro.schema()` caches the result per descriptor.
+ */
+internal fun AvroSchemaSupplier.getAvroSchema(context: SchemaSupplierContext): AvroSchema = apacheToAvro4kUncached(getSchema(context))
 
 @OptIn(SealedSerializationApi::class)
 internal class SerialDescriptorWithAvroSchemaDelegate(
