@@ -441,6 +441,30 @@ invocations:
   done. It does not appear at 15 or 200 clients. Per M1, EA-off describes the product on JS/native; **re-check this row in
   the M3-11+12 A/B and the M3-17 re-baseline**, and investigate with JIT logs if it persists.
 
+### M3-06: common caches, identity-first (`f9defb4` before, `213b585` after)
+
+2026-09-24. **EA-off is the primary metric here** (the change removes a per-hit allocation that escape analysis can hide):
+three interleaved EA-off invocations per side, plus one EA-on invocation per side. Each invocation 3 forks × 5 iterations.
+"sep" = every "after" EA-off invocation above (or below) every "before" one.
+
+| | B/op EA-off, before → after | ops/s EA-off, before → after | sep | EA-on ops/s (1 invocation) |
+|---|---|---|---|---|
+| `SchemaInference.warmCacheHit` | 48 → **≈0** | 139.7M → **304.9M (+118%)** | Y | 276.2M → 307.2M (+11%) |
+| `Polymorphic.readPolymorphic` @1000 | 228,352 → **180,352 (−21%)** | 15,230 → 15,878 (+4.3%) | Y | 15,335 → 13,878 (−9.5%) |
+| `Polymorphic.readConcrete` / `writeConcrete` / `writePolymorphic` @1000 | unchanged | +5.5% / +1.7% / −0.1% | n | +4.1% / −3.4% / −8.8% |
+| `NestedRecord.read` / `write` @depth 8 | unchanged | +0.6% / 0.0% | n | −5.4% / −1.9% |
+| `SchemaInference.coldInference` | 14,512 → 14,832 (+320 B) | −2.2% | Y | −3.2% |
+| `SchemaInference.newAvroInstance` | 2,808 → 3,048 (+240 B) | −0.6% | n | −3.5% |
+
+- **The target is hit:** the `Key.Lookup` wrapper that escaped into `ConcurrentHashMap.get` on every cache hit is gone —
+  `warmCacheHit` allocates nothing and runs 2.2× faster EA-off, and `readPolymorphic` sheds exactly **48 B per polymorphic
+  value** (two 24-byte lookups: `Avro.schemaCache` and `PolymorphicResolver`).
+- **Accepted costs:** a new `Avro` instance allocates +240 B (the extra identity layers) and cold inference +320 B; both are
+  one-off per instance / per descriptor, recorded and not gated.
+- **EA-on rows are a single invocation**, so their −3…−9.5% deltas are inside the ~10% cross-invocation band (M1) and not
+  conclusive. Together with M3-02's `complex` read @1 they form the **JVM watch list** for the M3-11+12 A/B and M3-17: if the
+  EA-on polymorphic rows stay below baseline across ≥3 invocations there, investigate with a per-fork breakdown and JIT logs.
+
 ## Run the benchmark locally
 
 Just execute the benchmark:
