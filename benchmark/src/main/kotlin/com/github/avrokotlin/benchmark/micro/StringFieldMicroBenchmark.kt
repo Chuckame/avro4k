@@ -2,9 +2,10 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.encodeToSink
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.benchmark.internal.CoreSchema
+import com.github.avrokotlin.benchmark.internal.coreSchema
+import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.BenchmarkMode
 import kotlinx.benchmark.Measurement
@@ -17,7 +18,6 @@ import kotlinx.io.Sink
 import kotlinx.io.asSink
 import kotlinx.io.buffered
 import kotlinx.serialization.ExperimentalSerializationApi
-import org.apache.avro.Schema
 import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
@@ -42,11 +42,11 @@ import java.util.concurrent.TimeUnit
 @Measurement(iterations = MICRO_MEASUREMENT_ITERATIONS, time = 1, timeUnit = TimeUnit.SECONDS)
 internal class StringFieldMicroBenchmark {
     lateinit var nonNull: StringStorm
-    lateinit var nonNullSchema: Schema
+    lateinit var nonNullSchema: CoreSchema
     lateinit var nonNullData: ByteArray
 
     lateinit var nullable: NullableStringStorm
-    lateinit var nullableSchema: Schema
+    lateinit var nullableSchema: CoreSchema
     lateinit var nullableData: ByteArray
 
     /** Allocated once so that the write methods only measure the encoding, not the sink construction. */
@@ -54,12 +54,12 @@ internal class StringFieldMicroBenchmark {
 
     @Setup
     fun setup() {
-        nonNullSchema = Avro.schema<StringStorm>()
-        nullableSchema = Avro.schema<NullableStringStorm>()
+        nonNullSchema = Avro.coreSchema<StringStorm>()
+        nullableSchema = Avro.coreSchema<NullableStringStorm>()
         nonNull = stringStorm()
         nullable = nullableStringStorm()
-        nonNullData = Avro.encodeToByteArray(nonNullSchema, nonNull)
-        nullableData = Avro.encodeToByteArray(nullableSchema, nullable)
+        nonNullData = Avro.encodeWith(nonNullSchema, nonNull)
+        nullableData = Avro.encodeWith(nullableSchema, nullable)
         sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 

@@ -2,6 +2,9 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.encodeToSink
+import com.github.avrokotlin.benchmark.internal.CoreSchema
+import com.github.avrokotlin.benchmark.internal.coreSchema
+import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.BenchmarkMode
 import kotlinx.benchmark.Measurement
@@ -16,7 +19,6 @@ import kotlinx.io.asSink
 import kotlinx.io.buffered
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
-import org.apache.avro.Schema
 import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
@@ -43,7 +45,7 @@ internal class NestedRecordMicroBenchmark {
      * site stays monomorphic within a fork.
      */
     lateinit var serializer: KSerializer<Any>
-    lateinit var schema: Schema
+    lateinit var schema: CoreSchema
     lateinit var value: Any
     lateinit var data: ByteArray
 
@@ -61,8 +63,8 @@ internal class NestedRecordMicroBenchmark {
         }
         this.serializer = serializer as KSerializer<Any>
         this.value = value
-        schema = Avro.schema(this.serializer.descriptor)
-        data = Avro.encodeToByteArray(schema, this.serializer, this.value)
+        schema = Avro.coreSchema(this.serializer.descriptor)
+        data = Avro.encodeWith(schema, this.serializer, this.value)
         sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 

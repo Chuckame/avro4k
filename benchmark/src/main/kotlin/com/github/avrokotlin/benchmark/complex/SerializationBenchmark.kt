@@ -1,11 +1,12 @@
 package com.github.avrokotlin.benchmark.complex
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.benchmark.internal.Clients
 import com.github.avrokotlin.benchmark.internal.ClientsGenerator
+import com.github.avrokotlin.benchmark.internal.CoreSchema
 import com.github.avrokotlin.benchmark.internal.RandomUtils
 import com.github.avrokotlin.benchmark.internal.WorkloadEquivalence
+import com.github.avrokotlin.benchmark.internal.coreSchema
 import kotlinx.benchmark.*
 import java.util.concurrent.TimeUnit
 
@@ -24,7 +25,7 @@ internal abstract class SerializationBenchmark {
     final var clientCount: Int = 15
 
     lateinit var clients: Clients
-    val schema = Avro.schema<Clients>()
+    val schema: CoreSchema = Avro.coreSchema<Clients>()
 
     @Setup
     fun initTestData() {

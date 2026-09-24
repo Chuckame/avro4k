@@ -2,9 +2,9 @@ package com.github.avrokotlin.benchmark.lists
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.encodeToSink
 import com.github.avrokotlin.benchmark.internal.ListWrapperDatasClass
+import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import kotlinx.io.Sink
 import kotlinx.io.asSink
@@ -26,7 +26,7 @@ internal class Avro4kListsBenchmark : SerializationListsBenchmark() {
     }
 
     override fun prepareBinaryData() {
-        data = Avro.encodeToByteArray(schema, lists)
+        data = Avro.encodeWith(schema, lists)
     }
 
     @Benchmark

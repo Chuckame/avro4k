@@ -3,7 +3,6 @@ package com.github.avrokotlin.avro4k.kafka.confluent
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.aliases
-import com.github.avrokotlin.avro4k.internal.decodeWithApacheDecoder
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig
 import kotlinx.serialization.DeserializationStrategy
@@ -124,7 +123,7 @@ public class SpecificAvro4kKafkaSerializer<T : Any>(
     }
 
     @OptIn(ExperimentalSerializationApi::class)
-    private val schema = avro.schema(serializer.descriptor.nonNullOriginal)
+    private val schema = avro.apacheSchema(serializer.descriptor.nonNullOriginal)
 
     override fun getSchema(value: T): Schema = schema
 }
@@ -211,7 +210,7 @@ public class SpecificAvro4kKafkaDeserializer<T : Any>(
     private fun setDeserializer(deserializer: DeserializationStrategy<T>) {
         this.deserializer = deserializer
         @OptIn(ExperimentalSerializationApi::class)
-        schema = avro.schema(deserializer.descriptor.nonNullOriginal)
+        schema = avro.apacheSchema(deserializer.descriptor.nonNullOriginal)
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -260,7 +259,7 @@ public class SpecificAvro4kKafkaDeserializer<T : Any>(
     }
 
     private fun wrapRootString(rootString: String, writerSchema: Schema): T {
-        return avro.decodeWithApacheDecoder(
+        return avro.decodeWithApache(
             writerSchema,
             deserializer,
             object : NoImplementedDecoder() {
@@ -272,7 +271,7 @@ public class SpecificAvro4kKafkaDeserializer<T : Any>(
     }
 
     private fun wrapRootByteArray(rootBytes: ByteArray, writerSchema: Schema): T {
-        return avro.decodeWithApacheDecoder(
+        return avro.decodeWithApache(
             writerSchema,
             deserializer,
             object : NoImplementedDecoder() {

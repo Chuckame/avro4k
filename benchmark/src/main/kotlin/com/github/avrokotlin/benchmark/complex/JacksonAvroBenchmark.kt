@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.ObjectReader
 import com.fasterxml.jackson.databind.ObjectWriter
 import com.fasterxml.jackson.dataformat.avro.AvroSchema
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.encodeToByteArray
+import com.github.avrokotlin.benchmark.internal.asApacheSchema
+import com.github.avrokotlin.benchmark.internal.encodeWith
 import com.github.avrokotlin.benchmark.internal.jackson.JacksonAvro
 import com.github.avrokotlin.benchmark.internal.jackson.toJackson
 import kotlinx.benchmark.Benchmark
@@ -33,13 +34,13 @@ internal class JacksonAvroBenchmark : SerializationBenchmark() {
     override fun setup() {
         val mapper = JacksonAvro.mapper()
         model = clients.toJackson()
-        writer = mapper.writer(AvroSchema(schema)).forType(JacksonClients::class.java)
-        reader = mapper.reader(AvroSchema(schema)).forType(JacksonClients::class.java)
+        writer = mapper.writer(AvroSchema(schema.asApacheSchema())).forType(JacksonClients::class.java)
+        reader = mapper.reader(AvroSchema(schema.asApacheSchema())).forType(JacksonClients::class.java)
         out = OutputStream.nullOutputStream()
     }
 
     override fun prepareBinaryData() {
-        data = Avro.encodeToByteArray(schema, clients)
+        data = Avro.encodeWith(schema, clients)
     }
 
     @Benchmark

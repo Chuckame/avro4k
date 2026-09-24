@@ -2,9 +2,6 @@ package com.github.avrokotlin.benchmark.internal
 
 import com.fasterxml.jackson.dataformat.avro.AvroSchema
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToByteArray
-import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.benchmark.internal.apache.ApacheAvro
 import com.github.avrokotlin.benchmark.internal.apache.toApache
 import com.github.avrokotlin.benchmark.internal.jackson.JacksonAvro
@@ -38,8 +35,9 @@ import com.github.avrokotlin.benchmark.internal.specific.SimpleDatasClass as Spe
  */
 internal object WorkloadEquivalence {
     fun verifyComplex(clients: Clients) {
-        val canonicalSchema = Avro.schema<Clients>()
-        val canonicalBytes = Avro.encodeToByteArray(canonicalSchema, clients)
+        val coreSchema = Avro.coreSchema<Clients>()
+        val canonicalSchema = coreSchema.asApacheSchema()
+        val canonicalBytes = Avro.encodeWith(coreSchema, clients)
         EquivalenceGate.verify(
             workload = "complex",
             canonicalSchema = canonicalSchema,
@@ -48,9 +46,9 @@ internal object WorkloadEquivalence {
                 ComparedLibrary(
                     label = "avro4k",
                     schema = canonicalSchema,
-                    encode = { Avro.encodeToByteArray(canonicalSchema, clients) },
+                    encode = { Avro.encodeWith(coreSchema, clients) },
                     decodeAndReEncode = {
-                        Avro.encodeToByteArray(canonicalSchema, Avro.decodeFromByteArray<Clients>(canonicalSchema, it))
+                        Avro.encodeWith(coreSchema, Avro.decodeWith<Clients>(coreSchema, it))
                     },
                 ),
                 apacheLibrary(ApacheClients::class.java, clients.toApache()),
@@ -69,8 +67,9 @@ internal object WorkloadEquivalence {
     }
 
     fun verifySimple(data: SimpleDatasClass) {
-        val canonicalSchema = Avro.schema<SimpleDatasClass>()
-        val canonicalBytes = Avro.encodeToByteArray(canonicalSchema, data)
+        val coreSchema = Avro.coreSchema<SimpleDatasClass>()
+        val canonicalSchema = coreSchema.asApacheSchema()
+        val canonicalBytes = Avro.encodeWith(coreSchema, data)
         EquivalenceGate.verify(
             workload = "simple",
             canonicalSchema = canonicalSchema,
@@ -79,11 +78,11 @@ internal object WorkloadEquivalence {
                 ComparedLibrary(
                     label = "avro4k",
                     schema = canonicalSchema,
-                    encode = { Avro.encodeToByteArray(canonicalSchema, data) },
+                    encode = { Avro.encodeWith(coreSchema, data) },
                     decodeAndReEncode = {
-                        Avro.encodeToByteArray(
-                            canonicalSchema,
-                            Avro.decodeFromByteArray<SimpleDatasClass>(canonicalSchema, it),
+                        Avro.encodeWith(
+                            coreSchema,
+                            Avro.decodeWith<SimpleDatasClass>(coreSchema, it),
                         )
                     },
                 ),
@@ -97,8 +96,9 @@ internal object WorkloadEquivalence {
     }
 
     fun verifyLists(data: ListWrapperDatasClass) {
-        val canonicalSchema = Avro.schema<ListWrapperDatasClass>()
-        val canonicalBytes = Avro.encodeToByteArray(canonicalSchema, data)
+        val coreSchema = Avro.coreSchema<ListWrapperDatasClass>()
+        val canonicalSchema = coreSchema.asApacheSchema()
+        val canonicalBytes = Avro.encodeWith(coreSchema, data)
         EquivalenceGate.verify(
             workload = "lists",
             canonicalSchema = canonicalSchema,
@@ -107,11 +107,11 @@ internal object WorkloadEquivalence {
                 ComparedLibrary(
                     label = "avro4k",
                     schema = canonicalSchema,
-                    encode = { Avro.encodeToByteArray(canonicalSchema, data) },
+                    encode = { Avro.encodeWith(coreSchema, data) },
                     decodeAndReEncode = {
-                        Avro.encodeToByteArray(
-                            canonicalSchema,
-                            Avro.decodeFromByteArray<ListWrapperDatasClass>(canonicalSchema, it),
+                        Avro.encodeWith(
+                            coreSchema,
+                            Avro.decodeWith<ListWrapperDatasClass>(coreSchema, it),
                         )
                     },
                 ),

@@ -1,8 +1,9 @@
 package com.github.avrokotlin.benchmark.lists
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.benchmark.internal.apache.ApacheAvro
+import com.github.avrokotlin.benchmark.internal.asApacheSchema
+import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.Param
 import org.apache.avro.generic.GenericRecord
@@ -24,11 +25,11 @@ internal class ApacheAvroGenericFastReaderListsBenchmark : SerializationListsBen
     lateinit var data: ByteArray
 
     override fun setup() {
-        reader = ApacheAvro.genericDatumReader(schema, fastReader)
+        reader = ApacheAvro.genericDatumReader(schema.asApacheSchema(), fastReader)
     }
 
     override fun prepareBinaryData() {
-        data = Avro.encodeToByteArray(schema, lists)
+        data = Avro.encodeWith(schema, lists)
         ApacheAvro.assertFastReaderInEffect(reader, data, fastReader)
     }
 

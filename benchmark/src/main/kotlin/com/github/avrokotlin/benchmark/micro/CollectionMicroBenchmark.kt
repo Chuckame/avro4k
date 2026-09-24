@@ -2,9 +2,10 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.encodeToSink
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.benchmark.internal.CoreSchema
+import com.github.avrokotlin.benchmark.internal.coreSchema
+import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.BenchmarkMode
 import kotlinx.benchmark.Measurement
@@ -18,7 +19,6 @@ import kotlinx.io.Sink
 import kotlinx.io.asSink
 import kotlinx.io.buffered
 import kotlinx.serialization.ExperimentalSerializationApi
-import org.apache.avro.Schema
 import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
@@ -45,15 +45,15 @@ internal class CollectionMicroBenchmark {
     final var size: Int = 10
 
     lateinit var longs: LongList
-    lateinit var longsSchema: Schema
+    lateinit var longsSchema: CoreSchema
     lateinit var longsData: ByteArray
 
     lateinit var records: SmallRecordList
-    lateinit var recordsSchema: Schema
+    lateinit var recordsSchema: CoreSchema
     lateinit var recordsData: ByteArray
 
     lateinit var twoCollections: TwoCollectionsRecordList
-    lateinit var twoCollectionsSchema: Schema
+    lateinit var twoCollectionsSchema: CoreSchema
     lateinit var twoCollectionsData: ByteArray
 
     /** Allocated once so that the write methods only measure the encoding, not the sink construction. */
@@ -61,15 +61,15 @@ internal class CollectionMicroBenchmark {
 
     @Setup
     fun setup() {
-        longsSchema = Avro.schema<LongList>()
-        recordsSchema = Avro.schema<SmallRecordList>()
+        longsSchema = Avro.coreSchema<LongList>()
+        recordsSchema = Avro.coreSchema<SmallRecordList>()
         longs = longList(size)
         records = smallRecordList(size)
-        longsData = Avro.encodeToByteArray(longsSchema, longs)
-        recordsData = Avro.encodeToByteArray(recordsSchema, records)
-        twoCollectionsSchema = Avro.schema<TwoCollectionsRecordList>()
+        longsData = Avro.encodeWith(longsSchema, longs)
+        recordsData = Avro.encodeWith(recordsSchema, records)
+        twoCollectionsSchema = Avro.coreSchema<TwoCollectionsRecordList>()
         twoCollections = twoCollectionsRecordList(size)
-        twoCollectionsData = Avro.encodeToByteArray(twoCollectionsSchema, twoCollections)
+        twoCollectionsData = Avro.encodeWith(twoCollectionsSchema, twoCollections)
         sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 

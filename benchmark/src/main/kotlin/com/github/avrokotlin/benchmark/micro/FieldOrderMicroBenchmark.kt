@@ -2,7 +2,11 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.encodeToSink
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.benchmark.internal.CoreSchema
+import com.github.avrokotlin.benchmark.internal.apacheSchema
+import com.github.avrokotlin.benchmark.internal.coreSchema
+import com.github.avrokotlin.benchmark.internal.encodeWith
+import com.github.avrokotlin.benchmark.internal.toCoreSchema
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.BenchmarkMode
 import kotlinx.benchmark.Measurement
@@ -48,7 +52,7 @@ internal class FieldOrderMicroBenchmark {
     lateinit var value: FieldOrderRecord
 
     /** The writer schema, whose field order may differ from the descriptor's element order. */
-    lateinit var writerSchema: Schema
+    lateinit var writerSchema: CoreSchema
     lateinit var data: ByteArray
 
     /** Allocated once so that [write] only measures the encoding, not the sink construction. */
@@ -56,16 +60,17 @@ internal class FieldOrderMicroBenchmark {
 
     @Setup
     fun setup() {
-        val inferred = Avro.schema<FieldOrderRecord>()
+        val inferred = Avro.apacheSchema<FieldOrderRecord>()
         val lastIndex = inferred.fields.size - 1
         writerSchema = when (fieldOrder) {
-            "matching" -> inferred
-            "swapped" -> inferred.withFieldOrder((0 until lastIndex - 1) + lastIndex + (lastIndex - 1))
-            "reversed" -> inferred.withFieldOrder(inferred.fields.indices.reversed())
+            // The control keeps core's own inferred (and cached) schema instance, exactly as before.
+            "matching" -> Avro.coreSchema<FieldOrderRecord>()
+            "swapped" -> inferred.withFieldOrder((0 until lastIndex - 1) + lastIndex + (lastIndex - 1)).toCoreSchema()
+            "reversed" -> inferred.withFieldOrder(inferred.fields.indices.reversed()).toCoreSchema()
             else -> throw IllegalArgumentException("Unsupported field order: $fieldOrder")
         }
         value = fieldOrderRecord()
-        data = Avro.encodeToByteArray(writerSchema, FieldOrderRecord.serializer(), value)
+        data = Avro.encodeWith(writerSchema, FieldOrderRecord.serializer(), value)
         sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 
@@ -83,8 +88,9 @@ internal class FieldOrderMicroBenchmark {
 /**
  * Rebuilds [this] record schema with its fields in the given positional order.
  *
- * The public avro4k API still speaks `org.apache.avro.Schema`, so building the mismatching writer
- * schema through the Apache API is the supported way to get one. The [Schema.Field] instances have
+ * The mismatching writer schema is built through the Apache API, then handed to core through
+ * [com.github.avrokotlin.benchmark.internal.toCoreSchema] (an identity until core's public API
+ * speaks `AvroSchema`, M3-12). The [Schema.Field] instances have
  * to be recreated: a field belongs to exactly one record schema and cannot be shared.
  */
 private fun Schema.withFieldOrder(newOrder: Iterable<Int>): Schema =

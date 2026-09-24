@@ -3,8 +3,6 @@ package com.github.avrokotlin.avro4k.kafka.confluent
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
-import com.github.avrokotlin.avro4k.internal.decodeWithApacheDecoder
-import com.github.avrokotlin.avro4k.internal.encodeWithApacheEncoder
 import io.confluent.kafka.schemaregistry.avro.AvroSchema
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer
@@ -84,7 +82,7 @@ public abstract class AbstractAvro4kKafkaSerializer<T : Any>(
             // All the rest should be serializable to have its schema inferred
             else -> {
                 val serializer = avro.serializersModule.serializer(value::class.java)
-                return avro.schema(serializer.descriptor)
+                return avro.apacheSchema(serializer.descriptor)
             }
         }
     }
@@ -124,7 +122,7 @@ public abstract class AbstractAvro4kKafkaSerializer<T : Any>(
 
     private fun unwrapRootByteArray(schema: Schema, data: T): ByteArray {
         var bytes: ByteArray? = null
-        avro.encodeWithApacheEncoder(
+        avro.encodeWithApache(
             schema,
             serializer,
             data,
@@ -145,7 +143,7 @@ public abstract class AbstractAvro4kKafkaSerializer<T : Any>(
         return object : DatumWriter<Any?> {
             override fun write(value: Any?, out: Encoder) {
                 @Suppress("UNCHECKED_CAST")
-                avro.encodeWithApacheEncoder(rawSchema, serializer, value as T, out)
+                avro.encodeWithApache(rawSchema, serializer, value as T, out)
             }
 
             override fun setSchema(schema: Schema) {
@@ -222,7 +220,7 @@ internal class Avro4kDatumReader<T>(
     private val deserializer: DeserializationStrategy<T>,
 ) : DatumReader<T> {
     override fun read(reuse: T?, `in`: Decoder): T {
-        return avro.decodeWithApacheDecoder(readerSchema, deserializer, `in`)
+        return avro.decodeWithApache(readerSchema, deserializer, `in`)
     }
 
     override fun setSchema(schema: Schema) {

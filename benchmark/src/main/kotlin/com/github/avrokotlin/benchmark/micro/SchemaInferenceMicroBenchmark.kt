@@ -1,6 +1,7 @@
 package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.benchmark.internal.coreSchema
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.BenchmarkMode
 import kotlinx.benchmark.Measurement
@@ -36,7 +37,7 @@ internal class SchemaInferenceMicroBenchmark {
     fun setup() {
         descriptor = Nested8.serializer().descriptor
         // Warm the shared instance's cache so that `warmCacheHit` only ever measures the lookup.
-        Avro.schema(descriptor)
+        Avro.coreSchema(descriptor)
     }
 
     /** A cache hit on the shared instance: a weak-keyed map lookup and nothing else. */

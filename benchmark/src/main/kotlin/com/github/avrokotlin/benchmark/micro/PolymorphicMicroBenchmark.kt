@@ -2,9 +2,10 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.encodeToSink
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.benchmark.internal.CoreSchema
+import com.github.avrokotlin.benchmark.internal.coreSchema
+import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.BenchmarkMode
 import kotlinx.benchmark.Measurement
@@ -18,7 +19,6 @@ import kotlinx.io.Sink
 import kotlinx.io.asSink
 import kotlinx.io.buffered
 import kotlinx.serialization.ExperimentalSerializationApi
-import org.apache.avro.Schema
 import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
@@ -42,11 +42,11 @@ internal class PolymorphicMicroBenchmark {
     final var shapeCount: Int = 10
 
     lateinit var shapes: ShapeList
-    lateinit var shapesSchema: Schema
+    lateinit var shapesSchema: CoreSchema
     lateinit var shapesData: ByteArray
 
     lateinit var circles: CircleList
-    lateinit var circlesSchema: Schema
+    lateinit var circlesSchema: CoreSchema
     lateinit var circlesData: ByteArray
 
     /** Allocated once so that the write methods only measure the encoding, not the sink construction. */
@@ -54,12 +54,12 @@ internal class PolymorphicMicroBenchmark {
 
     @Setup
     fun setup() {
-        shapesSchema = Avro.schema<ShapeList>()
-        circlesSchema = Avro.schema<CircleList>()
+        shapesSchema = Avro.coreSchema<ShapeList>()
+        circlesSchema = Avro.coreSchema<CircleList>()
         shapes = shapeList(shapeCount)
         circles = circleList(shapeCount)
-        shapesData = Avro.encodeToByteArray(shapesSchema, shapes)
-        circlesData = Avro.encodeToByteArray(circlesSchema, circles)
+        shapesData = Avro.encodeWith(shapesSchema, shapes)
+        circlesData = Avro.encodeWith(circlesSchema, circles)
         sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 

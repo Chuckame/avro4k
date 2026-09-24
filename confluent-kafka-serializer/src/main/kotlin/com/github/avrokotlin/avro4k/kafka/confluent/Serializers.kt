@@ -4,11 +4,9 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAlias
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
-import com.github.avrokotlin.avro4k.MissingFieldsEncodingException
 import com.github.avrokotlin.avro4k.internal.Cache
 import com.github.avrokotlin.avro4k.internal.WeakKeyCache
 import com.github.avrokotlin.avro4k.internal.aliases
-import com.github.avrokotlin.avro4k.internal.isNamedSchema
 import com.github.avrokotlin.avro4k.namedSchemaNotFoundInUnionError
 import com.github.avrokotlin.avro4k.serializer.AnySerializer
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
@@ -51,37 +49,37 @@ internal fun Avro.withAnyKSerializer(kSerializer: AnySerializer): Avro =
 internal class ReflectKSerializer : AnySerializer() {
     override fun SerializersModule.inferSerializationStrategyFromNonSerializableType(type: Class<out Any>) = inferSerializationStrategy(type)
 
-    override fun SerializersModule.preResolveDeserializationStrategy(writerSchema: Schema) =
-        writerSchema.getProp(SpecificData.CLASS_PROP)
+    override fun SerializersModule.preResolveDeserializationStrategy(writerSchema: CoreSchema) =
+        writerSchema.asApacheSchema().getProp(SpecificData.CLASS_PROP)
             ?.let { tryGetJavaClass(it) }
             ?.let { serializerOrNull(it) }
 
-    override fun SerializersModule.resolveArrayDeserializationStrategy(writerSchema: Schema): DeserializationStrategy<Any> {
+    override fun SerializersModule.resolveArrayDeserializationStrategy(writerSchema: CoreSchema): DeserializationStrategy<Any> {
         val itemSerializer =
-            writerSchema.getProp(SpecificData.ELEMENT_PROP)
+            writerSchema.asApacheSchema().getProp(SpecificData.ELEMENT_PROP)
                 ?.let { tryGetJavaClass(it) }
                 ?.let { serializerOrNull(it) }
                 ?: this@ReflectKSerializer.nullable
         return ListSerializer(itemSerializer)
     }
 
-    override fun SerializersModule.resolveMapDeserializationStrategy(writerSchema: Schema): DeserializationStrategy<Any> {
+    override fun SerializersModule.resolveMapDeserializationStrategy(writerSchema: CoreSchema): DeserializationStrategy<Any> {
         val keySerializer =
-            writerSchema.getProp(SpecificData.KEY_CLASS_PROP)
+            writerSchema.asApacheSchema().getProp(SpecificData.KEY_CLASS_PROP)
                 ?.let { tryGetJavaClass(it) }
                 ?.let { serializerOrNull(it) }
                 ?: String.serializer()
         return MapSerializer(keySerializer, this@ReflectKSerializer.nullable)
     }
 
-    override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: Schema) =
-        resolveNamedSchema(writerSchema) ?: GenericEnumKSerializer
+    override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: CoreSchema) =
+        resolveNamedSchema(writerSchema.asApacheSchema()) ?: GenericEnumKSerializer
 
-    override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: Schema) =
-        resolveNamedSchema(writerSchema) ?: GenericRecordKSerializer(this@ReflectKSerializer)
+    override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: CoreSchema) =
+        resolveNamedSchema(writerSchema.asApacheSchema()) ?: GenericRecordKSerializer(this@ReflectKSerializer)
 
-    override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: Schema) =
-        resolveNamedSchema(writerSchema) ?: GenericFixedKSerializer
+    override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: CoreSchema) =
+        resolveNamedSchema(writerSchema.asApacheSchema()) ?: GenericFixedKSerializer
 
     private fun SerializersModule.resolveNamedSchema(writerSchema: Schema): DeserializationStrategy<Any>? =
         findRegisteredDeserializerFromModule(writerSchema) ?: findDeserializerFromJavaClassPath(writerSchema)
@@ -145,11 +143,11 @@ internal class ReflectKSerializer : AnySerializer() {
 internal class GenericKSerializer : AnySerializer() {
     override fun SerializersModule.inferSerializationStrategyFromNonSerializableType(type: Class<out Any>) = inferSerializationStrategy(type)
 
-    override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: Schema) = GenericEnumKSerializer
+    override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: CoreSchema) = GenericEnumKSerializer
 
-    override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: Schema) = GenericFixedKSerializer
+    override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: CoreSchema) = GenericFixedKSerializer
 
-    override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: Schema) = GenericRecordKSerializer(this@GenericKSerializer)
+    override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: CoreSchema) = GenericRecordKSerializer(this@GenericKSerializer)
 }
 
 private fun AnySerializer.inferSerializationStrategy(type: Class<out Any>): SerializationStrategy<*>? =
@@ -164,30 +162,30 @@ private fun AnySerializer.inferSerializationStrategy(type: Class<out Any>): Seri
 
 internal object GenericEnumKSerializer : AvroSerializer<GenericEnumSymbol<*>>(GenericEnumSymbol::class.qualifiedName!!) {
     override fun deserializeAvro(decoder: AvroDecoder): GenericEnumSymbol<*> {
-        return GenericData.EnumSymbol(decoder.currentWriterSchema, decoder.decodeString())
+        return GenericData.EnumSymbol(decoder.apacheWriterSchema, decoder.decodeString())
     }
 
     override fun serializeAvro(encoder: AvroEncoder, value: GenericEnumSymbol<*>) {
-        if (encoder.currentWriterSchema.isUnion) {
+        if (encoder.isWriterSchemaUnion) {
             encoder.trySelectNamedSchema(value.schema.fullName, value.schema::getAliases)
             // When unable to determine the type from the enum schema, delegate it to the native encodeString resolver instead of raising an error here
         }
         encoder.encodeString(value.toString())
     }
 
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): CoreSchema {
         throw schemaGenerationUnsupportedError()
     }
 }
 
 internal object GenericFixedKSerializer : AvroSerializer<GenericFixed>(GenericFixed::class.qualifiedName!!) {
     override fun deserializeAvro(decoder: AvroDecoder): GenericFixed {
-        return decoder.decodeFixed()
+        return decoder.decodeGenericFixed()
     }
 
     override fun serializeAvro(encoder: AvroEncoder, value: GenericFixed) {
         with(encoder) {
-            if (currentWriterSchema.isUnion) {
+            if (isWriterSchemaUnion) {
                 trySelectNamedSchema(value.schema.fullName, value.schema::getAliases)
                 // When unable to determine the type from the fixed schema, delegate it to the native encodeFixed resolver instead of raising an error here
             }
@@ -195,7 +193,7 @@ internal object GenericFixedKSerializer : AvroSerializer<GenericFixed>(GenericFi
         }
     }
 
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): CoreSchema {
         throw schemaGenerationUnsupportedError()
     }
 }
@@ -207,7 +205,7 @@ internal class GenericRecordKSerializer(
 
     override fun serializeAvro(encoder: AvroEncoder, value: IndexedRecord) {
         with(encoder) {
-            if (currentWriterSchema.isUnion) {
+            if (isWriterSchemaUnion) {
                 trySelectNamedSchema(value.schema.fullName, value.schema::getAliases) ||
                     throw namedSchemaNotFoundInUnionError(value.schema.fullName, value.schema.aliases)
             }
@@ -219,7 +217,7 @@ internal class GenericRecordKSerializer(
                         // In IndexedRecord, the implementation can miss a field, which in that case is represented by null,
                         // and .get() does not fail when the field is null even if not authorized.
                         // so we need to fail here, or we will get a "cannot write null to a non-nullable field" error later.
-                        throw MissingFieldsEncodingException(listOf(value.schema.fields[index]), value.schema)
+                        throw missingFieldEncodingException(value.schema.fields[index], value.schema)
                     }
                     @OptIn(ExperimentalSerializationApi::class)
                     encodeNullableSerializableElement(descriptor, index, anySerializer.nullable, fieldValue)
@@ -230,9 +228,10 @@ internal class GenericRecordKSerializer(
 
     override fun deserializeAvro(decoder: AvroDecoder): IndexedRecord {
         with(decoder) {
-            val descriptor = currentWriterSchema.toGenericDescriptor()
+            val writerSchema = apacheWriterSchema
+            val descriptor = writerSchema.toGenericDescriptor()
             return decodeStructure(descriptor) {
-                val result = GenericData.Record(currentWriterSchema)
+                val result = GenericData.Record(writerSchema)
                 var index: Int
                 do {
                     index = decodeElementIndex(descriptor)
@@ -277,7 +276,7 @@ internal class GenericRecordKSerializer(
             }
         }
 
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): CoreSchema {
         throw schemaGenerationUnsupportedError()
     }
 }

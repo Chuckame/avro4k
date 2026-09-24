@@ -92,6 +92,8 @@ dependencies {
     implementation("org.slf4j:slf4j-simple:2.0.18")
 
     implementation(project(":core"))
+    // M3-03: internal/CoreBridge.kt converts with its toAvro4k() / toApacheSchema() once core speaks AvroSchema (M3-12)
+    implementation(project(":apache-interop"))
 }
 
 kotlin {

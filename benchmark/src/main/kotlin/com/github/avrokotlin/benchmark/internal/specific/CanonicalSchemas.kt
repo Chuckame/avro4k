@@ -1,10 +1,10 @@
 package com.github.avrokotlin.benchmark.internal.specific
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.benchmark.internal.Clients
 import com.github.avrokotlin.benchmark.internal.ListWrapperDatasClass
 import com.github.avrokotlin.benchmark.internal.SimpleDatasClass
+import com.github.avrokotlin.benchmark.internal.apacheSchema
 import org.apache.avro.Schema
 import java.io.File
 
@@ -32,9 +32,9 @@ internal object CanonicalSchemas {
     const val SPECIFIC_NAMESPACE = "com.github.avrokotlin.benchmark.internal.specific"
 
     private val SCHEMAS: Map<String, () -> Schema> = mapOf(
-        "Clients.avsc" to { Avro.schema<Clients>() },
-        "SimpleDatasClass.avsc" to { Avro.schema<SimpleDatasClass>() },
-        "ListWrapperDatasClass.avsc" to { Avro.schema<ListWrapperDatasClass>() },
+        "Clients.avsc" to { Avro.apacheSchema<Clients>() },
+        "SimpleDatasClass.avsc" to { Avro.apacheSchema<SimpleDatasClass>() },
+        "ListWrapperDatasClass.avsc" to { Avro.apacheSchema<ListWrapperDatasClass>() },
     )
 
     @JvmStatic

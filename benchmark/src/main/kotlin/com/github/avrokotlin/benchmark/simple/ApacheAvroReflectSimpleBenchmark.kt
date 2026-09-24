@@ -1,9 +1,9 @@
 package com.github.avrokotlin.benchmark.simple
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.benchmark.internal.apache.ApacheAvro
 import com.github.avrokotlin.benchmark.internal.apache.toApache
+import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import org.apache.avro.Schema
 import org.apache.avro.io.DatumReader
@@ -46,7 +46,7 @@ internal class ApacheAvroReflectSimpleBenchmark : SerializationSimpleBenchmark()
     }
 
     override fun prepareBinaryData() {
-        data = Avro.encodeToByteArray(schema, clients)
+        data = Avro.encodeWith(schema, clients)
     }
 
     @Benchmark

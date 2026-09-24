@@ -1,9 +1,10 @@
 package com.github.avrokotlin.benchmark.lists
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.benchmark.internal.CoreSchema
 import com.github.avrokotlin.benchmark.internal.ListWrapperDatasClass
 import com.github.avrokotlin.benchmark.internal.WorkloadEquivalence
+import com.github.avrokotlin.benchmark.internal.coreSchema
 import kotlinx.benchmark.*
 import java.util.concurrent.TimeUnit
 
@@ -24,7 +25,7 @@ internal abstract class SerializationListsBenchmark {
     final var entryCount: Int = 10000
 
     lateinit var lists: ListWrapperDatasClass
-    val schema = Avro.schema<ListWrapperDatasClass>()
+    val schema: CoreSchema = Avro.coreSchema<ListWrapperDatasClass>()
 
     @Setup
     fun initTestData() {
