@@ -23,6 +23,8 @@ import org.apache.avro.Schema
 internal fun AvroDefault.toFieldDefault(fieldSchema: Schema): JsonElement {
     val json = if (value.isStartingAsJson()) Json.parseToJsonElement(value).normalizeNumbers() else JsonPrimitive(value)
     return when {
+        // Kept by the user's decision (2026-09-24, PROGRESS.md decision log): re-challenge it (e.g. reject `null` on a
+        // non-nullable field) only if keeping it ever adds complexity to the code.
         json is JsonNull -> if (fieldSchema.isNullable) json else JsonPrimitive("null")
 
         fieldSchema.asSchemaList().any { it.logicalType?.name == CHAR_LOGICAL_TYPE_NAME } ->
