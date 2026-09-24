@@ -109,7 +109,7 @@ private fun from(schema: Schema, seenNamedTypes: MutableMap<String, NamedSchema>
         Schema.Type.FIXED ->
             FixedSchema(
                 name = Name(schema.name, schema.namespace),
-                size = schema.fixedSize.toUInt(),
+                size = schema.fixedSize,
                 doc = schema.doc,
                 aliases = schema.aliasesWithSpace,
                 props = schema.objectProps.toJsonElementMap()

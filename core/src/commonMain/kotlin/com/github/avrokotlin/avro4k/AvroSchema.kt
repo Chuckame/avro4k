@@ -5,8 +5,9 @@ import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.internal.IdentitySet
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import kotlin.concurrent.Volatile
 
 @InternalAvro4kApi
 public interface WithProps {
@@ -29,9 +30,6 @@ public val AvroSchema.nullable: AvroSchema
         }
     }
 
-public val ResolvedSchema.logicalTypeName: String?
-    get() = props["logicalType"]?.jsonPrimitive?.contentOrNull
-
 /**
  * This is a marker indicating that the schema is resolved, meaning it be of any type, except a [UnionSchema].
  * Any resolved schema can have properties on it.
@@ -39,7 +37,16 @@ public val ResolvedSchema.logicalTypeName: String?
  * @see AvroSchema
  * @see WithProps
  */
-public sealed class ResolvedSchema : AvroSchema(), WithProps
+public sealed class ResolvedSchema(
+    type: Type,
+    props: Map<String, JsonElement>,
+) : AvroSchema(type, props.logicalTypeNameOrNull()), WithProps
+
+/**
+ * The `logicalType` prop as a string, or null when absent or not a JSON primitive (`JsonNull` included).
+ * Never throws: a malformed `logicalType` is ignored, like Apache Avro ignores an invalid logical type.
+ */
+private fun Map<String, JsonElement>.logicalTypeNameOrNull(): String? = (this["logicalType"] as? JsonPrimitive)?.contentOrNull
 
 /**
  * The multiplatform, pure-kotlin model of an Avro schema, the drop-in replacement of Apache Avro's `Schema` class.
@@ -48,10 +55,24 @@ public sealed class ResolvedSchema : AvroSchema(), WithProps
  * never use it on a hot path. Caches keyed by a schema must be identity-based.
  * A [RecordSchema]'s hash code only depends on its name, so hashing any schema is cheap and never recurses into records.
  */
-public sealed class AvroSchema {
+public sealed class AvroSchema(
+    /**
+     * The kind of this schema. A stored field rather than an overridden getter, because encoders and decoders read it
+     * once per value: a field read, like Apache Avro's `Schema.getType()`.
+     */
+    public val type: Type,
+    /**
+     * The name of this schema's logical type (the `logicalType` prop), or null when it has none.
+     * Always null for a [UnionSchema]: a logical type annotates a single, resolved type.
+     *
+     * Computed once at construction, as the props are fixed by then, so reading it per value is a field read instead of
+     * a map lookup plus a JSON cast. Like [type], it is derived from the constructor arguments, so it takes no part in
+     * `equals`, `hashCode` or `toString`.
+     */
+    public val logicalTypeName: String?,
+) {
     public open val fullName: String get() = simpleName
     public abstract val simpleName: String
-    public abstract val type: Type
 
     internal open fun equals(
         other: Any?,
@@ -81,115 +102,102 @@ public sealed class AvroSchema {
         STRING,
     }
 
-    public sealed class PrimitiveSchema : ResolvedSchema()
+    public sealed class PrimitiveSchema(
+        type: Type,
+        props: Map<String, JsonElement>,
+    ) : ResolvedSchema(type, props)
 
     public data class BooleanSchema(
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : PrimitiveSchema() {
+    ) : PrimitiveSchema(Type.BOOLEAN, props) {
         init {
             ensureNotProhibitedProp("type")
         }
 
         override val simpleName: String
             get() = "boolean"
-        override val type: Type
-            get() = Type.BOOLEAN
     }
 
     public data class IntSchema(
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : PrimitiveSchema() {
+    ) : PrimitiveSchema(Type.INT, props) {
         init {
             ensureNotProhibitedProp("type")
         }
 
         override val simpleName: String
             get() = "int"
-        override val type: Type
-            get() = Type.INT
     }
 
     public data class LongSchema(
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : PrimitiveSchema() {
+    ) : PrimitiveSchema(Type.LONG, props) {
         init {
             ensureNotProhibitedProp("type")
         }
 
         override val simpleName: String
             get() = "long"
-        override val type: Type
-            get() = Type.LONG
     }
 
     public data class FloatSchema(
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : PrimitiveSchema() {
+    ) : PrimitiveSchema(Type.FLOAT, props) {
         init {
             ensureNotProhibitedProp("type")
         }
 
         override val simpleName: String
             get() = "float"
-        override val type: Type
-            get() = Type.FLOAT
     }
 
     public data class DoubleSchema(
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : PrimitiveSchema() {
+    ) : PrimitiveSchema(Type.DOUBLE, props) {
         init {
             ensureNotProhibitedProp("type")
         }
 
         override val simpleName: String
             get() = "double"
-        override val type: Type
-            get() = Type.DOUBLE
     }
 
     public data class BytesSchema(
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : PrimitiveSchema() {
+    ) : PrimitiveSchema(Type.BYTES, props) {
         init {
             ensureNotProhibitedProp("type")
         }
 
         override val simpleName: String
             get() = "bytes"
-        override val type: Type
-            get() = Type.BYTES
     }
 
     public data class StringSchema(
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : PrimitiveSchema() {
+    ) : PrimitiveSchema(Type.STRING, props) {
         init {
             ensureNotProhibitedProp("type")
         }
 
         override val simpleName: String
             get() = "string"
-        override val type: Type
-            get() = Type.STRING
     }
 
     public data class NullSchema(
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : ResolvedSchema() {
+    ) : ResolvedSchema(Type.NULL, props) {
         init {
             ensureNotProhibitedProp("type")
         }
 
         override val simpleName: String
             get() = "null"
-        override val type: Type
-            get() = Type.NULL
     }
 
     public data class UnionSchema(
         val types: List<ResolvedSchema>,
-    ) : AvroSchema() {
+    ) : AvroSchema(Type.UNION, null) {
         val isNullable: Boolean = types.any { it is NullSchema }
         val isSimpleNullableType: Boolean get() = types.size == 2 && isNullable
 
@@ -218,8 +226,6 @@ public sealed class AvroSchema {
 
         override val simpleName: String
             get() = "union"
-        override val type: Type
-            get() = Type.UNION
 
         override fun equals(other: Any?): Boolean {
             return equals(other, HashSet())
@@ -266,15 +272,13 @@ public sealed class AvroSchema {
     public data class ArraySchema(
         val elementSchema: AvroSchema,
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : ResolvedSchema() {
+    ) : ResolvedSchema(Type.ARRAY, props) {
         init {
             ensureNotProhibitedProp("type", "items")
         }
 
         override val simpleName: String
             get() = "array"
-        override val type: Type
-            get() = Type.ARRAY
 
         override fun equals(other: Any?): Boolean {
             return equals(other, HashSet())
@@ -306,15 +310,13 @@ public sealed class AvroSchema {
     public data class MapSchema(
         val valueSchema: AvroSchema,
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : ResolvedSchema() {
+    ) : ResolvedSchema(Type.MAP, props) {
         init {
             ensureNotProhibitedProp("type", "values")
         }
 
         override val simpleName: String
             get() = "map"
-        override val type: Type
-            get() = Type.MAP
 
         override fun equals(other: Any?): Boolean {
             return equals(other, HashSet())
@@ -343,7 +345,10 @@ public sealed class AvroSchema {
         }
     }
 
-    public sealed class NamedSchema : ResolvedSchema(), WithDoc {
+    public sealed class NamedSchema(
+        type: Type,
+        props: Map<String, JsonElement>,
+    ) : ResolvedSchema(type, props), WithDoc {
         public abstract val name: Name
         public abstract val aliases: Set<Name>
 
@@ -363,8 +368,24 @@ public sealed class AvroSchema {
         override val doc: String? = null,
         override val aliases: Set<Name> = emptySet(),
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : NamedSchema() {
-        private lateinit var fieldsByName: Map<String, Field>
+    ) : NamedSchema(Type.RECORD, props) {
+        /**
+         * Field position by field name and by field alias, built on the first lookup rather than at construction:
+         * a recursive record's [LockableList] is still empty when the constructor runs, so an index built there would
+         * be empty. Kept out of the primary constructor, so it takes no part in the data class members, and ignored by
+         * the hand-written [equals], [hashCode] and [toString].
+         *
+         * **Visibility, on every platform.** The map is fully built *before* the single write that publishes it, and
+         * never mutated afterwards. The field is [Volatile]: on the JVM a volatile write happens-before every read that
+         * observes it (JLS 17.4.5); on Kotlin/Native, [Volatile]'s contract is that a thread reading the value "sees
+         * not only that value, but all side effects that led to writing that value"; JS is single-threaded. So a reader
+         * that sees the map sees all of its entries, without relying on the JVM's final-field guarantee (which
+         * Kotlin/Native does not have, and which a field written after construction would not get anyway).
+         * Two threads may race on the first lookup and each build the map: both builds are equal and either one wins,
+         * so the race is benign and no lock is needed.
+         */
+        @Volatile
+        private var fieldIndexByName: Map<String, Int>? = null
 
         init {
             require(name !in aliases) { "Record name '$name' cannot be part of aliases $aliases" }
@@ -377,17 +398,57 @@ public sealed class AvroSchema {
         }
 
         private fun validateFields(fields: List<Field>) {
-            fieldsByName = fields.flatMap { f -> listOf(f.name to f) + f.aliases.map { it to f } }.toMap()
-            require(fieldsByName.size == fields.size + fields.sumOf { it.aliases.size }) { "Record fields must be unique" }
+            val names = HashSet<String>()
+            for (field in fields) {
+                require(names.add(field.name)) { "Record fields must be unique: '${field.name}' is used twice in record '$name'" }
+                for (alias in field.aliases) {
+                    require(names.add(alias)) { "Record fields must be unique: '$alias' is used twice in record '$name'" }
+                }
+            }
         }
 
-        override val type: Type get() = Type.RECORD
+        /**
+         * Returns the position in [fields] of the field having the given name or alias, or null if there is none.
+         *
+         * O(1) after the first call on this instance, which builds the index. Throws [IllegalStateException] when
+         * called on a record whose [LockableList] of fields is not locked yet.
+         */
+        public fun getFieldIndexOrNull(fieldName: String): Int? {
+            return fieldIndex()[fieldName]
+        }
 
         /**
-         * Returns the field having the given name or alias.
+         * Returns the field having the given name or alias, or null if there is none. Same cost as [getFieldIndexOrNull].
+         */
+        public fun getFieldOrNull(fieldName: String): Field? {
+            val index = fieldIndex()[fieldName] ?: return null
+            return fields[index]
+        }
+
+        /**
+         * Returns the field having the given name or alias. Same cost as [getFieldIndexOrNull].
+         *
+         * @throws NoSuchElementException if there is no such field
          */
         public fun getFieldByName(fieldName: String): Field {
-            return fieldsByName.getValue(fieldName)
+            return getFieldOrNull(fieldName) ?: throw NoSuchElementException("No field named '$fieldName' in record '$name'")
+        }
+
+        private fun fieldIndex(): Map<String, Int> {
+            fieldIndexByName?.let { return it }
+            check(fields !is LockableList || fields.isLocked) {
+                "Record '$name' cannot be queried by field name before its LockableList of fields is locked"
+            }
+            val index = HashMap<String, Int>()
+            for (i in fields.indices) {
+                val field = fields[i]
+                index[field.name] = i
+                for (alias in field.aliases) {
+                    index[alias] = i
+                }
+            }
+            fieldIndexByName = index
+            return index
         }
 
         override fun equals(other: Any?): Boolean {
@@ -483,17 +544,16 @@ public sealed class AvroSchema {
 
     public data class FixedSchema(
         override val name: Name,
-        val size: UInt,
+        val size: Int,
         override val doc: String? = null,
         override val aliases: Set<Name> = emptySet(),
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : NamedSchema() {
+    ) : NamedSchema(Type.FIXED, props) {
         init {
+            require(size >= 0) { "Fixed size must not be negative, but was $size for fixed '$name'" }
             require(name !in aliases) { "Fixed name '$name' cannot be part of aliases $aliases" }
             ensureNotProhibitedProp("type", "size", "name", "namespace", "aliases", "doc")
         }
-
-        override val type: Type get() = Type.FIXED
     }
 
     public data class EnumSchema(
@@ -503,15 +563,33 @@ public sealed class AvroSchema {
         override val doc: String? = null,
         override val aliases: Set<Name> = emptySet(),
         override val props: Map<String, JsonElement> = emptyMap(),
-    ) : NamedSchema() {
+    ) : NamedSchema(Type.ENUM, props) {
+        /**
+         * Symbol position by symbol, built once at construction ([symbols] is complete by then) so that encoding an enum
+         * value is a hash lookup instead of an O(n) scan. It doubles as the uniqueness check, so it costs no extra work.
+         * Kept out of the primary constructor, so it takes no part in the data class `equals`, `hashCode`,
+         * `toString` or `copy`: it is derived from [symbols], so two equal enums always have equal indexes anyway.
+         */
+        private val symbolIndex: Map<String, Int> =
+            HashMap<String, Int>().also { index ->
+                for (i in symbols.indices) {
+                    index[symbols[i]] = i
+                }
+            }
+
         init {
             require(name !in aliases) { "Enum name '$name' cannot be part of aliases $aliases" }
-            require(symbols.toSet().size == symbols.size) { "Enum symbols must be unique" }
-            require(defaultSymbol == null || defaultSymbol in symbols) { "Default symbol must be one of the enum symbols" }
+            require(symbolIndex.size == symbols.size) { "Enum symbols must be unique" }
+            require(defaultSymbol == null || defaultSymbol in symbolIndex) { "Default symbol must be one of the enum symbols" }
             ensureNotProhibitedProp("type", "default", "symbols", "name", "namespace", "aliases", "doc")
         }
 
-        override val type: Type get() = Type.ENUM
+        /**
+         * Returns the position of [symbol] in [symbols], or null if it is not one of them. O(1).
+         */
+        public fun getSymbolIndexOrNull(symbol: String): Int? {
+            return symbolIndex[symbol]
+        }
     }
 
     public companion object {

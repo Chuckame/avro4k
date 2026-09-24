@@ -313,7 +313,7 @@ public class KotlinGenerator(
 
     private fun AvroSchema.typeNameFromMetadata(): TypeName? {
         return actualJavaClassName?.let { parseJavaClassName(it) }
-            ?: (this as? ResolvedSchema)?.logicalTypeName?.let { logicalTypes[it] }
+            ?: logicalTypeName?.let { logicalTypes[it] }
     }
 
     private fun getTypeName(schema: AvroSchema, potentialAnonymousBaseName: String): TypeName {

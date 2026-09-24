@@ -81,7 +81,7 @@ private fun AvroSchema.toJsonElement(currentSpace: String? = null, knownNamedTyp
                         buildJsonObject {
                             put("type", "fixed")
                             putNamedSchemaProps(this@toJsonElement, currentSpace)
-                            put("size", size.toInt())
+                            put("size", size)
                             putAll(props)
                             putAliases(aliases.map { if (name.space == it.space) it.simpleName else it.fullName })
                         }

@@ -87,7 +87,7 @@ class AvroSchemaTest {
 
         val fixed = schema.getFieldByName("f").schema as FixedSchema
         fixed.fullName shouldBe "other.F"
-        fixed.size shouldBe 4u
+        fixed.size shouldBe 4
 
         val noNs = schema.getFieldByName("noNs").schema as RecordSchema
         noNs.name.space shouldBe null
@@ -160,13 +160,13 @@ class AvroSchemaTest {
                         "inner",
                         RecordSchema(
                             Name("Inner"),
-                            listOf(RecordSchema.Field("sameNsAsOuter", FixedSchema(Name("ns.F"), 2u)))
+                            listOf(RecordSchema.Field("sameNsAsOuter", FixedSchema(Name("ns.F"), 2)))
                         )
                     )
                 )
             )
         parse(schema.toJsonString()) shouldBe schema
-        ((parse(schema.toJsonString()) as RecordSchema).fields[0].schema as RecordSchema).fields[0].schema shouldBe FixedSchema(Name("ns.F"), 2u)
+        ((parse(schema.toJsonString()) as RecordSchema).fields[0].schema as RecordSchema).fields[0].schema shouldBe FixedSchema(Name("ns.F"), 2)
     }
 
     // ---- equals / hashCode / toString ----
@@ -284,7 +284,7 @@ class AvroSchemaTest {
         shouldThrow<IllegalArgumentException> { IntSchema(mapOf("type" to JsonPrimitive("x"))) }
         shouldThrow<IllegalArgumentException> { EnumSchema(Name("E"), listOf("A", "A")) }
         shouldThrow<IllegalArgumentException> { EnumSchema(Name("E"), listOf("A"), defaultSymbol = "B") }
-        shouldThrow<IllegalArgumentException> { FixedSchema(Name("F"), 1u, aliases = setOf(Name("F"))) }
+        shouldThrow<IllegalArgumentException> { FixedSchema(Name("F"), 1, aliases = setOf(Name("F"))) }
         shouldThrow<IllegalArgumentException> {
             RecordSchema(Name("R"), listOf(RecordSchema.Field("a", IntSchema()), RecordSchema.Field("a", IntSchema())))
         }

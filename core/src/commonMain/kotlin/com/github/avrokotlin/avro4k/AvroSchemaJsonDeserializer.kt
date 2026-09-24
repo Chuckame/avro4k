@@ -155,7 +155,7 @@ private fun fromJsonElement(
                     val name = props.removeName(currentSpace)
                     FixedSchema(
                         name = name,
-                        size = props.removeMandatory("size").jsonPrimitive.int.toUInt(),
+                        size = props.removeMandatory("size").jsonPrimitive.int,
                         doc = props.remove("doc")?.stringPrimitive,
                         aliases = props.removeAliases(name.space) ?: emptySet(),
                         props = props
