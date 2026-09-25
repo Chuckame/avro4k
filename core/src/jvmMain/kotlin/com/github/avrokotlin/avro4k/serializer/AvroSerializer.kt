@@ -14,6 +14,7 @@ import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.findAnnotation
 import com.github.avrokotlin.avro4k.internal.findElementAnnotation
+import com.github.avrokotlin.avro4k.internal.nameForMessages
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
@@ -80,7 +81,7 @@ public abstract class AvroSerializer<T>(
         encoder: Encoder,
         value: T,
     ) {
-        throw UnsupportedOperationException("The serializer ${this::class.qualifiedName} is not usable outside of Avro serialization.")
+        throw UnsupportedOperationException("The serializer ${this::class.nameForMessages} is not usable outside of Avro serialization.")
     }
 
     /**
@@ -98,7 +99,7 @@ public abstract class AvroSerializer<T>(
      * Implement it to provide a generic deserialization logic with the standard [Decoder].
      */
     public open fun deserializeGeneric(decoder: Decoder): T {
-        throw UnsupportedOperationException("The serializer ${this::class.qualifiedName} is not usable outside of Avro serialization.")
+        throw UnsupportedOperationException("The serializer ${this::class.nameForMessages} is not usable outside of Avro serialization.")
     }
 
     /**

@@ -8,8 +8,9 @@ import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.shouldBe
 import kotlinx.serialization.Serializable
-import org.apache.avro.AvroTypeException
+import kotlinx.serialization.SerializationException
 import java.math.BigDecimal
 import kotlin.io.path.Path
 
@@ -60,8 +61,11 @@ internal class AvroDefaultSchemaTest : FunSpec({
     }
 
     test("schema for data class with @AvroDefault should throw error when array type does not match default value type") {
-        shouldThrow<AvroTypeException> { Avro.apacheSchema(BarInvalidArrayType.serializer()) }
-        shouldThrow<AvroTypeException> { Avro.apacheSchema(BarInvalidNonArrayType.serializer()) }
+        // Same message as Apache's `Schema.Field` validation, as a SerializationException instead of its AvroTypeException
+        shouldThrow<SerializationException> { Avro.apacheSchema(BarInvalidArrayType.serializer()) }.message shouldBe
+            "Invalid default for field defaultFloatArrayWith2Defaults: [\"foo-bar\"] not a {\"type\":\"array\",\"items\":\"float\"}"
+        shouldThrow<SerializationException> { Avro.apacheSchema(BarInvalidNonArrayType.serializer()) }.message shouldBe
+            "Invalid default for field defaultBarArrayWithNonWorkingDefaults: {} not a {\"type\":\"array\",\"items\":\"int\"}"
     }
 }) {
     @Serializable

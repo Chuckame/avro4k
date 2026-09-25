@@ -16,7 +16,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import org.apache.avro.AvroTypeException
 
 internal class ClassVisitor(
     descriptor: SerialDescriptor,
@@ -94,8 +93,8 @@ internal class ClassVisitor(
         validateAvroName(fieldName)
         val (finalSchema, fieldDefault) = getDefaultAndReorderUnionIfNeeded(annotations, elementSchema)
         if (fieldDefault != null && !fieldDefault.isValidDefaultFor(finalSchema)) {
-            // Apache's `Schema.Field` constructor validated the default, with this exception and message
-            throw AvroTypeException("Invalid default for field $fieldName: $fieldDefault not a ${finalSchema.toSchemaJsonStringOrName()}")
+            // Apache's `Schema.Field` constructor validated the default, with this message (it threw an `AvroTypeException`)
+            throw AvroSchemaGenerationException("Invalid default for field $fieldName: $fieldDefault not a ${finalSchema.toSchemaJsonStringOrName()}")
         }
 
         return RecordSchema.Field(

@@ -25,9 +25,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonPrimitive
-import org.intellij.lang.annotations.Language
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import kotlin.jvm.JvmStatic
 
 /**
  * Represents a duration in months, days and milliseconds.
@@ -71,10 +69,9 @@ public data class AvroDuration(
 
     public companion object {
         @JvmStatic
-        @Language("RegExp")
         private fun part(
             name: Char,
-            @Language("RegExp") digitsRegex: String = "",
+            digitsRegex: String = "",
         ): String {
             val digitsPart = if (digitsRegex.isNotEmpty()) "(?:[.,]($digitsRegex))?" else ""
             return "(?:\\+?([0-9]+)$digitsPart$name)?"
@@ -126,7 +123,7 @@ public data class AvroDuration(
 public class AvroDurationParseException(value: String) : SerializationException("Unable to parse duration: $value")
 
 @InternalAvro4kApi
-public object AvroDurationSerializer : AvroSerializer<AvroDuration>(AvroDuration::class.qualifiedName!!) {
+public object AvroDurationSerializer : AvroSerializer<AvroDuration>("com.github.avrokotlin.avro4k.serializer.AvroDuration") {
     internal const val LOGICAL_TYPE_NAME = "duration"
     private const val DURATION_BYTES = 12
     private const val DEFAULT_DURATION_FULL_NAME = "time.Duration"
@@ -175,7 +172,7 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>(AvroDuration
 
     override fun deserializeAvro(decoder: AvroDecoder): AvroDuration {
         return with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError(AvroDuration::class.qualifiedName!!, AvroSchema.Type.FIXED, AvroSchema.Type.STRING) }) {
+            decodeResolvingAny({ UnexpectedDecodeSchemaError("com.github.avrokotlin.avro4k.serializer.AvroDuration", AvroSchema.Type.FIXED, AvroSchema.Type.STRING) }) {
                 when (it.type) {
                     AvroSchema.Type.FIXED -> {
                         if (it.knownLogicalTypeName == LOGICAL_TYPE_NAME && it.fixedSize == DURATION_BYTES) {
@@ -195,21 +192,39 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>(AvroDuration
         }
     }
 
+    /** Three unsigned 32-bit integers, each little-endian: months, days, then milliseconds (the spec's layout). */
     private fun encodeDuration(value: AvroDuration): ByteArray {
-        val buffer = ByteBuffer.allocate(DURATION_BYTES).order(ByteOrder.LITTLE_ENDIAN)
-        buffer.putInt(value.months.toInt())
-        buffer.putInt(value.days.toInt())
-        buffer.putInt(value.millis.toInt())
-        return buffer.array()
+        val bytes = ByteArray(DURATION_BYTES)
+        bytes.putIntLittleEndian(0, value.months.toInt())
+        bytes.putIntLittleEndian(4, value.days.toInt())
+        bytes.putIntLittleEndian(8, value.millis.toInt())
+        return bytes
     }
 
+    /** The reverse of [encodeDuration]. [bytes] is exactly [DURATION_BYTES] long (checked on the writer schema). */
     private fun decodeDuration(bytes: ByteArray): AvroDuration {
-        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         return AvroDuration(
-            months = buffer.getInt().toUInt(),
-            days = buffer.getInt().toUInt(),
-            millis = buffer.getInt().toUInt()
+            months = bytes.getIntLittleEndian(0).toUInt(),
+            days = bytes.getIntLittleEndian(4).toUInt(),
+            millis = bytes.getIntLittleEndian(8).toUInt()
         )
+    }
+
+    private fun ByteArray.putIntLittleEndian(
+        offset: Int,
+        value: Int,
+    ) {
+        this[offset] = value.toByte()
+        this[offset + 1] = (value ushr 8).toByte()
+        this[offset + 2] = (value ushr 16).toByte()
+        this[offset + 3] = (value ushr 24).toByte()
+    }
+
+    private fun ByteArray.getIntLittleEndian(offset: Int): Int {
+        return (this[offset].toInt() and 0xFF) or
+            ((this[offset + 1].toInt() and 0xFF) shl 8) or
+            ((this[offset + 2].toInt() and 0xFF) shl 16) or
+            ((this[offset + 3].toInt() and 0xFF) shl 24)
     }
 
     override fun serializeGeneric(

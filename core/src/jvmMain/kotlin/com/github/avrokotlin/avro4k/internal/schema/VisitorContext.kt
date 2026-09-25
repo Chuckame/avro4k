@@ -95,7 +95,7 @@ internal data class InlineClassFieldAnnotations(
         }
     ) {
         require(inlineClassDescriptor.isInline) {
-            "${InlineClassFieldAnnotations::class.qualifiedName} is only for inline classes, but trying to use it with non-inline class descriptor $inlineClassDescriptor"
+            "com.github.avrokotlin.avro4k.internal.schema.InlineClassFieldAnnotations is only for inline classes, but trying to use it with non-inline class descriptor $inlineClassDescriptor"
         }
     }
 }
@@ -116,7 +116,7 @@ internal data class FieldAnnotations(
         descriptor.findElementAnnotation<AvroDefault>(elementIndex)
     ) {
         require(descriptor.kind == StructureKind.CLASS) {
-            "${FieldAnnotations::class.qualifiedName} is only for classes, but trying at element index $elementIndex with non class descriptor $descriptor"
+            "com.github.avrokotlin.avro4k.internal.schema.FieldAnnotations is only for classes, but trying at element index $elementIndex with non class descriptor $descriptor"
         }
     }
 }
@@ -175,8 +175,10 @@ internal fun MutableMap<String, JsonElement>.addProp(
     if (name in reserved) {
         throw AvroSchemaGenerationException("Can't set reserved property: $name")
     }
-    val old = putIfAbsent(name, value)
-    if (old != null && old != value) {
+    val old = get(name)
+    if (old == null) {
+        put(name, value)
+    } else if (old != value) {
         throw AvroSchemaGenerationException("Can't overwrite property: $name")
     }
 }

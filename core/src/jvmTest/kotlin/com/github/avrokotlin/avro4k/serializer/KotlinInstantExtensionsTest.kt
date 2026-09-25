@@ -2,8 +2,12 @@
 
 package com.github.avrokotlin.avro4k.serializer
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldStartWith
+import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.serialization.SerializationException
 import kotlin.time.Instant
 
 internal class KotlinInstantExtensionsTest : StringSpec({
@@ -28,6 +32,24 @@ internal class KotlinInstantExtensionsTest : StringSpec({
             )
 
             conversion.convert(instant) shouldBe Long.MAX_VALUE
+        }
+
+        "fail on the ${conversion.name} timestamps just outside the representable range, as Math.multiplyExact and addExact did" {
+            val justAfterMax =
+                Instant.fromEpochSeconds(
+                    Math.floorDiv(Long.MAX_VALUE, conversion.unitsPerSecond),
+                    Math.floorMod(Long.MAX_VALUE, conversion.unitsPerSecond) * conversion.nanosPerUnit + conversion.nanosPerUnit
+                )
+            val justBeforeMin =
+                Instant.fromEpochSeconds(
+                    Math.floorDiv(Long.MIN_VALUE, conversion.unitsPerSecond),
+                    Math.floorMod(Long.MIN_VALUE, conversion.unitsPerSecond) * conversion.nanosPerUnit - conversion.nanosPerUnit
+                )
+            listOf(justAfterMax, justBeforeMin).forEach { instant ->
+                val error = shouldThrow<SerializationException> { conversion.convert(instant) }
+                error.message shouldStartWith "$instant is out of range for Avro timestamp-"
+                error.cause.shouldBeInstanceOf<ArithmeticException>().message shouldBe "long overflow"
+            }
         }
     }
 

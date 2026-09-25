@@ -3,6 +3,7 @@
 package com.github.avrokotlin.avro4k.serializer
 
 import kotlinx.serialization.SerializationException
+import kotlin.math.abs
 import kotlin.time.Instant
 
 private const val NANOSECONDS_PER_MILLISECOND: Long = 1_000_000L
@@ -27,13 +28,13 @@ private fun Instant.toEpochUnits(
     try {
         val nanosPerUnit = NANOSECONDS_PER_SECOND / unitsPerSecond
         if (epochSeconds < 0 && nanosecondsOfSecond > 0) {
-            val units = Math.multiplyExact(epochSeconds + 1, unitsPerSecond)
+            val units = multiplyExact(epochSeconds + 1, unitsPerSecond)
             val adjustment = nanosecondsOfSecond / nanosPerUnit - unitsPerSecond
-            return Math.addExact(units, adjustment)
+            return addExact(units, adjustment)
         }
 
-        val units = Math.multiplyExact(epochSeconds, unitsPerSecond)
-        return Math.addExact(units, nanosecondsOfSecond / nanosPerUnit)
+        val units = multiplyExact(epochSeconds, unitsPerSecond)
+        return addExact(units, nanosecondsOfSecond / nanosPerUnit)
     } catch (e: ArithmeticException) {
         throw SerializationException("$this is out of range for Avro $logicalType", e)
     }
@@ -50,6 +51,34 @@ private fun Instant.Companion.fromEpochUnits(
     unitsPerSecond: Long,
     nanosPerUnit: Long,
 ): Instant = fromEpochSeconds(
-    Math.floorDiv(units, unitsPerSecond),
-    Math.floorMod(units, unitsPerSecond) * nanosPerUnit
+    units.floorDiv(unitsPerSecond),
+    units.mod(unitsPerSecond) * nanosPerUnit
 )
+
+/** `a * b`, or an [ArithmeticException] on overflow: the algorithm and message of the JVM's `Math.multiplyExact`. */
+private fun multiplyExact(
+    a: Long,
+    b: Long,
+): Long {
+    val result = a * b
+    // Only operands wider than 31 bits can overflow a long product
+    if ((abs(a) or abs(b)) ushr 31 != 0L) {
+        if ((b != 0L && result / b != a) || (a == Long.MIN_VALUE && b == -1L)) {
+            throw ArithmeticException("long overflow")
+        }
+    }
+    return result
+}
+
+/** `a + b`, or an [ArithmeticException] on overflow: the algorithm and message of the JVM's `Math.addExact`. */
+private fun addExact(
+    a: Long,
+    b: Long,
+): Long {
+    val result = a + b
+    // Overflows if and only if both operands have the opposite sign of the result
+    if ((a xor result) and (b xor result) < 0) {
+        throw ArithmeticException("long overflow")
+    }
+    return result
+}

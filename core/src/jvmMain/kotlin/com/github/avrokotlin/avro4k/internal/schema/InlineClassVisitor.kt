@@ -14,7 +14,6 @@ import com.github.avrokotlin.avro4k.AvroSchema.NullSchema
 import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.jsonElement
-import com.github.avrokotlin.avro4k.serializer.AvroSerializer
 import com.github.avrokotlin.avro4k.serializer.ElementLocation
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -39,7 +38,7 @@ internal class InlineClassVisitor(
                         throw SerializationException(
                             "The value class property '${inlineClassDescriptor.serialName}.${inlineClassDescriptor.getElementName(0)}' has " +
                                 "forbidden additional properties $props for the named schema ${generatedSchema.fullName}. " +
-                                "Please create your own serializer extending ${AvroSerializer::class.qualifiedName} to add properties to a named schema."
+                                "Please create your own serializer extending com.github.avrokotlin.avro4k.serializer.AvroSerializer to add properties to a named schema."
                         )
                     }
                     // The last annotation wins for a prop set twice (the element's one over the class' one)

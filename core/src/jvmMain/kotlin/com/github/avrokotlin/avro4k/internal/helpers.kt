@@ -9,6 +9,7 @@ import kotlinx.io.Buffer
 import kotlinx.io.UnsafeIoApi
 import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.descriptors.PolymorphicKind
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.SerialKind
@@ -22,8 +23,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializerOrNull
-import org.apache.avro.LogicalType
-import org.apache.avro.Schema
 
 internal inline fun <reified T : Annotation> SerialDescriptor.findAnnotation() = annotations.firstNotNullOfOrNull { it as? T }
 
@@ -57,80 +56,6 @@ public val SerialDescriptor.aliases: Set<String>
 internal fun SerialDescriptor.getElementAliases(elementIndex: Int): Set<String> =
     findElementAnnotation<AvroAlias>(elementIndex)?.value?.toSet() ?: emptySet()
 
-private val SCHEMA_PLACEHOLDER = Schema.create(Schema.Type.NULL)
-
-@InternalAvro4kApi
-public fun Schema.copy(
-    name: String = this.name,
-    doc: String? = this.doc,
-    namespace: String? = if (this.type == Schema.Type.RECORD || this.type == Schema.Type.ENUM || this.type == Schema.Type.FIXED) this.namespace else null,
-    aliases: Set<String> = if (this.type == Schema.Type.RECORD || this.type == Schema.Type.ENUM || this.type == Schema.Type.FIXED) this.aliases else emptySet(),
-    isError: Boolean = if (this.type == Schema.Type.RECORD) this.isError else false,
-    types: List<Schema> = if (this.isUnion) this.types.toList() else emptyList(),
-    enumSymbols: List<String> = if (this.type == Schema.Type.ENUM) this.enumSymbols.toList() else emptyList(),
-    fields: List<Schema.Field>? = if (this.type == Schema.Type.RECORD && this.hasFields()) this.fields.map { it.copy() } else null,
-    enumDefault: String? = if (this.type == Schema.Type.ENUM) this.enumDefault else null,
-    fixedSize: Int = if (this.type == Schema.Type.FIXED) this.fixedSize else -1,
-    valueType: Schema = if (this.type == Schema.Type.MAP) this.valueType else SCHEMA_PLACEHOLDER,
-    elementType: Schema = if (this.type == Schema.Type.ARRAY) this.elementType else SCHEMA_PLACEHOLDER,
-    objectProps: Map<String, Any> = this.objectProps,
-    additionalProps: Map<String, Any> = emptyMap(),
-    logicalType: LogicalType? = this.logicalType,
-    logicalTypeName: String? = this.logicalType?.name,
-): Schema {
-    @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
-    return when (type) {
-        Schema.Type.RECORD -> if (hasFields()) Schema.createRecord(name, doc, namespace, isError, fields) else Schema.createRecord(name, doc, namespace, isError)
-
-        Schema.Type.ENUM -> Schema.createEnum(name, doc, namespace, enumSymbols, enumDefault)
-
-        Schema.Type.FIXED -> Schema.createFixed(name, doc, namespace, fixedSize)
-
-        Schema.Type.UNION -> Schema.createUnion(types)
-
-        Schema.Type.MAP -> Schema.createMap(valueType)
-
-        Schema.Type.ARRAY -> Schema.createArray(elementType)
-
-        Schema.Type.BYTES,
-        Schema.Type.STRING,
-        Schema.Type.INT,
-        Schema.Type.LONG,
-        Schema.Type.FLOAT,
-        Schema.Type.DOUBLE,
-        Schema.Type.BOOLEAN,
-        Schema.Type.NULL,
-        -> Schema.create(type)
-    }
-        .also { newSchema ->
-            objectProps.forEach { (key, value) -> newSchema.addProp(key, value) }
-            additionalProps.forEach { (key, value) -> newSchema.addProp(key, value) }
-            if (logicalType != null && logicalTypeName != null) {
-                require(logicalType.name == logicalTypeName) { "Logical type name mismatch: expected '$logicalTypeName', but got '${logicalType.name}'" }
-            }
-            (logicalType ?: logicalTypeName?.let(::LogicalType))?.addToSchema(newSchema)
-            aliases.forEach { newSchema.addAlias(it) }
-        }
-}
-
-internal fun Schema.Field.copy(
-    name: String = this.name(),
-    schema: Schema = this.schema(),
-    doc: String? = this.doc(),
-    defaultVal: Any? = this.defaultVal(),
-    order: Schema.Field.Order = this.order(),
-    aliases: Set<String> = this.aliases(),
-    objectProps: Map<String, Any> = this.objectProps,
-    additionalProps: Map<String, Any> = emptyMap(),
-): Schema.Field {
-    return Schema.Field(name, schema, doc, defaultVal, order)
-        .also { newSchema ->
-            objectProps.forEach { (key, value) -> newSchema.addProp(key, value) }
-            additionalProps.forEach { (key, value) -> newSchema.addProp(key, value) }
-            aliases.forEach { newSchema.addAlias(it) }
-        }
-}
-
 @OptIn(ExperimentalSerializationApi::class)
 internal fun SerialDescriptor.possibleSerializationSubclasses(serializersModule: SerializersModule): Sequence<SerialDescriptor> {
     return when (this.kind) {
@@ -150,9 +75,13 @@ internal fun SerialDescriptor.possibleSerializationSubclasses(serializersModule:
     }
 }
 
-@OptIn(ExperimentalSerializationApi::class)
+/**
+ * The descriptor of a contextual type: the one registered in [serializersModule], else the descriptor of the captured
+ * class's own serializer (generated or built-in).
+ */
+@OptIn(ExperimentalSerializationApi::class, InternalSerializationApi::class)
 internal fun SerialDescriptor.getNonNullContextualDescriptor(serializersModule: SerializersModule) =
-    requireNotNull(serializersModule.getContextualDescriptor(this) ?: this.capturedKClass?.java?.let(serializersModule::serializerOrNull)?.descriptor) {
+    requireNotNull(serializersModule.getContextualDescriptor(this) ?: this.capturedKClass?.serializerOrNull()?.descriptor) {
         "No descriptor found in serialization context for $this"
     }
 

@@ -14,6 +14,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlin.concurrent.Volatile
 
 /**
  * Capacity of the per-[RecordResolver] inline cache. Sized to comfortably hold the record types of a deeply
@@ -64,8 +65,12 @@ internal class RecordResolver(
      *
      * Concurrency: the array is immutable once published, replaced wholesale by a copy-on-write assignment, and
      * only ever *read* on the hot path, so there is no locking and no write contention between threads. The field
-     * is `@Volatile` for safe publication: array elements are not final fields, so a plain field would let a racing
-     * thread observe a partially-initialized [Memo]. Losing a concurrent update is harmless — it only costs the
+     * is [Volatile] for safe publication: array elements are not final fields, so a plain field would let a racing
+     * thread observe a partially-initialized [Memo]. On the JVM a volatile write happens-before every read that
+     * observes it (JLS 17.4.5); on Kotlin/Native, [Volatile]'s contract is that a thread reading the value "sees not
+     * only that value, but all side effects that led to writing that value"; JS is single-threaded. The array and
+     * every [Memo] in it are fully built before that single write and never mutated afterwards, so a reader that sees
+     * the array sees complete entries on every platform. Losing a concurrent update is harmless — it only costs the
      * loser a future miss, which falls through to [fieldCache], the real cache.
      *
      * Note this pins up to [INLINE_CACHE_CAPACITY] schemas/descriptors strongly (per [Avro] instance), unlike

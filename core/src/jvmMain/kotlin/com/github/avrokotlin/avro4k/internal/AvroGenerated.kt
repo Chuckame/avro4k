@@ -5,7 +5,6 @@ package com.github.avrokotlin.avro4k.internal
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialInfo
-import org.intellij.lang.annotations.Language
 
 /**
  * Internal annotation to store the original schema used to generate the annotated class.
@@ -19,6 +18,5 @@ import org.intellij.lang.annotations.Language
 @InternalAvro4kApi
 @Target(AnnotationTarget.CLASS)
 public annotation class AvroGenerated(
-    @Language("JSON")
     val originalSchema: String,
 )

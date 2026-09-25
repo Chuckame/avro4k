@@ -24,7 +24,7 @@ internal fun DecodedNullError(
     "Unexpected null value for field '${descriptor.getElementName(elementIndex)}' for type '${descriptor.serialName}', Decoder.decodeTaggedNotNullMark should be called first"
 )
 
-internal fun Decoder.IllegalIndexedAccessError() = UnsupportedOperationException("${this::class.qualifiedName} does not support indexed access")
+internal fun Decoder.IllegalIndexedAccessError() = UnsupportedOperationException("${this::class.nameForMessages} does not support indexed access")
 
 context(_: Decoder)
 internal inline fun <reified ExpectedType> BadDecodedValueError(
@@ -35,12 +35,12 @@ internal inline fun <reified ExpectedType> BadDecodedValueError(
     val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
     return if (value == null) {
         SerializationException(
-            "Decoded null value for ${ExpectedType::class.qualifiedName} kind, expected one of [${allExpectedTypes.joinToString { it.qualifiedName!! }}]"
+            "Decoded null value for ${ExpectedType::class.nameForMessages} kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
         )
     } else {
         SerializationException(
-            "Decoded value '$value' of type ${value::class.qualifiedName} for " +
-                "${ExpectedType::class.qualifiedName} kind, expected one of [${allExpectedTypes.joinToString { it.qualifiedName!! }}]"
+            "Decoded value '$value' of type ${value::class.nameForMessages} for " +
+                "${ExpectedType::class.nameForMessages} kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
         )
     }
 }
@@ -55,11 +55,11 @@ internal fun BadDecodedValueError(
     val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
     return if (value == null) {
         SerializationException(
-            "Decoded null value for $expectedKind kind, expected one of [${allExpectedTypes.joinToString { it.qualifiedName!! }}]"
+            "Decoded null value for $expectedKind kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
         )
     } else {
         SerializationException(
-            "Decoded value '$value' of type ${value::class.qualifiedName} for $expectedKind kind, expected one of [${allExpectedTypes.joinToString { it.qualifiedName!! }}]"
+            "Decoded value '$value' of type ${value::class.nameForMessages} for $expectedKind kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
         )
     }
 }

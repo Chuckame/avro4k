@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.AvroEnumDefault
 import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlin.jvm.JvmField
 
 internal class EnumResolver {
     /**

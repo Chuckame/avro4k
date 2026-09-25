@@ -71,10 +71,55 @@ private fun JsonElement.normalizeNumbers(): JsonElement =
             if (isString || booleanOrNull != null) {
                 this
             } else {
-                val number = content.toBigDecimal().stripTrailingZeros()
-                if (number.scale() <= 0) JsonPrimitive(number.toBigInteger()) else JsonPrimitive(number)
+                // parsed back, so that the result is a plain json number literal, like the JsonPrimitive(Number) it replaces
+                Json.parseToJsonElement(content.normalizeDecimalNumber())
             }
     }
+
+/** The syntax `java.math.BigDecimal(String)` accepts, with ASCII digits: sign, integer digits, fraction digits, exponent. */
+private val DECIMAL_NUMBER = Regex("([+-]?)([0-9]*)(?:\\.([0-9]*))?(?:[eE]([+-]?[0-9]+))?")
+
+/**
+ * This decimal number as `java.math.BigDecimal(this).stripTrailingZeros()` prints it, so that every platform writes the
+ * same default in the schema: as an integer (`BigInteger.toString`) when the stripped scale is not positive, else as
+ * `BigDecimal.toString` does, in scientific notation when the adjusted exponent is below -6 (`1.5E-7`).
+ *
+ * @throws NumberFormatException if this is not a decimal number, or its scale does not fit in an int
+ */
+internal fun String.normalizeDecimalNumber(): String {
+    val match = DECIMAL_NUMBER.matchEntire(this)
+    if (match == null || (match.groupValues[2].isEmpty() && match.groupValues[3].isEmpty())) {
+        throw NumberFormatException("Not a decimal number: $this")
+    }
+    val (sign, integerDigits, fractionDigits, exponentDigits) = match.destructured
+    val exponent = if (exponentDigits.isEmpty()) 0L else exponentDigits.toLong()
+    val significantDigits = (integerDigits + fractionDigits).trimStart('0')
+    if (significantDigits.isEmpty()) {
+        // BigDecimal has no negative zero, and a stripped zero is always the integer 0
+        return "0"
+    }
+    val digits = significantDigits.trimEnd('0')
+    val scaleAsLong = fractionDigits.length - exponent - (significantDigits.length - digits.length)
+    if (scaleAsLong !in Int.MIN_VALUE..Int.MAX_VALUE) {
+        throw NumberFormatException("Scale out of range: $this")
+    }
+    val scale = scaleAsLong.toInt()
+    val prefix = if (sign == "-") "-" else ""
+    if (scale <= 0) {
+        return prefix + digits + "0".repeat(-scale)
+    }
+    val adjustedExponent = digits.length - 1L - scale
+    return when {
+        adjustedExponent < -6 -> {
+            val fraction = if (digits.length > 1) "." + digits.substring(1) else ""
+            "$prefix${digits[0]}${fraction}E$adjustedExponent"
+        }
+
+        digits.length > scale -> prefix + digits.substring(0, digits.length - scale) + "." + digits.substring(digits.length - scale)
+
+        else -> prefix + "0." + "0".repeat(scale - digits.length) + digits
+    }
+}
 
 /**
  * Whether this json is a valid default value for [schema], following Apache Java's validation of defaults (itself the

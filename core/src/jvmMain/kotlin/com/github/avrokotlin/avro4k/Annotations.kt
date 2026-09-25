@@ -3,10 +3,8 @@
 package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
-import com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialInfo
-import org.intellij.lang.annotations.Language
 
 /**
  * Adds a property to the Avro schema or field. Its value could be any valid JSON or just a string.
@@ -21,7 +19,7 @@ import org.intellij.lang.annotations.Language
 @Target(AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)
 public annotation class AvroProp(
     val key: String,
-    @Language("JSON") val value: String,
+    val value: String,
 )
 
 /**
@@ -76,7 +74,7 @@ public annotation class AvroAlias(vararg val value: String)
 public annotation class AvroStringable
 
 /**
- * To be used with [BigDecimalSerializer] to specify the scale, precision, type and rounding mode of the decimal value.
+ * To be used with [com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer] (JVM only) to specify the scale, precision, type and rounding mode of the decimal value.
  *
  * Can be used with [AvroFixed] to serialize value as a fixed type.
  *
@@ -121,7 +119,7 @@ public annotation class AvroFixed(val size: Int)
 @SerialInfo
 @Target(AnnotationTarget.PROPERTY)
 public annotation class AvroDefault(
-    @Language("JSON") val value: String,
+    val value: String,
 )
 
 /**

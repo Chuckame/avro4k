@@ -107,7 +107,7 @@ private val AvroStringSerialDescriptor: SerialDescriptor =
         } ?: AvroSchema.StringSchema()
     }
 
-private object KotlinDurationSerializer : AvroSerializer<Duration>(Duration::class.qualifiedName!!) {
+private object KotlinDurationSerializer : AvroSerializer<Duration>("kotlin.time.Duration") {
     private const val MILLIS_PER_DAY = 1000 * 60 * 60 * 24
 
     override fun getSchema(context: SchemaSupplierContext): AvroSchema {
@@ -149,7 +149,7 @@ private object KotlinDurationSerializer : AvroSerializer<Duration>(Duration::cla
 
     private fun Duration.toAvroDuration(): AvroDuration {
         if (isNegative()) {
-            throw SerializationException("${Duration::class.qualifiedName} cannot be converted to ${AvroDuration::class.qualifiedName} as it cannot be negative")
+            throw SerializationException("kotlin.time.Duration cannot be converted to com.github.avrokotlin.avro4k.serializer.AvroDuration as it cannot be negative")
         }
         if (isInfinite()) {
             return AvroDuration(
@@ -167,7 +167,7 @@ private object KotlinDurationSerializer : AvroSerializer<Duration>(Duration::cla
     }
 }
 
-private object AvroByteArraySerializer : AvroSerializer<ByteArray>(ByteArray::class.qualifiedName!!) {
+private object AvroByteArraySerializer : AvroSerializer<ByteArray>("kotlin.ByteArray") {
     override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema() ?: it.fixed?.createSchema(it)

@@ -37,7 +37,7 @@ internal val KotlinStdLibSerializersModule: SerializersModule
  *
  * Note: it does not check if the schema logical type name is `uuid` as it does not make any conversion.
  */
-public object KotlinUuidSerializer : AvroSerializer<Uuid>(Uuid::class.qualifiedName!!) {
+public object KotlinUuidSerializer : AvroSerializer<Uuid>("kotlin.uuid.Uuid") {
     internal const val LOGICAL_TYPE_NAME = "uuid"
 
     override fun getSchema(context: SchemaSupplierContext): AvroSchema {
@@ -124,7 +124,7 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>(Uuid::class.qualifiedN
  *
  * Also supports string type for ISO-8601 representation.
  */
-public object KotlinInstantSerializer : AvroSerializer<Instant>(Instant::class.qualifiedName!!) {
+public object KotlinInstantSerializer : AvroSerializer<Instant>("kotlin.time.Instant") {
     override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
