@@ -629,6 +629,173 @@ Apache `Schema` itself (no `toAvro4k()`, which base's core did not need), `parse
 - **Watch list:** `complex` read @1 no longer regresses (8/9 fast forks); the polymorphic EA-on rows are flat against this
   base except `writeConcrete` @1000; `simple` write @25 joins the list.
 
+## Results — cumulative: M0 baseline vs M3 so far (4508a13 vs bd99294)
+
+The per-unit A/Bs above each compare one step with the step before it. This section answers the
+cumulative question instead: **is avro4k faster than it was at the M0 baseline, and how far is it from
+Apache now?** It measures the M0 baseline and today's tree, with every library, in the same runs.
+
+| | |
+|---|---|
+| Date | 2026-09-25/26 |
+| Machine | Apple M2 Pro, macOS 26.6.2, JBR 21.0.11, JMH 1.37 |
+| Base ("M0") | `4508a13`: the re-captured baseline (the M0 tables above were produced from this benchmark tree) |
+| Head ("now") | `bd99294`: core on `AvroSchema`, own codec, platform-free core in `commonMain` |
+| Total | 6 × ~29 min throughput + 2 × ~3 min allocation, ≈ 3 h of benchmarking |
+
+**What was compared.** `git diff 4508a13 bd99294 -- benchmark/src` leaves every end-to-end `@Benchmark` body
+(`read()`/`write()` of all libraries in `simple`, `complex` and `lists`) unchanged. What changed is setup plumbing only:
+the `schema` field became `CoreSchema` via `Avro.coreSchema<T>()`, test data is encoded through `encodeWith`, and
+Jackson/Apache-generic setup convert with `asApacheSchema()`. The Apache and Jackson benchmarks therefore ran unchanged on
+both sides. **Excluded:** the micro-benchmarks. They measure single internals, not the question asked here, and they are
+not like for like: `IdentityLookupMicroBenchmark`, `FreshWriterSchemaMicroBenchmark` and
+`CollectionMicroBenchmark.readTwoCollections` do not exist at M0. The per-unit A/Bs above cover them.
+
+**How it was run.** The plugin's own per-workload tasks, which run the same classes with the same settings as
+`:benchmark:benchmark` (1 fork, 5 × 1 s warmup, 5 × 3 s measurement, escape analysis on) and leave out the micro suite:
+
+```bash
+for cfg in simple-read simple-write complex-read complex-write lists-read lists-write; do
+  caffeinate -i ./gradlew :benchmark:${cfg}Benchmark
+done
+# EA-off allocation, avro4k rows only, once per side:
+caffeinate -i ./gradlew :benchmark:benchmarkAlloc -Pbench='\.Avro4k' -PallocForks=1 -PallocWarmups=5 \
+  -PallocIterations=5 -PallocTime=1s -PallocJmhArgs='-jvmArgsAppend -XX:-DoEscapeAnalysis'
+```
+
+The six-task set ran **3 times per side, alternated** (base, head, base, head, base, head), with nothing else running.
+So every row has 3 forks per side, one per invocation. "sep" = all three "now" invocations are above (or below) all three
+"M0" ones.
+
+> [!WARNING]
+> **The machine ran on battery in Low Power Mode throughout** (89% → 38%, no change of power source). Both sides ran
+> under the same conditions, alternated, so the comparisons inside this section hold. The **absolute** ops/s are roughly
+> 20–55% below the M0 tables above, and some M0 ratios to Apache differ from the M0 table (`complex` read @1: 0.73× here, 0.47×
+> there). **Read the numbers in this section against each other only**, not against the other sections.
+
+**Noise floor for this run.** Apache `SpecificData` runs identical code on both sides, so its base→head drift is
+pure measurement noise. It stayed within ±7.2% on all 16 rows, and 13 of them were within ±4%. Jackson came out
+1–12% lower on the head side in 15 of 16 rows. Its code is identical too, and the cause was not investigated (the
+benchmark classpath differs: head adds `apache-interop`). It does not affect the avro4k or Apache columns.
+
+### avro4k, M0 → now, and its distance to Apache
+
+ops/s, mean of 3 invocations per side, higher is better. **avro4k ÷ Apache** = avro4k's throughput divided by Apache's
+fastest configuration (`SpecificData` + generated classes, fast reader on) **in the same runs**. Below 1.00× avro4k is
+slower; above, it is faster. Verdicts: under 10% and not separated = **same**. Separated but under 10% = **slightly
+better/worse**.
+
+`simple`: one flat record of primitives, × `recordCount`
+
+| | avro4k M0 | avro4k now | Δ | sep | verdict | avro4k ÷ Apache, M0 | avro4k ÷ Apache, now |
+|---|---:|---:|---:|:-:|---|---:|---:|
+| read @1 | 2,503,925 | 2,722,630 | +8.7% | n | same | 0.44× | 0.51× |
+| read @25 | 141,534 | 150,816 | +6.6% | n | same | 0.61× | 0.64× |
+| read @500 | 7,616 | 8,460 | **+11.1%** | Y | **better** | 0.65× | 0.74× |
+| write @1 | 3,632,512 | 3,556,816 | −2.1% | n | same | 0.75× | 0.75× |
+| write @25 | 204,911 | 221,384 | +8.0% | n | same ¹ | 1.22× | 1.31× |
+| write @500 | 9,724 | 11,139 | **+14.5%** | Y | **better** | 1.34× | 1.53× |
+
+`complex`: nested records, unions, a sealed (polymorphic) field, maps, logical types, × `clientCount`
+
+| | avro4k M0 | avro4k now | Δ | sep | verdict | avro4k ÷ Apache, M0 | avro4k ÷ Apache, now |
+|---|---:|---:|---:|:-:|---|---:|---:|
+| **read @1** | 251,269 | 218,629 | **−13.0%** | Y | **worse** ² | 0.73× | 0.61× |
+| read @15 | 17,422 | 18,273 | +4.9% | Y | slightly better | 0.51× | 0.53× |
+| read @200 | 1,268 | 1,305 | +2.9% | Y | same | 0.51× | 0.52× |
+| write @1 | 449,167 | 474,722 | +5.7% | Y | slightly better | 0.84× | 0.87× |
+| write @15 | 26,582 | 29,156 | +9.7% | Y | slightly better | 0.92× | 0.99× |
+| write @200 | 1,822 | 2,048 | **+12.4%** | Y | **better** | 0.91× | 1.02× |
+
+`lists`: 1 wrapper × `entryCount` entries × 100 longs
+
+| | avro4k M0 | avro4k now | Δ | sep | verdict | avro4k ÷ Apache, M0 | avro4k ÷ Apache, now |
+|---|---:|---:|---:|:-:|---|---:|---:|
+| read @100 | 4,478 | 5,396 | **+20.5%** | Y | **better** | 0.47× | 0.55× |
+| read @10,000 | 38.7 | 54.2 | **+40.2%** | Y | **better** | 0.43× | 0.57× |
+| write @100 | 4,364 | 4,927 | **+12.9%** | n | **better** ³ | 0.71× | 0.80× |
+| write @10,000 | 30.4 | 56.5 | **+86.0%** | Y | **better** | 0.51× | 0.92× |
+
+1. `simple` write @25 is the bimodal row from the M3-11+12 watch list. Two "now" invocations reached ~249k (+21%) and
+   one landed in the slow mode at 166k. That is why the mean is only +8% and the row is not separated.
+2. `complex` read @1 is the bimodal row from the M3-02 watch list, and it is **below M0 in all three invocations**. Two
+   are −5% (237k, 240k vs 248–256k) and one landed in the slow mode (179k, −29%). avro4k allocates **5% less** per
+   read here with escape analysis off (table below), so it is not doing more work. The JIT settles into a slower
+   compilation more often. This has not been confirmed with JIT logs, and it is the only row worse than M0.
+3. `lists` write @100 is +12.9% but not separated. The first "now" invocation was low for **every** library on that row
+   (Apache Specific 5,137 vs ~6,700 in the other two), so that fork is noise, not avro4k. The other two are +26%.
+
+For reference, every library in the "now" runs (mean of 3). Apache's code is the same on both sides:
+
+`simple`
+
+| | read @1 | read @25 | read @500 | write @1 | write @25 | write @500 |
+|---|---:|---:|---:|---:|---:|---:|
+| **avro4k** (now) | 2,722,630 | 150,816 | 8,460 | 3,556,816 | 221,384 | 11,139 |
+| Apache Specific | 5,329,783 | 233,956 | 11,358 | 4,767,604 | 168,893 | 7,284 |
+| Apache Reflect | 1,982,030 | 89,415 | 4,492 | 2,030,658 | 74,954 | 3,582 |
+| Jackson | 898,008 | 47,881 | 2,296 | 1,411,555 | 78,822 | 3,692 |
+| _Apache Generic, fast reader_ | 6,133,029 | 194,948 | 8,081 | — | — | — |
+
+`complex`
+
+| | read @1 | read @15 | read @200 | write @1 | write @15 | write @200 |
+|---|---:|---:|---:|---:|---:|---:|
+| **avro4k** (now) | 218,629 | 18,273 | 1,305 | 474,722 | 29,156 | 2,048 |
+| Apache Specific | 358,024 | 34,415 | 2,493 | 545,801 | 29,498 | 2,007 |
+| Apache Reflect | 211,787 | 13,908 | 1,012 | 235,081 | 15,153 | 1,046 |
+| Jackson | 265,337 | 14,701 | 1,076 | 339,519 | 19,154 | 1,207 |
+| _Apache Generic, fast reader_ | 387,620 | 43,839 | 3,067 | — | — | — |
+
+`lists`
+
+| | read @100 | read @10,000 | write @100 | write @10,000 |
+|---|---:|---:|---:|---:|
+| **avro4k** (now) | 5,396 | 54.2 | 4,927 | 56.5 |
+| Apache Specific | 9,767 | 96.0 | 6,166 | 61.7 |
+| Apache Reflect | 3,759 | 37.9 | 2,111 | 24.3 |
+| Jackson | 5,050 | 50.8 | 3,850 | 40.3 |
+| _Apache Generic, fast reader_ | 9,863 | 96.6 | — | — |
+
+avro4k now beats Jackson and Apache `ReflectData` on every row except `complex` read @1, where Jackson is 21% faster
+(Reflect is about level).
+
+### Allocation per operation, escape analysis off (B/op, lower is better)
+
+One invocation per side. The per-iteration spread is below 1 B/op on every row, so a second invocation adds nothing.
+This is the allocation JS and native will see (see M1, finding 1).
+
+| | read M0 → now | Δ | write M0 → now | Δ |
+|---|---|---:|---|---:|
+| `simple` @1 | 976 → 704 | **−28%** | 536 → 224 | **−58%** |
+| `simple` @25 | 13,328 → 8,640 | **−35%** | 5,144 → 2,144 | **−58%** |
+| `simple` @500 | 258,441 → 166,353 | **−36%** | 96,345 → 40,145 | **−58%** |
+| `complex` @1 | 6,280 → 5,968 | −5% | 2,168 → 1,816 | **−16%** |
+| `complex` @15 | 135,216 → 130,256 | −4% | 30,776 → 26,552 | **−14%** |
+| `complex` @200 | 1,808,622 → 1,745,261 | −4% | 409,812 → 356,571 | **−13%** |
+| `lists` @100 | 312,378 → 303,401 | −3% | 21,354 → 9,841 | **−54%** |
+| `lists` @10,000 | 31,160,969 → 30,280,745 | −3% | 2,080,709 → 960,359 | **−54%** |
+
+No row allocates more than at M0.
+
+### Verdict, in plain words
+
+- **Better than M0 on 10 of 16 rows, same on 5, worse on 1.** The biggest gains are on `lists` (+86% write, +40% read
+  @10,000). Allocation went down on every row: writes by 13–58%, `simple` reads by 28–36%. The one worse row,
+  **`complex` read @1 (−13%)**, allocates less than at M0. It is most likely the JIT's compilation outcome on a tiny
+  payload (two runs −5%, one −29%), but this is not confirmed.
+- **Writes are at or above Apache from medium sizes up:** `complex` 0.99×/1.02× (M0 0.92×/0.91×), `simple` 1.31×/1.53×,
+  `lists` @10,000 0.92× (M0 0.51×). What is left is the **smallest payloads** (`simple` @1 0.75×, `complex` @1 0.87×,
+  `lists` @100 0.80×), a fixed cost per call and per structure. M5's **C1** frame-stack encoder targets it, and **C4**
+  targets the union-heavy `complex` encode.
+- **Reads are still about half Apache's speed, and this is the main gap:** `complex` 0.51× → 0.52×, `lists` ~0.45× →
+  ~0.56×, `simple` 0.44–0.65× → 0.51–0.74×. Read allocation barely moved (`complex` −4%, `lists` −3%). M1–M3 removed
+  lookups, wrappers and per-value buffers, but not the decoder built for each record, array block and map block. M5
+  targets that with **C1**'s frame-stack decoder, **C6** (polymorphic decode, which still builds a `Pair` per value on
+  `complex`'s sealed field) and the rest of **C5** (string/bytes decode fast paths).
+- **Not covered by the plan:** `complex` read @1 and the `simple` write @25 bimodality need JIT logs, and C1 rewrites that
+  path, so re-measure after it. **C8** (the reordering encoder) cannot show here, because no workload reorders fields.
+
 ## Run the benchmark locally
 
 Just execute the benchmark:
