@@ -3,13 +3,18 @@ package com.github.avrokotlin.avro4k.serializer
 import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
+import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.ensureFixedSize
 import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
-import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
+import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.isFullNameOrAliasMatch
+import com.github.avrokotlin.avro4k.internal.schema.isUnion
+import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
 import com.github.avrokotlin.avro4k.trySelectLogicalTypeFromUnion
 import com.github.avrokotlin.avro4k.trySelectNamedSchema
 import com.github.avrokotlin.avro4k.trySelectTypeNameFromUnion
@@ -19,8 +24,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import org.apache.avro.LogicalType
-import org.apache.avro.Schema
+import kotlinx.serialization.json.JsonPrimitive
 import org.intellij.lang.annotations.Language
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -126,12 +130,18 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>(AvroDuration
     internal const val LOGICAL_TYPE_NAME = "duration"
     private const val DURATION_BYTES = 12
     private const val DEFAULT_DURATION_FULL_NAME = "time.Duration"
-    internal val DURATION_SCHEMA =
-        Schema.createFixed(DEFAULT_DURATION_FULL_NAME, "A 12-byte byte array encoding a duration in months, days and milliseconds.", null, DURATION_BYTES).also {
-            LogicalType(LOGICAL_TYPE_NAME).addToSchema(it)
-        }
 
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    /** A new instance on each read: a schema node is never shared by two generated schemas. */
+    internal val DURATION_SCHEMA: AvroSchema
+        get() =
+            AvroSchema.FixedSchema(
+                name = Name(DEFAULT_DURATION_FULL_NAME, null),
+                size = DURATION_BYTES,
+                doc = "A 12-byte byte array encoding a duration in months, days and milliseconds.",
+                props = mapOf("logicalType" to JsonPrimitive(LOGICAL_TYPE_NAME))
+            )
+
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
         } ?: DURATION_SCHEMA
@@ -144,38 +154,38 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>(AvroDuration
         with(encoder) {
             if (currentWriterSchema.isUnion) {
                 trySelectNamedSchema(DEFAULT_DURATION_FULL_NAME) ||
-                    trySelectLogicalTypeFromUnion(LOGICAL_TYPE_NAME, Schema.Type.FIXED) ||
-                    trySelectTypeNameFromUnion(Schema.Type.STRING) ||
-                    throw unsupportedWriterTypeError(Schema.Type.FIXED, Schema.Type.STRING)
+                    trySelectLogicalTypeFromUnion(LOGICAL_TYPE_NAME, AvroSchema.Type.FIXED) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.STRING) ||
+                    throw unsupportedWriterTypeError(AvroSchema.Type.FIXED, AvroSchema.Type.STRING)
             }
             when (currentWriterSchema.type) {
-                Schema.Type.FIXED ->
-                    if (currentWriterSchema.logicalType?.name == LOGICAL_TYPE_NAME || currentWriterSchema.isFullNameOrAliasMatch(DEFAULT_DURATION_FULL_NAME, ::emptySet)) {
+                AvroSchema.Type.FIXED ->
+                    if (currentWriterSchema.knownLogicalTypeName == LOGICAL_TYPE_NAME || currentWriterSchema.isFullNameOrAliasMatch(DEFAULT_DURATION_FULL_NAME, ::emptySet)) {
                         encodeFixed(ensureFixedSize(encodeDuration(value)))
                     } else {
                         throw fullNameOrAliasMismatchError(DEFAULT_DURATION_FULL_NAME, emptySet())
                     }
 
-                Schema.Type.STRING -> encodeString(value.toString())
+                AvroSchema.Type.STRING -> encodeString(value.toString())
 
-                else -> throw unsupportedWriterTypeError(Schema.Type.FIXED, Schema.Type.STRING)
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.FIXED, AvroSchema.Type.STRING)
             }
         }
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): AvroDuration {
         return with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError(AvroDuration::class.qualifiedName!!, Schema.Type.FIXED, Schema.Type.STRING) }) {
+            decodeResolvingAny({ UnexpectedDecodeSchemaError(AvroDuration::class.qualifiedName!!, AvroSchema.Type.FIXED, AvroSchema.Type.STRING) }) {
                 when (it.type) {
-                    Schema.Type.FIXED -> {
-                        if (it.logicalType?.name == LOGICAL_TYPE_NAME && it.fixedSize == DURATION_BYTES) {
-                            AnyValueDecoder { decodeDuration(contextOf<AvroDecoder>().decodeFixed().bytes()) }
+                    AvroSchema.Type.FIXED -> {
+                        if (it.knownLogicalTypeName == LOGICAL_TYPE_NAME && it.fixedSize == DURATION_BYTES) {
+                            AnyValueDecoder { decodeDuration(contextOf<AvroDecoder>().decodeFixed()) }
                         } else {
                             null
                         }
                     }
 
-                    Schema.Type.STRING -> {
+                    AvroSchema.Type.STRING -> {
                         AnyValueDecoder { AvroDuration.parse(contextOf<AvroDecoder>().decodeString()) }
                     }
 

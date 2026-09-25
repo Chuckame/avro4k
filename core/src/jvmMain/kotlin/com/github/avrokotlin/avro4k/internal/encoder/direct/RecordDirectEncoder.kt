@@ -7,7 +7,6 @@ import com.github.avrokotlin.avro4k.MissingFieldsEncodingException
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
-import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
 
@@ -42,17 +41,11 @@ internal fun RecordDirectEncoder(
     }
 }
 
-/** The message of the public, Apache-typed constructor, built from avro4k's own schema. */
 internal fun missingFieldsError(
     schema: RecordSchema,
     workflow: EncodingWorkflow.MissingWriterFields,
     descriptor: SerialDescriptor,
-): MissingFieldsEncodingException {
-    val missingFields = workflow.missingWriterFields.joinToString("', '") { schema.fields[it].name }
-    return MissingFieldsEncodingException(
-        "Missing required fields '$missingFields' when encoding with writer schema ${schema.toSchemaJsonString()} from descriptor $descriptor"
-    )
-}
+): MissingFieldsEncodingException = MissingFieldsEncodingException(workflow.missingWriterFields.map { schema.fields[it] }, schema, descriptor)
 
 private class RecordNonContiguousEncoder(
     private val descriptorToWriterFieldIndex: IntArray,

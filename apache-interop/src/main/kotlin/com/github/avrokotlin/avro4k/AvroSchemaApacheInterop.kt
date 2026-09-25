@@ -4,8 +4,8 @@ import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import org.apache.avro.Schema
 
-// The conversion itself lives in core until core drops its Apache dependency, so that core can convert at its own
-// public boundaries meanwhile.
+// The conversion itself lives in core until core drops its Apache dependency, as core still hands Apache's model to
+// Apache's own classes meanwhile (object container files, the validating codec, the generic data values).
 
 /**
  * Converts this Apache Avro schema to avro4k's multiplatform [AvroSchema].
@@ -34,5 +34,8 @@ public fun Schema.toAvro4k(): AvroSchema = apacheToAvro4k(this)
  * schema and parses json. Each node of the result converts back to the node of this schema it comes from:
  * `toApacheSchema().toAvro4k()` returns this very instance, and so does every sub-schema. The cached results are shared:
  * they must not be mutated (`addProp`…).
+ *
+ * A logical type that Apache does not know (avro4k's own `char`, a custom one) is kept as a `LogicalType` of that name,
+ * as the Apache schemas avro4k used to generate had it, where Apache's parser alone would only keep the `logicalType` prop.
  */
 public fun AvroSchema.toApacheSchema(): Schema = avro4kToApache(this)

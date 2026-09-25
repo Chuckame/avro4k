@@ -1,8 +1,8 @@
 package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.Buffer
-import com.github.avrokotlin.avro4k.internal.Cache
-import com.github.avrokotlin.avro4k.internal.WeakKeyCache
+import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
+import com.github.avrokotlin.avro4k.internal.avro4kToApacheUncached
 import kotlinx.io.Buffer
 import kotlinx.io.Sink
 import kotlinx.io.Source
@@ -17,7 +17,6 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
-import org.apache.avro.Schema
 import org.apache.avro.SchemaNormalization
 import java.io.InputStream
 import java.io.OutputStream
@@ -34,7 +33,7 @@ import java.io.OutputStream
  */
 @ExperimentalAvro4kApi
 public class AvroSingleObject(
-    private val schemaRegistry: (fingerprint: Long) -> Schema?,
+    private val schemaRegistry: (fingerprint: Long) -> AvroSchema?,
     @PublishedApi
     internal val avro: Avro = Avro,
 ) : BinaryFormat {
@@ -46,30 +45,33 @@ public class AvroSingleObject(
      * to its parsing form and hashing it, which is far more expensive than the payload encoding itself
      * for the small records typical of single-object encoding.
      *
-     * The cache is weak-keyed so that a long-lived [AvroSingleObject] never keeps a [Schema] alive, and
-     * per-instance so that its lifetime is bounded by this format instance rather than by the class loader.
+     * The cache is weak-keyed so that a long-lived [AvroSingleObject] never keeps an [AvroSchema] alive, and
+     * per-instance so that its lifetime is bounded by this format instance rather than by the class loader. It matches
+     * the writer schema by identity first, then by equality: a writer schema created per call (e.g. parsed per message)
+     * finds the fingerprint of an equal one, and is never remembered by identity (see [IdentityFirstCache]).
      *
      * The cached values are mutable [ByteArray]s, but they never escape: [crc64avro] is private, and its
      * only caller hands the array to [Sink.write], which copies the bytes out and neither retains nor
      * mutates the array. No public API exposes the fingerprint bytes.
      */
-    private val fingerprintCache: Cache<Schema, ByteArray> = WeakKeyCache()
+    private val fingerprintCache = IdentityFirstCache<AvroSchema, ByteArray>()
 
-    private fun Schema.crc64avro(): ByteArray =
+    // Apache's normalization needs its own model: converted on a miss only, uncached, as nothing else needs that form
+    private fun AvroSchema.crc64avro(): ByteArray =
         fingerprintCache.getOrPut(this) {
-            SchemaNormalization.parsingFingerprint("CRC-64-AVRO", this)
+            SchemaNormalization.parsingFingerprint("CRC-64-AVRO", avro4kToApacheUncached(this))
         }
 
     @Deprecated("Use encodeToSink instead", ReplaceWith("encodeToSink(writerSchema, serializer, value, outputStream.asSink().buffered())"))
     public fun <T> encodeToStream(
-        writerSchema: Schema,
+        writerSchema: AvroSchema,
         serializer: SerializationStrategy<T>,
         value: T,
         outputStream: OutputStream,
     ): Unit = encodeToSink(writerSchema, serializer, value, outputStream.asSink().buffered())
 
     public fun <T> encodeToSink(
-        writerSchema: Schema,
+        writerSchema: AvroSchema,
         serializer: SerializationStrategy<T>,
         value: T,
         sink: Sink,
@@ -119,7 +121,7 @@ private const val MAGIC_BYTE: Byte = 0xC3.toByte()
 private const val FORMAT_VERSION: Byte = 1
 
 public fun <T> AvroSingleObject.encodeToByteArray(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
 ): ByteArray {
@@ -129,7 +131,7 @@ public fun <T> AvroSingleObject.encodeToByteArray(
 }
 
 public inline fun <reified T> AvroSingleObject.encodeToByteArray(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     value: T,
 ): ByteArray = encodeToByteArray(writerSchema, avro.serializersModule.serializer<T>(), value)
 

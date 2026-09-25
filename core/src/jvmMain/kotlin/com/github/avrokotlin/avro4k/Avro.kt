@@ -5,7 +5,6 @@ import com.github.avrokotlin.avro4k.internal.EnumResolver
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.PolymorphicResolver
 import com.github.avrokotlin.avro4k.internal.RecordResolver
-import com.github.avrokotlin.avro4k.internal.avro4kToApacheKeepingUnknownLogicalTypes
 import com.github.avrokotlin.avro4k.internal.schema.ValueVisitor
 import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
 import com.github.avrokotlin.avro4k.serializer.JavaStdLibSerializersModule
@@ -24,7 +23,6 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.overwriteWith
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.serializer
-import org.apache.avro.Schema
 
 /**
  * The goal of this class is to serialize and deserialize in avro binary format.
@@ -44,7 +42,7 @@ public sealed class Avro(
      * or collection descriptors are fresh per call, so identity alone would re-infer the schema on every call.
      * `internal` for tests.
      */
-    internal val schemaCache = IdentityFirstCache<SerialDescriptor, GeneratedSchema>()
+    internal val schemaCache = IdentityFirstCache<SerialDescriptor, AvroSchema>()
 
     internal val recordResolver = RecordResolver(this)
     internal val polymorphicResolver = PolymorphicResolver(serializersModule) { avroSchema(it).fullName }
@@ -99,26 +97,16 @@ public sealed class Avro(
      * @see AvroBuilder.serializersModule
      * @see com.github.avrokotlin.avro4k.serializer.AvroSerializer
      */
-    public fun schema(descriptor: SerialDescriptor): Schema {
-        return generatedSchema(descriptor).apacheSchema
-    }
-
-    /**
-     * The schema inferred for [descriptor], as avro4k's own [AvroSchema]: the one [schema] returns is its Apache form.
-     * Same cache, same cost: one lookup.
-     */
-    internal fun avroSchema(descriptor: SerialDescriptor): AvroSchema {
-        return generatedSchema(descriptor).avroSchema
-    }
-
-    /** Both forms of the schema inferred for [descriptor], in a single cache entry so that [schema] stays one lookup. */
-    private fun generatedSchema(descriptor: SerialDescriptor): GeneratedSchema {
+    public fun schema(descriptor: SerialDescriptor): AvroSchema {
         return schemaCache.getOrPut(descriptor) {
             lateinit var output: AvroSchema
             ValueVisitor(this) { output = it }.visitValue(descriptor)
-            GeneratedSchema(output)
+            output
         }
     }
+
+    /** [schema], for core's own call sites. */
+    internal fun avroSchema(descriptor: SerialDescriptor): AvroSchema = schema(descriptor)
 
     /**
      * Encodes the given [value] to a [ByteArray] using the provided [writerSchema] and [serializer].
@@ -144,7 +132,7 @@ public sealed class Avro(
      * @see AvroBuilder.serializersModule
      */
     public fun <T> encodeToByteArray(
-        writerSchema: Schema,
+        writerSchema: AvroSchema,
         serializer: SerializationStrategy<T>,
         value: T,
     ): ByteArray {
@@ -171,7 +159,7 @@ public sealed class Avro(
      * @see AvroBuilder.serializersModule
      */
     public fun <T> decodeFromByteArray(
-        writerSchema: Schema,
+        writerSchema: AvroSchema,
         deserializer: DeserializationStrategy<T>,
         bytes: ByteArray,
     ): T {
@@ -314,23 +302,11 @@ private class AvroImpl(configuration: AvroConfiguration, serializersModule: Seri
     Avro(configuration, serializersModule)
 
 /**
- * A schema inferred by [Avro.schema], in both forms: the schema generation builds [avroSchema], and [apacheSchema] is its
- * Apache form, which the public API and the runtime still use until they are switched to `AvroSchema`.
- *
- * [apacheSchema] is computed once, eagerly, with the identity-cached conversion: every node of both trees is paired with
- * its counterpart (`avro4kToApache`), so the identity of the Apache schema is stable per cache entry, as it was when the
- * generation built it directly. Immutable once constructed, so an instance can be shared by all threads.
- */
-internal class GeneratedSchema(val avroSchema: AvroSchema) {
-    val apacheSchema: Schema = avro4kToApacheKeepingUnknownLogicalTypes(avroSchema)
-}
-
-/**
  * Infers the Avro schema for the given type [T].
  *
  * @see Avro.schema
  */
-public inline fun <reified T> Avro.schema(): Schema {
+public inline fun <reified T> Avro.schema(): AvroSchema {
     val serializer = serializersModule.serializer<T>()
     return schema(serializer.descriptor)
 }
@@ -340,7 +316,7 @@ public inline fun <reified T> Avro.schema(): Schema {
  *
  * @see Avro.schema
  */
-public fun Avro.schema(serializer: KSerializer<*>): Schema {
+public fun Avro.schema(serializer: KSerializer<*>): AvroSchema {
     return schema(serializer.descriptor)
 }
 
@@ -350,7 +326,7 @@ public fun Avro.schema(serializer: KSerializer<*>): Schema {
  * @see Avro.encodeToByteArray
  */
 public inline fun <reified T> Avro.encodeToByteArray(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     value: T,
 ): ByteArray {
     val serializer = serializersModule.serializer<T>()
@@ -366,7 +342,7 @@ public inline fun <reified T> Avro.encodeToByteArray(
  * @see Avro.decodeFromByteArray
  */
 public inline fun <reified T> Avro.decodeFromByteArray(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     bytes: ByteArray,
 ): T {
     val serializer = serializersModule.serializer<T>()

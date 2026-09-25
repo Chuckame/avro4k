@@ -128,8 +128,8 @@ internal class ValueVisitor internal constructor(
 internal const val CHAR_LOGICAL_TYPE_NAME = "char"
 
 /**
- * A new instance on each call, never a shared constant: `Avro.schema()` pairs every node of a generated schema with its
- * Apache node (`avro4kToApache`), and a node shared by several generated schemas could only be paired once.
+ * A new instance on each call, never a shared constant: the Apache form of a generated schema (`toApacheSchema()`) pairs
+ * each of its nodes with its Apache node, and a node shared by several generated schemas could only be paired once.
  */
 private fun PrimitiveKind.toSchema(): AvroSchema =
     when (this) {

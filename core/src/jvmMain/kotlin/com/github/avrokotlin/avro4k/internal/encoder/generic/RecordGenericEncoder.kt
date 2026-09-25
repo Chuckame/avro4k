@@ -5,8 +5,8 @@ package com.github.avrokotlin.avro4k.internal.encoder.generic
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ListRecord
-import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
+import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import com.github.avrokotlin.avro4k.internal.schema.fields
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -106,7 +106,7 @@ private abstract class AbstractRecordGenericEncoder(
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
-        onEncoded(ListRecord(apacheFacadeOf(schema), fieldValues.asList()))
+        onEncoded(ListRecord(avro4kToApache(schema), fieldValues.asList()))
     }
 
     override fun encodeValue(value: Any) {

@@ -38,7 +38,7 @@ internal class AvroSchemaCacheTest : StringSpec({
         val schema = avro.apacheSchema(descriptor)
 
         repeat(100) { avro.apacheSchema(CachedRecord.serializer().descriptor) shouldBeSameInstanceAs schema }
-        avro.schemaCache.identity.getOrNull(descriptor)?.apacheSchema shouldBeSameInstanceAs schema
+        avro.schemaCache.identity.getOrNull(descriptor)?.toApacheSchema() shouldBeSameInstanceAs schema
     }
 }) {
     @Serializable

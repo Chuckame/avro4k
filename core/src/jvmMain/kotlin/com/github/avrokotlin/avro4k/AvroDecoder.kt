@@ -1,15 +1,10 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
-import com.github.avrokotlin.avro4k.internal.avro4kToApacheKeepingUnknownLogicalTypes
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
-import com.github.avrokotlin.avro4k.internal.toAvroSchemaType
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.Decoder
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericFixed
 
 /**
  * Interface to decode Avro values.
@@ -50,10 +45,10 @@ public interface AvroDecoder : Decoder {
      * It won't return a union as the schema correspond to the actual value.
      */
     @ExperimentalAvro4kApi
-    public val currentWriterSchema: Schema
+    public val currentWriterSchema: AvroSchema
 
     /**
-     * Decode a [Schema.Type.BYTES] value.
+     * Decode a [AvroSchema.Type.BYTES] value.
      *
      * A bytes value is a sequence of bytes prefixed with an int corresponding to its length.
      */
@@ -61,12 +56,12 @@ public interface AvroDecoder : Decoder {
     public fun decodeBytes(): ByteArray
 
     /**
-     * Decode a [Schema.Type.FIXED] value.
+     * Decode a [AvroSchema.Type.FIXED] value, as its bytes.
      *
      * A fixed value is a fixed-size sequence of bytes, where the length is not materialized in the binary output as it is known by the [currentWriterSchema].
      */
     @ExperimentalAvro4kApi
-    public fun decodeFixed(): GenericFixed
+    public fun decodeFixed(): ByteArray
 
     /**
      * Decode a value that corresponds to the [currentWriterSchema].
@@ -104,7 +99,7 @@ public interface AvroDecoder : Decoder {
 @ExperimentalAvro4kApi
 public inline fun <T : Any> AvroDecoder.decodeResolvingAny(
     error: () -> Throwable,
-    resolver: (Schema) -> AnyValueDecoder<T>?,
+    resolver: (AvroSchema) -> AnyValueDecoder<T>?,
 ): T {
     return findValueDecoder(error, resolver).decodeAny()
 }
@@ -117,7 +112,7 @@ public inline fun <T : Any> AvroDecoder.decodeResolvingAny(
 @ExperimentalAvro4kApi
 public inline fun AvroDecoder.decodeResolvingByte(
     error: () -> Throwable,
-    resolver: (Schema) -> ByteValueDecoder?,
+    resolver: (AvroSchema) -> ByteValueDecoder?,
 ): Byte {
     return findValueDecoder(error, resolver).decodeByte()
 }
@@ -130,7 +125,7 @@ public inline fun AvroDecoder.decodeResolvingByte(
 @ExperimentalAvro4kApi
 public inline fun AvroDecoder.decodeResolvingShort(
     error: () -> Throwable,
-    resolver: (Schema) -> ShortValueDecoder?,
+    resolver: (AvroSchema) -> ShortValueDecoder?,
 ): Short {
     return findValueDecoder(error, resolver).decodeShort()
 }
@@ -143,7 +138,7 @@ public inline fun AvroDecoder.decodeResolvingShort(
 @ExperimentalAvro4kApi
 public inline fun AvroDecoder.decodeResolvingInt(
     error: () -> Throwable,
-    resolver: (Schema) -> IntValueDecoder?,
+    resolver: (AvroSchema) -> IntValueDecoder?,
 ): Int {
     return findValueDecoder(error, resolver).decodeInt()
 }
@@ -156,7 +151,7 @@ public inline fun AvroDecoder.decodeResolvingInt(
 @ExperimentalAvro4kApi
 public inline fun AvroDecoder.decodeResolvingLong(
     error: () -> Throwable,
-    resolver: (Schema) -> LongValueDecoder?,
+    resolver: (AvroSchema) -> LongValueDecoder?,
 ): Long {
     return findValueDecoder(error, resolver).decodeLong()
 }
@@ -169,7 +164,7 @@ public inline fun AvroDecoder.decodeResolvingLong(
 @ExperimentalAvro4kApi
 public inline fun AvroDecoder.decodeResolvingBoolean(
     error: () -> Throwable,
-    resolver: (Schema) -> BooleanValueDecoder?,
+    resolver: (AvroSchema) -> BooleanValueDecoder?,
 ): Boolean {
     return findValueDecoder(error, resolver).decodeBoolean()
 }
@@ -182,7 +177,7 @@ public inline fun AvroDecoder.decodeResolvingBoolean(
 @ExperimentalAvro4kApi
 public inline fun AvroDecoder.decodeResolvingFloat(
     error: () -> Throwable,
-    resolver: (Schema) -> FloatValueDecoder?,
+    resolver: (AvroSchema) -> FloatValueDecoder?,
 ): Float {
     return findValueDecoder(error, resolver).decodeFloat()
 }
@@ -195,7 +190,7 @@ public inline fun AvroDecoder.decodeResolvingFloat(
 @ExperimentalAvro4kApi
 public inline fun AvroDecoder.decodeResolvingDouble(
     error: () -> Throwable,
-    resolver: (Schema) -> DoubleValueDecoder?,
+    resolver: (AvroSchema) -> DoubleValueDecoder?,
 ): Double {
     return findValueDecoder(error, resolver).decodeDouble()
 }
@@ -208,7 +203,7 @@ public inline fun AvroDecoder.decodeResolvingDouble(
 @ExperimentalAvro4kApi
 public inline fun AvroDecoder.decodeResolvingChar(
     error: () -> Throwable,
-    resolver: (Schema) -> CharValueDecoder?,
+    resolver: (AvroSchema) -> CharValueDecoder?,
 ): Char {
     return findValueDecoder(error, resolver).decodeChar()
 }
@@ -297,16 +292,16 @@ public fun interface CharValueDecoder {
 @PublishedApi
 internal inline fun <T : Any> AvroDecoder.findValueDecoder(
     error: () -> Throwable,
-    resolver: (Schema) -> T?,
+    resolver: (AvroSchema) -> T?,
 ): T {
     val schema = currentWriterSchema
 
     val foundResolver =
-        if (schema.isUnion) {
+        if (schema is AvroSchema.UnionSchema) {
             if (this is AbstractAvroDirectDecoder) {
                 throw UnsupportedOperationException("The union should be already resolved, which means a misusage of avro4k")
             } else {
-                currentWriterSchema.types.firstNotNullOfOrNull(resolver)
+                schema.types.firstNotNullOfOrNull(resolver)
             }
         } else {
             resolver(schema)
@@ -314,52 +309,13 @@ internal inline fun <T : Any> AvroDecoder.findValueDecoder(
     return foundResolver ?: throw error()
 }
 
-/**
- * The decoders of core, which decode against avro4k's own [AvroSchema]: [currentAvroSchema] is the schema core's runtime
- * reads, and the public, Apache-typed [currentWriterSchema] is only a facade over it ([apacheFacadeOf]), until the public
- * API is `AvroSchema`-typed too.
- */
-internal interface AvroSchemaDecoder : AvroDecoder {
-    /**
-     * The writer schema of the value being decoded, as avro4k's own model. Never a union once the value is being decoded,
-     * like [currentWriterSchema].
-     */
-    val currentAvroSchema: AvroSchema
-}
-
-/**
- * The public, Apache-typed `currentWriterSchema` of core's encoders and decoders: the Apache form of [schema], through the
- * identity-cached converter, which pairs both models node by node. So it returns the caller's own Apache node when the
- * writer schema was given as an Apache schema (or `Avro.schema()`'s one for a generated schema): identity and
- * `GenericFixed` semantics are those of the Apache schema the caller handed in.
- *
- * It is a cache lookup per call, so core's runtime never reads it: it reads the `AvroSchema` directly. Only the serializers
- * and the Apache-typed `decodeResolving*` lambdas still do, until the public API is `AvroSchema`-typed. A node that no
- * Apache node is paired with yet (e.g. core's own constant schemas) is converted once, keeping the logical types Apache
- * does not know, as `Avro.schema()` does.
- */
-internal fun apacheFacadeOf(schema: AvroSchema): Schema = avro4kToApacheKeepingUnknownLogicalTypes(schema)
-
-/**
- * The writer schema of the value being decoded, as avro4k's own model: read straight from core's decoders, or converted
- * (identity-cached) from [AvroDecoder.currentWriterSchema] for any other [AvroDecoder].
- */
-internal val AvroDecoder.currentAvroSchema: AvroSchema
-    get() = if (this is AvroSchemaDecoder) currentAvroSchema else apacheToAvro4k(currentWriterSchema)
-
 internal fun AvroDecoder.unsupportedWriterTypeError(
     mainType: AvroSchema.Type,
     vararg fallbackTypes: AvroSchema.Type,
 ): Throwable {
     val fallbacksStr = if (fallbackTypes.isNotEmpty()) ", and also not matching to any compatible type (one of ${fallbackTypes.joinToString()})." else ""
-    val schema = currentAvroSchema
+    val schema = currentWriterSchema
     return SerializationException(
         "Unsupported schema named '${schema.fullNameForMessages}' for decoded type of $mainType$fallbacksStr. Actual schema: ${schema.toSchemaJsonString()}"
     )
 }
-
-/** [unsupportedWriterTypeError] for the serializers, which still name Apache's types until they read [AvroSchema]. */
-internal fun AvroDecoder.unsupportedWriterTypeError(
-    mainType: Schema.Type,
-    vararg fallbackTypes: Schema.Type,
-): Throwable = unsupportedWriterTypeError(mainType.toAvroSchemaType(), *Array(fallbackTypes.size) { fallbackTypes[it].toAvroSchemaType() })

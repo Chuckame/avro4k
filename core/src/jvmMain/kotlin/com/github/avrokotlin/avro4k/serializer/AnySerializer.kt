@@ -25,7 +25,6 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
 import kotlinx.serialization.serializer
 import kotlinx.serialization.serializerOrNull
-import org.apache.avro.Schema
 import java.util.concurrent.ConcurrentHashMap
 
 internal val AnyTypeSerializersModule: SerializersModule
@@ -39,7 +38,7 @@ internal val AnyTypeSerializersModule: SerializersModule
  *
  * At encoding, it barely gets the [KSerializer] from the value's type (see [inferSerializationStrategyFromNonSerializableType] for customization).
  *
- * At decoding, it delegates the process to the inferred [KSerializer] from the [Schema.type] (example: [Schema.Type.BOOLEAN] is handled by the [Boolean]'s serializer).
+ * At decoding, it delegates the process to the inferred [KSerializer] from the [AvroSchema.type] (example: [AvroSchema.Type.BOOLEAN] is handled by the [Boolean]'s serializer).
  * For more customization about named types, see [resolveFixedDeserializationStrategy], [resolveEnumDeserializationStrategy], and [resolveRecordDeserializationStrategy].
  */
 @InternalAvro4kApi
@@ -123,21 +122,19 @@ public open class AnySerializer : KSerializer<Any> {
         // getOrPut is inline: no capturing lambda is allocated per call.
         val serializer =
             decodingCache.getOrPut(writerSchema) {
-                decoder.serializersModule.resolveDeserializationStrategy(writerSchema, decoder, decoder.avro.configuration)
+                decoder.serializersModule.resolveDeserializationStrategy(writerSchema, decoder.avro.configuration)
             }
         return decoder.decodeSerializableValue(serializer)
     }
 
     /**
-     * Only runs on a miss of [decodingCache]. The hooks still take the Apache form of [writerSchema], read from the
-     * decoder's facade, until the public API is `AvroSchema`-typed.
+     * Only runs on a miss of [decodingCache].
      */
     private fun SerializersModule.resolveDeserializationStrategy(
         writerSchema: AvroSchema,
-        decoder: AbstractAvroDirectDecoder,
         configuration: AvroConfiguration,
     ): DeserializationStrategy<Any> {
-        preResolveDeserializationStrategy(decoder.currentWriterSchema)?.let { return it }
+        preResolveDeserializationStrategy(writerSchema)?.let { return it }
         // Let's try to use the logical type's serializer if any
         writerSchema.logicalTypeName?.let { configuration.logicalTypes[it] }?.let { return it }
         // Else infer the serializer from the schema type
@@ -157,15 +154,15 @@ public open class AnySerializer : KSerializer<Any> {
             AvroSchema.Type.BYTES -> ByteArraySerializer()
 
             // Named types and collections can be decoded differently depending on the needs
-            AvroSchema.Type.ARRAY -> resolveArrayDeserializationStrategy(decoder.currentWriterSchema)
+            AvroSchema.Type.ARRAY -> resolveArrayDeserializationStrategy(writerSchema)
 
-            AvroSchema.Type.MAP -> resolveMapDeserializationStrategy(decoder.currentWriterSchema)
+            AvroSchema.Type.MAP -> resolveMapDeserializationStrategy(writerSchema)
 
-            AvroSchema.Type.FIXED -> resolveFixedDeserializationStrategy(decoder.currentWriterSchema)
+            AvroSchema.Type.FIXED -> resolveFixedDeserializationStrategy(writerSchema)
 
-            AvroSchema.Type.ENUM -> resolveEnumDeserializationStrategy(decoder.currentWriterSchema)
+            AvroSchema.Type.ENUM -> resolveEnumDeserializationStrategy(writerSchema)
 
-            AvroSchema.Type.RECORD -> resolveRecordDeserializationStrategy(decoder.currentWriterSchema)
+            AvroSchema.Type.RECORD -> resolveRecordDeserializationStrategy(writerSchema)
 
             // Having an union here is an avro4k error, or a wrong usage of this serializer
             AvroSchema.Type.UNION -> throw UnsupportedOperationException(
@@ -184,84 +181,84 @@ public open class AnySerializer : KSerializer<Any> {
     }
 
     /**
-     * Allows to provide a serializer for the given [writerSchema] before checking its [Schema.type] or its [Schema.logicalType].
+     * Allows to provide a serializer for the given [writerSchema] before checking its [AvroSchema.type] or its [AvroSchema.logicalTypeName].
      * Useful to provide a custom serializer depending on a custom property.
      *
      * @param writerSchema the schema from which the value is being decoded
      * @return the serializer to be used, or `null` (the default) if no serializer is found.
      */
     @InternalAvro4kApi
-    protected open fun SerializersModule.preResolveDeserializationStrategy(writerSchema: Schema): DeserializationStrategy<Any>? {
+    protected open fun SerializersModule.preResolveDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any>? {
         return null
     }
 
     /**
      * Provides the serializer for the given array schema.
-     * [resolveArrayDeserializationStrategy] won't be called if the [writerSchema] has its [Schema.logicalType]'s name found in [AvroConfiguration.logicalTypes].
+     * [resolveArrayDeserializationStrategy] won't be called if the [writerSchema] has its [AvroSchema.logicalTypeName] found in [AvroConfiguration.logicalTypes].
      *
      * By default, an array value is decoded as a `List<Any?>`.
      *
      * Results are cached, so expect only one call per [writerSchema].
      *
-     * @param writerSchema the schema always being of the type [Schema.Type.ARRAY]
+     * @param writerSchema the schema always being of the type [AvroSchema.Type.ARRAY]
      * @return the serializer to be used for array types when decoding
      */
     @InternalAvro4kApi
-    protected open fun SerializersModule.resolveArrayDeserializationStrategy(writerSchema: Schema): DeserializationStrategy<Any> {
+    protected open fun SerializersModule.resolveArrayDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return ListSerializer(this@AnySerializer.nullable)
     }
 
     /**
      * Provides the serializer for the given map schema.
-     * [resolveMapDeserializationStrategy] won't be called if the [writerSchema] has its [Schema.logicalType]'s name found in [AvroConfiguration.logicalTypes].
+     * [resolveMapDeserializationStrategy] won't be called if the [writerSchema] has its [AvroSchema.logicalTypeName] found in [AvroConfiguration.logicalTypes].
      *
      * By default, a map value is decoded as a `Map<String, Any?>`.
      *
      * Results are cached, so expect only one call per [writerSchema].
      *
-     * @param writerSchema the schema always being of the type [Schema.Type.MAP]
+     * @param writerSchema the schema always being of the type [AvroSchema.Type.MAP]
      * @return the serializer to be used for map types when decoding
      */
     @InternalAvro4kApi
-    protected open fun SerializersModule.resolveMapDeserializationStrategy(writerSchema: Schema): DeserializationStrategy<Any> {
+    protected open fun SerializersModule.resolveMapDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return MapSerializer(String.serializer(), this@AnySerializer.nullable)
     }
 
     /**
      * Provides the serializer for the given enum schema.
-     * [resolveEnumDeserializationStrategy] won't be called if the [writerSchema] has its [Schema.logicalType]'s name found in [AvroConfiguration.logicalTypes].
+     * [resolveEnumDeserializationStrategy] won't be called if the [writerSchema] has its [AvroSchema.logicalTypeName] found in [AvroConfiguration.logicalTypes].
      *
      * By default, an enum value is decoded as a [String].
      *
      * Results are cached, so expect only one call per [writerSchema].
      *
-     * @param writerSchema the schema always being of the type [Schema.Type.ENUM]
+     * @param writerSchema the schema always being of the type [AvroSchema.Type.ENUM]
      * @return the serializer to be used for enum types when decoding
      */
     @InternalAvro4kApi
-    protected open fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: Schema): DeserializationStrategy<Any> {
+    protected open fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return String.serializer()
     }
 
     /**
      * Provides the serializer for the given fixed schema.
-     * [resolveFixedDeserializationStrategy] won't be called if the [writerSchema] has its [Schema.logicalType]'s name found in [AvroConfiguration.logicalTypes].
+     * [resolveFixedDeserializationStrategy] won't be called if the [writerSchema] has its [AvroSchema.logicalTypeName] found in [AvroConfiguration.logicalTypes].
      *
      * By default, a fixed value is decoded as a [ByteArray].
      *
      * Results are cached, so expect only one call per [writerSchema].
      *
-     * @param writerSchema the schema always being of the type [Schema.Type.FIXED]
+     * @param writerSchema the schema always being of the type [AvroSchema.Type.FIXED]
      * @return the serializer to be used for fixed types when decoding
      */
     @InternalAvro4kApi
-    protected open fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: Schema): DeserializationStrategy<Any> {
+    protected open fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return ByteArraySerializer()
     }
 
     /**
      * Provides the serializer for the given record schema.
-     * [resolveRecordDeserializationStrategy] won't be called if the [writerSchema] has its [Schema.logicalType]'s name found in [AvroConfiguration.logicalTypes].
+     * [resolveRecordDeserializationStrategy] won't be called if the [writerSchema] has its [AvroSchema.logicalTypeName] found in [AvroConfiguration.logicalTypes].
      *
      * By default, a record is decoded as a [Map], where the keys are field names as [String] and the values are field values.
      *
@@ -269,11 +266,11 @@ public open class AnySerializer : KSerializer<Any> {
      * For recursively resolve a subtype, do provide a nullable [AnySerializer] to allow resolving the schema at runtime depending on the [writerSchema].
      * Also, results are cached, so expect only one call per [writerSchema].
      *
-     * @param writerSchema the schema always being of the type [Schema.Type.RECORD]
+     * @param writerSchema the schema always being of the type [AvroSchema.Type.RECORD]
      * @return the serializer to be used for record types when decoding
      */
     @InternalAvro4kApi
-    protected open fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: Schema): DeserializationStrategy<Any> {
+    protected open fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return MapSerializer(String.serializer(), this@AnySerializer.nullable)
     }
 }

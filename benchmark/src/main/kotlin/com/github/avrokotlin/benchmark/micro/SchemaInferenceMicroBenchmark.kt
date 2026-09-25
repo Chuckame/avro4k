@@ -1,6 +1,7 @@
 package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.benchmark.internal.CoreSchema
 import com.github.avrokotlin.benchmark.internal.coreSchema
 import kotlinx.benchmark.Benchmark
 import kotlinx.benchmark.BenchmarkMode
@@ -11,7 +12,7 @@ import kotlinx.benchmark.Setup
 import kotlinx.benchmark.State
 import kotlinx.benchmark.Warmup
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.Schema
+
 import java.util.concurrent.TimeUnit
 
 /**
@@ -42,11 +43,11 @@ internal class SchemaInferenceMicroBenchmark {
 
     /** A cache hit on the shared instance: a weak-keyed map lookup and nothing else. */
     @Benchmark
-    fun warmCacheHit(): Schema = Avro.schema(descriptor)
+    fun warmCacheHit(): CoreSchema = Avro.schema(descriptor)
 
     /** A cold cache: full inference through `ValueVisitor`, plus the instance construction. */
     @Benchmark
-    fun coldInference(): Schema = Avro { }.schema(descriptor)
+    fun coldInference(): CoreSchema = Avro { }.schema(descriptor)
 
     /** The control for [coldInference]: the instance construction on its own. */
     @Benchmark

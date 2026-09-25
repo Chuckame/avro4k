@@ -82,6 +82,7 @@ dependencies {
 
     commonExpectedGeneratedSourcesImplementation(project(":core"))
     "fixedTypesRoundTripImplementation"(project(":core"))
+    "fixedTypesRoundTripImplementation"(project(":apache-interop"))
     "fixedTypesRoundTripImplementation"(platform(libs.junit.bom))
     "fixedTypesRoundTripImplementation"(libs.kotest.core)
     "fixedTypesRoundTripImplementation"("org.junit.jupiter:junit-jupiter")

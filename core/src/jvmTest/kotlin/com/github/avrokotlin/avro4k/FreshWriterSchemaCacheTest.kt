@@ -57,6 +57,10 @@ internal class FreshWriterSchemaCacheTest : StringSpec({
         avro.recordResolver.fieldCache.identitySize shouldBe workflowIdentitySize
         avro.recordResolver.fieldCache.equalitySize shouldBe workflowEqualitySize
         first.toString() shouldBe json
+        // an equal but fresh schema maps to the canonical conversion, which converts back to the canonical instance
+        val fresh = Schema.Parser().parse(json)
+        fresh.toAvro4k() shouldBeSameInstanceAs first.toAvro4k()
+        fresh.toAvro4k().toApacheSchema() shouldBeSameInstanceAs first
     }
 
     "an avro4k writer schema parsed per call resolves its record workflow once" {

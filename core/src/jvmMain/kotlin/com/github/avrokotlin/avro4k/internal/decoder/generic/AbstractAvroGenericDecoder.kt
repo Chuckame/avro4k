@@ -1,9 +1,8 @@
 package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.AvroSchemaDecoder
-import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
@@ -24,7 +23,6 @@ import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.AbstractDecoder
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.modules.SerializersModule
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericArray
 import org.apache.avro.generic.GenericContainer
 import org.apache.avro.generic.GenericEnumSymbol
@@ -39,12 +37,14 @@ import java.nio.ByteBuffer
  * this deprecated path.
  */
 @OptIn(ExperimentalSerializationApi::class)
-internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroSchemaDecoder {
+internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDecoder {
     internal abstract val avro: Avro
 
-    /** The Apache-typed facade over [currentAvroSchema], for the public API only: see [apacheFacadeOf]. */
-    final override val currentWriterSchema: Schema
-        get() = apacheFacadeOf(currentAvroSchema)
+    /** The writer schema of the value being decoded. */
+    abstract val currentAvroSchema: AvroSchema
+
+    final override val currentWriterSchema: AvroSchema
+        get() = currentAvroSchema
 
     abstract override fun decodeNotNullMark(): Boolean
 
@@ -215,9 +215,9 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroSche
         }
     }
 
-    override fun decodeFixed(): GenericFixed {
+    override fun decodeFixed(): ByteArray {
         return when (val value = decodeValue()) {
-            is GenericFixed -> value
+            is GenericFixed -> value.bytes()
             else -> throw BadDecodedValueError<GenericFixed>(value, GenericFixed::class)
         }
     }

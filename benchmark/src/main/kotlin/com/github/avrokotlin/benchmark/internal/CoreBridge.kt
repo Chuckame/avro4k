@@ -1,9 +1,12 @@
 package com.github.avrokotlin.benchmark.internal
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.decodeFromByteArray
 import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.schema
+import com.github.avrokotlin.avro4k.toApacheSchema
+import com.github.avrokotlin.avro4k.toAvro4k
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -13,9 +16,9 @@ import org.apache.avro.Schema
  * The one place where the benchmarks' set-up and schema plumbing meet core's schema-typed API.
  *
  * Two worlds meet here. avro4k's own measured methods hand core a schema; the competitors (Apache, Jackson) and the
- * equivalence gate need an Apache `Schema`. Core's public API is still Apache-typed today, so every helper here is an
- * identity. When core's public API switches to `AvroSchema`, only [CoreSchema], [asApacheSchema] and [toCoreSchema]
- * change; everything else delegates to them or passes a [CoreSchema] straight through.
+ * equivalence gate need an Apache `Schema`. Core's public API is `AvroSchema`-typed: [CoreSchema], [asApacheSchema] and
+ * [toCoreSchema] convert with apache-interop; everything else delegates to them or passes a [CoreSchema] straight
+ * through.
  *
  * Rules:
  * - a `@Benchmark` method is never edited to go through here. Its schema arguments are fields typed [CoreSchema], so
@@ -24,17 +27,14 @@ import org.apache.avro.Schema
  *   review: a grep of this module for those calls must only find `@Benchmark` methods and this file.
  */
 
-/**
- * The schema type of core's public API: the type of every schema field a measured avro4k method hands to core.
- * After the switch: `typealias CoreSchema = AvroSchema`.
- */
-internal typealias CoreSchema = Schema
+/** The schema type of core's public API: the type of every schema field a measured avro4k method hands to core. */
+internal typealias CoreSchema = AvroSchema
 
-/** A core schema as an Apache schema, for Apache, Jackson and the equivalence gate. After the switch: `toApacheSchema()`. */
-internal fun CoreSchema.asApacheSchema(): Schema = this
+/** A core schema as an Apache schema, for Apache, Jackson and the equivalence gate. */
+internal fun CoreSchema.asApacheSchema(): Schema = toApacheSchema()
 
-/** An Apache-built schema as a core schema, e.g. a hand-made writer schema. After the switch: `toAvro4k()`. */
-internal fun Schema.toCoreSchema(): CoreSchema = this
+/** An Apache-built schema as a core schema, e.g. a hand-made writer schema. */
+internal fun Schema.toCoreSchema(): CoreSchema = toAvro4k()
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Schema generation

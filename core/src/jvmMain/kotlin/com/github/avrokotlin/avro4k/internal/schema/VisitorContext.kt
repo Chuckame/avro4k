@@ -42,7 +42,7 @@ internal data class VisitorContext(
      *
      * Why: a name defines one type in Avro, and the json of a schema defines each named type once, then refers to it by
      * name. The generation used to build an enum or a fixed anew at each use, equal instances that the json route of
-     * `Avro.schema()` could not pair one by one with the single Apache node its parser shares. Two *different*
+     * the Apache form (`toApacheSchema()`) could not pair one by one with the single Apache node its parser shares. Two *different*
      * named schemas with the same full name cannot be written as json at all: the second one would silently read as the
      * first (e.g. a fixed of another size), so it is rejected, with a message that starts like Apache's `Schema.Parser` one
      * (`Can't redefine: <full name>`).

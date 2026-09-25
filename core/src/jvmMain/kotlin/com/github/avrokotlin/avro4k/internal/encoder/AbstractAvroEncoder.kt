@@ -2,7 +2,6 @@ package com.github.avrokotlin.avro4k.internal.encoder
 
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.ensureFixedSize
 import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
@@ -28,7 +27,6 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.encoding.CompositeEncoder
-import org.apache.avro.Schema
 
 @OptIn(ExperimentalSerializationApi::class)
 internal abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
@@ -40,9 +38,8 @@ internal abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
      */
     abstract var currentAvroSchema: AvroSchema
 
-    /** The Apache-typed facade over [currentAvroSchema], for the public API only: see [apacheFacadeOf]. */
-    final override val currentWriterSchema: Schema
-        get() = apacheFacadeOf(currentAvroSchema)
+    final override val currentWriterSchema: AvroSchema
+        get() = currentAvroSchema
 
     abstract fun getRecordEncoder(descriptor: SerialDescriptor): CompositeEncoder
 

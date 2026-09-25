@@ -6,12 +6,15 @@ import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroDefault
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
+import com.github.avrokotlin.avro4k.CoreSchema
 import com.github.avrokotlin.avro4k.SomeEnum
 import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.apacheWriterSchema
 import com.github.avrokotlin.avro4k.decodeWith
 import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
 import com.github.avrokotlin.avro4k.serializer.SchemaSupplierContext
+import com.github.avrokotlin.avro4k.toCoreSchema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
@@ -224,7 +227,7 @@ internal class AvroDefaultSpecTest : StringSpec({
  * The union `[int, string]`, decoding whichever branch was written.
  */
 private object IntOrStringSerializer : AvroSerializer<Any>("IntOrString") {
-    override fun getSchema(context: SchemaSupplierContext): Schema = SchemaBuilder.unionOf().intType().and().stringType().endUnion()
+    override fun getSchema(context: SchemaSupplierContext): CoreSchema = SchemaBuilder.unionOf().intType().and().stringType().endUnion().toCoreSchema()
 
     override fun serializeAvro(encoder: AvroEncoder, value: Any) {
         when (value) {
@@ -234,7 +237,7 @@ private object IntOrStringSerializer : AvroSerializer<Any>("IntOrString") {
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): Any =
-        when (decoder.currentWriterSchema.type) {
+        when (decoder.apacheWriterSchema.type) {
             Schema.Type.INT -> decoder.decodeInt()
             else -> decoder.decodeString()
         }

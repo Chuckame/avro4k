@@ -23,8 +23,8 @@ internal class AvroSingleObjectFingerprintCacheTest : StringSpec({
 
     val registry =
         mapOf(
-            SchemaNormalization.parsingFingerprint64(schemaA) to schemaA,
-            SchemaNormalization.parsingFingerprint64(schemaB) to schemaB
+            SchemaNormalization.parsingFingerprint64(schemaA) to schemaA.toAvro4k(),
+            SchemaNormalization.parsingFingerprint64(schemaB) to schemaB.toAvro4k()
         )
 
     fun newFormat() = AvroSingleObject(registry::get)

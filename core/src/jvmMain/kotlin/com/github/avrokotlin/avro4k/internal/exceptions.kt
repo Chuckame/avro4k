@@ -3,13 +3,12 @@
 package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.AvroDecoder
-import com.github.avrokotlin.avro4k.currentAvroSchema
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.SerialKind
 import kotlinx.serialization.encoding.Decoder
-import org.apache.avro.Schema
 import kotlin.reflect.KClass
 
 internal class AvroSchemaGenerationException(message: String) : SerializationException(message)
@@ -67,11 +66,11 @@ internal fun BadDecodedValueError(
 
 internal fun AvroDecoder.UnexpectedDecodeSchemaError(
     actualType: String,
-    firstExpectedType: Schema.Type,
-    vararg expectedTypes: Schema.Type,
+    firstExpectedType: AvroSchema.Type,
+    vararg expectedTypes: AvroSchema.Type,
 ): SerializationException {
     val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
     return SerializationException(
-        "For $actualType, expected type one of $allExpectedTypes, but had writer schema ${currentAvroSchema.toSchemaJsonString()}"
+        "For $actualType, expected type one of $allExpectedTypes, but had writer schema ${currentWriterSchema.toSchemaJsonString()}"
     )
 }

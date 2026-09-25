@@ -38,28 +38,6 @@ internal inline fun <reified T : Annotation> SerialDescriptor.findElementAnnotat
 internal val SerialDescriptor.nonNullSerialName: String get() = nonNullOriginal.serialName
 
 /**
- * The [AvroSchema.Type] of the same name, for the callers that still name Apache's types (the serializers, until they
- * read [AvroSchema]). A `when` over an enum: no allocation, no lookup by name.
- */
-internal fun Schema.Type.toAvroSchemaType(): AvroSchema.Type =
-    when (this) {
-        Schema.Type.RECORD -> AvroSchema.Type.RECORD
-        Schema.Type.ENUM -> AvroSchema.Type.ENUM
-        Schema.Type.ARRAY -> AvroSchema.Type.ARRAY
-        Schema.Type.MAP -> AvroSchema.Type.MAP
-        Schema.Type.UNION -> AvroSchema.Type.UNION
-        Schema.Type.FIXED -> AvroSchema.Type.FIXED
-        Schema.Type.STRING -> AvroSchema.Type.STRING
-        Schema.Type.BYTES -> AvroSchema.Type.BYTES
-        Schema.Type.INT -> AvroSchema.Type.INT
-        Schema.Type.LONG -> AvroSchema.Type.LONG
-        Schema.Type.FLOAT -> AvroSchema.Type.FLOAT
-        Schema.Type.DOUBLE -> AvroSchema.Type.DOUBLE
-        Schema.Type.BOOLEAN -> AvroSchema.Type.BOOLEAN
-        Schema.Type.NULL -> AvroSchema.Type.NULL
-    }
-
-/**
  * True if the descriptor's serial name or one of its `@AvroAlias`es matches this schema's full name or aliases. A one-line
  * delegate to the common helper, which cannot see the descriptor helpers; inline, so no bound reference is allocated.
  */
@@ -67,31 +45,8 @@ internal fun Schema.Type.toAvroSchemaType(): AvroSchema.Type =
 internal inline fun AvroSchema.isFullNameOrAliasMatch(descriptor: SerialDescriptor): Boolean = isFullNameOrAliasMatch(descriptor.nonNullSerialName) { descriptor.aliases }
 
 @InternalAvro4kApi
-public fun Schema.isNamedSchema(): Boolean {
-    return when (this.type) {
-        Schema.Type.RECORD, Schema.Type.ENUM, Schema.Type.FIXED -> true
-        else -> false
-    }
-}
-
-internal fun Schema.nonFailingAliases(): Set<String> {
-    return if (isNamedSchema()) {
-        aliases
-    } else {
-        emptySet()
-    }
-}
-
-/** For the serializers, which still read Apache's `Schema` until the public API is `AvroSchema`-typed. */
-internal fun Schema.isFullNameOrAliasMatch(
-    fullName: String,
-    aliases: () -> Set<String>,
-): Boolean {
-    return isFullNameMatch(fullName) || aliases().any { isFullNameMatch(it) }
-}
-
-internal fun Schema.isFullNameMatch(fullNameToMatch: String): Boolean {
-    return fullName == fullNameToMatch || (isNamedSchema() && aliases.any { it == fullNameToMatch })
+public fun AvroSchema.isNamedSchema(): Boolean {
+    return this is AvroSchema.NamedSchema
 }
 
 @InternalAvro4kApi

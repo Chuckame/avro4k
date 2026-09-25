@@ -44,8 +44,8 @@ data class Project(val name: String, val language: String)
 
 fun main() {
     // Generating schemas
-    val schema = Avro.schema<Project>()
-    println(schema.toString()) // {"type":"record","name":"Project","namespace":"myapp","fields":[{"name":"name","type":"string"},{"name":"language","type":"string"}]}
+    val schema: AvroSchema = Avro.schema<Project>()
+    println(schema.toJsonElement()) // {"type":"record","name":"Project","namespace":"myapp","fields":[{"name":"name","type":"string"},{"name":"language","type":"string"}]}
 
     // Serializing objects
     val data = Project("kotlinx.serialization", "Kotlin")
@@ -206,7 +206,8 @@ data class Project(val name: String, val language: String)
 
 fun main() {
     val schema = Avro.schema<Project>()
-    val schemasByFingerprint = mapOf(SchemaNormalization.parsingFingerprint64(schema) to schema)
+    // Apache's SchemaNormalization needs an Apache schema: `toApacheSchema()` comes from the `apache-interop` module
+    val schemasByFingerprint = mapOf(SchemaNormalization.parsingFingerprint64(schema.toApacheSchema()) to schema)
     val singleObjectInstance = AvroSingleObject(schemasByFingerprint::get)
 
     // Serializing objects
@@ -406,7 +407,7 @@ Then you can generate the schema using the `Avro.schema` function:
 
 ```kotlin
 val schema = Avro.schema<Pizza>()
-println(schema.toString(true))
+println(schema.toJsonElement())
 ```
 
 The generated schema will look as follows:
@@ -581,6 +582,9 @@ To do so, just provide the type `Any` to the `decodeFromByteArray` (and the othe
 > [!WARNING]
 > You need to provide the schema, or an error will be thrown as Avro4k is not able to infer the schema.
 
+The writer schema is an `AvroSchema`: parse it with `AvroSchema.fromJsonString(json)`, or convert an Apache `Schema` with `toAvro4k()` from the
+`apache-interop` module.
+
 ```kotlin
 Avro.decodeFromByteArray<Any>(writerSchema, bytes)
 Avro.encodeToByteArray<Any>(writerSchema, data)
@@ -633,10 +637,10 @@ You also need to override `getSchema` to provide the schema of your custom type 
 
 ```kotlin
 object YourTypeSerializer : AvroSerializer<YourType>(YourType::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         // you can access the data class element, inlined elements from value classes, and their annotations
         // you can also access the avro configuration in the context
-        return ... /* create the corresponding schema using SchemaBuilder or Schema.create */
+        return ... /* create the corresponding schema, e.g. AvroSchema.StringSchema(), or AvroSchema.fromJsonString(...) */
     }
 
     override fun serializeAvro(encoder: AvroEncoder, value: YourType) {
@@ -870,7 +874,7 @@ To add metadata to a type not owned by you, you can use a value class. Here an e
 @Serializable
 value class BigQueryJson(@AvroProp("sqlType", "JSON") val value: String)
 
-println(Avro.schema<BigQueryJson>().toString(true)) // {"type":"string","sqlType":"JSON"}
+println(Avro.schema<BigQueryJson>().toJsonElement()) // {"type":"string","sqlType":"JSON"}
 ```
 
 > [!NOTE]

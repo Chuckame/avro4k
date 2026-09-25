@@ -267,6 +267,41 @@ internal fun AvroSchema.hasValidLogicalType(): Boolean {
         !props.isStringProp("java-element-class")
 }
 
+/** The logical types of the specification, which Apache Java 1.12 knows natively (`LogicalTypes.fromSchemaImpl`). */
+private val SPECIFICATION_LOGICAL_TYPES =
+    setOf(
+        "decimal",
+        "big-decimal",
+        "duration",
+        "uuid",
+        "date",
+        "time-millis",
+        "time-micros",
+        "timestamp-millis",
+        "timestamp-micros",
+        "timestamp-nanos",
+        "local-timestamp-millis",
+        "local-timestamp-micros",
+        "local-timestamp-nanos"
+    )
+
+/**
+ * The name of this schema's logical type when it is one of the specification's and valid ([hasValidLogicalType]), or
+ * null: what Apache's `getLogicalType()?.name` returns for a schema it parsed, so that the serializers, which compare it
+ * with the specification's names and read a missing one as "no logical type", keep Apache's semantics. Another name
+ * (avro4k's own `char`, a user's custom one) is null here: [AvroSchema.logicalTypeName] is the raw prop.
+ *
+ * Memoized per schema instance ([AvroSchema.knownLogicalTypeNameMemo]): a field read per value after the first one.
+ */
+internal val AvroSchema.knownLogicalTypeName: String?
+    get() {
+        val memo = knownLogicalTypeNameMemo
+        if (memo !== AvroSchema.NotComputed) return memo as String?
+        val name = logicalTypeName?.takeIf { it in SPECIFICATION_LOGICAL_TYPES && hasValidLogicalType() }
+        knownLogicalTypeNameMemo = name
+        return name
+    }
+
 private fun Map<String, JsonElement>.isStringProp(key: String): Boolean = (this[key] as? JsonPrimitive)?.isString == true
 
 /** Apache's `Decimal` rules: an int `precision` > 0 that the fixed size can hold, an int `scale` (0 when absent) in `0..precision`. */

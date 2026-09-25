@@ -23,7 +23,7 @@ class FixedTypesRoundTripTest {
         val source = Schema.Parser().parse(File("src/test/resources/fixed-types.avsc"))
         val descriptor = serializer(Class.forName("fixed.ns.FixedTypes")).descriptor
 
-        val inferred = Avro.schema(descriptor)
+        val inferred = Avro.schema(descriptor).toApacheSchema()
 
         inferred.fixedTypes() shouldBe source.fixedTypes()
         // Inferred indeed: no generated class carries its schema

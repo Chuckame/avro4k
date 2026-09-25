@@ -9,7 +9,6 @@ import kotlinx.io.Source
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer
-import org.apache.avro.Schema
 
 /**
  * Encode the given [value] as binary avro into the given [sink], respecting the [writerSchema].
@@ -29,7 +28,7 @@ import org.apache.avro.Schema
  * @see com.github.avrokotlin.avro4k.serializer.AvroSerializer
  */
 public fun <T> Avro.encodeToSink(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
     sink: Sink,
@@ -80,7 +79,7 @@ public inline fun <reified T> Avro.encodeToSink(
  * @see com.github.avrokotlin.avro4k.serializer.AvroSerializer
  */
 public inline fun <reified T> Avro.encodeToSink(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     value: T,
     sink: Sink,
 ) {
@@ -104,7 +103,7 @@ public inline fun <reified T> Avro.encodeToSink(
  * @see com.github.avrokotlin.avro4k.serializer.AvroSerializer
  */
 public fun <T> Avro.decodeFromSource(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     deserializer: DeserializationStrategy<T>,
     source: Source,
 ): T {
@@ -151,7 +150,7 @@ public inline fun <reified T> Avro.decodeFromSource(source: Source): T {
  * @see com.github.avrokotlin.avro4k.serializer.AvroSerializer
  */
 public inline fun <reified T> Avro.decodeFromSource(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     source: Source,
 ): T {
     val serializer = serializersModule.serializer<T>()

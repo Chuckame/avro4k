@@ -7,6 +7,7 @@ import com.github.avrokotlin.avro4k.AvroDefault
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.SomeEnum
 import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.apacheWriterSchema
 import com.github.avrokotlin.avro4k.decodeFromGenericDataWith
 import com.github.avrokotlin.avro4k.decodeWith
 import com.github.avrokotlin.avro4k.encodeWith
@@ -170,17 +171,17 @@ internal class JsonDefaultDecoderTest : StringSpec({
             SchemaBuilder.unionOf().nullType().and().array().items().intType()
                 .and().map().values().stringType().and().stringType().endUnion()
 
-        JsonDefaultDecoder(Avro, JsonNull, union).currentWriterSchema.type shouldBe Schema.Type.NULL
-        JsonDefaultDecoder(Avro, JsonArray(emptyList()), union).currentWriterSchema.type shouldBe Schema.Type.ARRAY
-        JsonDefaultDecoder(Avro, JsonObject(emptyMap()), union).currentWriterSchema.type shouldBe Schema.Type.MAP
-        JsonDefaultDecoder(Avro, JsonPrimitive("x"), union).currentWriterSchema.type shouldBe Schema.Type.STRING
+        JsonDefaultDecoder(Avro, JsonNull, union).apacheWriterSchema.type shouldBe Schema.Type.NULL
+        JsonDefaultDecoder(Avro, JsonArray(emptyList()), union).apacheWriterSchema.type shouldBe Schema.Type.ARRAY
+        JsonDefaultDecoder(Avro, JsonObject(emptyMap()), union).apacheWriterSchema.type shouldBe Schema.Type.MAP
+        JsonDefaultDecoder(Avro, JsonPrimitive("x"), union).apacheWriterSchema.type shouldBe Schema.Type.STRING
 
         // the spec's "first schema that matches", where the former path took the first branch of the json's kind
         val intOrString = SchemaBuilder.unionOf().intType().and().stringType().endUnion()
         JsonDefaultDecoder(Avro, JsonPrimitive("foo"), intOrString).decodeString() shouldBe "foo"
         JsonDefaultDecoder(Avro, JsonPrimitive(1), SchemaBuilder.unionOf().stringType().and().intType().endUnion()).decodeInt() shouldBe 1
         JsonDefaultDecoder(Avro, JsonPrimitive(3_000_000_000), SchemaBuilder.unionOf().intType().and().longType().endUnion())
-            .currentWriterSchema.type shouldBe Schema.Type.LONG
+            .apacheWriterSchema.type shouldBe Schema.Type.LONG
         val shapes = Avro.apacheSchema<Shape>()
         JsonDefaultDecoder(Avro, Json.parseToJsonElement("{\"side\":2}"), shapes).decodeSerializableValue(serializer<Shape>()) shouldBe Square(2)
         shouldThrow<SerializationException> { JsonDefaultDecoder(Avro, JsonPrimitive(true), intOrString) }

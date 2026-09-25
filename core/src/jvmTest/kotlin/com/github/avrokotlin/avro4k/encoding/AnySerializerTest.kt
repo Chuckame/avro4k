@@ -469,10 +469,11 @@ class AnySerializerTest : StringSpec() {
 }
 
 /**
- * Stubs both forms of the writer schema of a mocked core decoder: [AnySerializer] reads the `AvroSchema` one, and hands the
- * Apache one to its hooks.
+ * Stubs the writer schema of a mocked core decoder, both its internal field, which [AnySerializer] reads, and the public
+ * [AbstractAvroDirectDecoder.currentWriterSchema] over it: one instance for both, as in a real decoder.
  */
 private fun AbstractAvroDirectDecoder.stubWriterSchemas(writerSchema: Schema) {
-    every { currentAvroSchema } returns writerSchema.toAvro4k()
-    every { currentWriterSchema } returns writerSchema
+    val converted = writerSchema.toAvro4k()
+    every { currentAvroSchema } returns converted
+    every { currentWriterSchema } returns converted
 }

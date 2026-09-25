@@ -4,6 +4,7 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
 import com.github.avrokotlin.avro4k.serializer.AvroDurationSerializer
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
@@ -23,7 +24,6 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import org.apache.avro.Schema
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Duration
@@ -104,13 +104,13 @@ private val AvroStringSerialDescriptor: SerialDescriptor =
     SerialDescriptorWithAvroSchemaDelegate(String.serializer().descriptor) { context ->
         context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema() ?: it.fixed?.createSchema(it)
-        } ?: Schema.create(Schema.Type.STRING)
+        } ?: AvroSchema.StringSchema()
     }
 
 private object KotlinDurationSerializer : AvroSerializer<Duration>(Duration::class.qualifiedName!!) {
     private const val MILLIS_PER_DAY = 1000 * 60 * 60 * 24
 
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull { it.stringable?.createSchema() }
             ?: AvroDurationSerializer.DURATION_SCHEMA
     }
@@ -168,10 +168,10 @@ private object KotlinDurationSerializer : AvroSerializer<Duration>(Duration::cla
 }
 
 private object AvroByteArraySerializer : AvroSerializer<ByteArray>(ByteArray::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema() ?: it.fixed?.createSchema(it)
-        } ?: Schema.create(Schema.Type.BYTES)
+        } ?: AvroSchema.BytesSchema()
     }
 
     override fun serializeAvro(

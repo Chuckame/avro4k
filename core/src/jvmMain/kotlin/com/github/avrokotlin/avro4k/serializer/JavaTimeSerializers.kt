@@ -3,9 +3,11 @@ package com.github.avrokotlin.avro4k.serializer
 import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
-import com.github.avrokotlin.avro4k.internal.copy
+import com.github.avrokotlin.avro4k.internal.schema.isUnion
+import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
 import com.github.avrokotlin.avro4k.logicalTypeMismatchError
 import com.github.avrokotlin.avro4k.trySelectTypeNameFromUnion
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
@@ -14,8 +16,6 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
-import org.apache.avro.LogicalType
-import org.apache.avro.Schema
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -43,10 +43,10 @@ internal const val LOGICAL_TYPE_NAME_TIMESTAMP_MICROS = "timestamp-micros"
 internal const val LOGICAL_TYPE_NAME_TIMESTAMP_NANOS = "timestamp-nanos"
 
 public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.INT).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_DATE))
+        } ?: logicalTypeSchema(AvroSchema.Type.INT, LOGICAL_TYPE_NAME_DATE)
     }
 
     override fun serializeAvro(
@@ -55,20 +55,20 @@ public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.q
     ) {
         with(encoder) {
             if (currentWriterSchema.isUnion) {
-                trySelectTypeNameFromUnion(Schema.Type.INT) ||
-                    trySelectTypeNameFromUnion(Schema.Type.STRING) ||
-                    throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.STRING)
+                trySelectTypeNameFromUnion(AvroSchema.Type.INT) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.STRING) ||
+                    throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
             }
             when (currentWriterSchema.type) {
-                Schema.Type.INT ->
-                    when (currentWriterSchema.logicalType?.name) {
+                AvroSchema.Type.INT ->
+                    when (currentWriterSchema.knownLogicalTypeName) {
                         LOGICAL_TYPE_NAME_DATE -> encodeInt(value.toEpochDay().toInt())
-                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_DATE, Schema.Type.INT)
+                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_DATE, AvroSchema.Type.INT)
                     }
 
-                Schema.Type.STRING -> encodeString(value.toString())
+                AvroSchema.Type.STRING -> encodeString(value.toString())
 
-                else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.STRING)
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
             }
         }
     }
@@ -83,11 +83,11 @@ public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.q
     override fun deserializeAvro(decoder: AvroDecoder): LocalDate {
         with(decoder) {
             return decoder.decodeResolvingAny({
-                UnexpectedDecodeSchemaError("LocalDate", Schema.Type.INT, Schema.Type.LONG)
+                UnexpectedDecodeSchemaError("LocalDate", AvroSchema.Type.INT, AvroSchema.Type.LONG)
             }) {
                 when (it.type) {
-                    Schema.Type.INT -> {
-                        when (it.logicalType?.name) {
+                    AvroSchema.Type.INT -> {
+                        when (it.knownLogicalTypeName) {
                             LOGICAL_TYPE_NAME_DATE, null -> {
                                 AnyValueDecoder { LocalDate.ofEpochDay(decoder.decodeInt().toLong()) }
                             }
@@ -96,8 +96,8 @@ public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.q
                         }
                     }
 
-                    Schema.Type.LONG -> {
-                        when (it.logicalType?.name) {
+                    AvroSchema.Type.LONG -> {
+                        when (it.knownLogicalTypeName) {
                             null -> {
                                 AnyValueDecoder { LocalDate.ofEpochDay(decoder.decodeLong()) }
                             }
@@ -106,7 +106,7 @@ public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.q
                         }
                     }
 
-                    Schema.Type.STRING -> {
+                    AvroSchema.Type.STRING -> {
                         AnyValueDecoder { LocalDate.parse(decoder.decodeString()) }
                     }
 
@@ -125,10 +125,10 @@ private const val NANOS_PER_MILLISECOND = 1_000_000L
 private const val NANOS_PER_MICROSECOND = 1_000L
 
 public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.INT).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIME_MILLIS))
+        } ?: logicalTypeSchema(AvroSchema.Type.INT, LOGICAL_TYPE_NAME_TIME_MILLIS)
     }
 
     override fun serializeAvro(
@@ -137,27 +137,27 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
     ) {
         with(encoder) {
             if (currentWriterSchema.isUnion) {
-                trySelectTypeNameFromUnion(Schema.Type.INT) ||
-                    trySelectTypeNameFromUnion(Schema.Type.LONG) ||
-                    trySelectTypeNameFromUnion(Schema.Type.STRING) ||
-                    throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.LONG, Schema.Type.STRING)
+                trySelectTypeNameFromUnion(AvroSchema.Type.INT) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.LONG) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.STRING) ||
+                    throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
             when (currentWriterSchema.type) {
-                Schema.Type.INT ->
-                    when (currentWriterSchema.logicalType?.name) {
+                AvroSchema.Type.INT ->
+                    when (currentWriterSchema.knownLogicalTypeName) {
                         LOGICAL_TYPE_NAME_TIME_MILLIS -> encodeInt(value.toMillisOfDay())
-                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIME_MILLIS, Schema.Type.INT)
+                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIME_MILLIS, AvroSchema.Type.INT)
                     }
 
-                Schema.Type.LONG ->
-                    when (currentWriterSchema.logicalType?.name) {
+                AvroSchema.Type.LONG ->
+                    when (currentWriterSchema.knownLogicalTypeName) {
                         LOGICAL_TYPE_NAME_TIME_MICROS -> encodeLong(value.toMicroOfDay())
-                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIME_MICROS, Schema.Type.LONG)
+                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIME_MICROS, AvroSchema.Type.LONG)
                     }
 
-                Schema.Type.STRING -> encodeString(value.toString())
+                AvroSchema.Type.STRING -> encodeString(value.toString())
 
-                else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.LONG, Schema.Type.STRING)
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
         }
     }
@@ -178,14 +178,14 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
             return decodeResolvingAny({
                 UnexpectedDecodeSchemaError(
                     "LocalTime",
-                    Schema.Type.INT,
-                    Schema.Type.LONG,
-                    Schema.Type.STRING
+                    AvroSchema.Type.INT,
+                    AvroSchema.Type.LONG,
+                    AvroSchema.Type.STRING
                 )
             }) {
                 when (it.type) {
-                    Schema.Type.INT -> {
-                        when (it.logicalType?.name) {
+                    AvroSchema.Type.INT -> {
+                        when (it.knownLogicalTypeName) {
                             LOGICAL_TYPE_NAME_TIME_MILLIS, null -> {
                                 AnyValueDecoder { LocalTime.ofNanoOfDay(decoder.decodeInt() * NANOS_PER_MILLISECOND) }
                             }
@@ -194,8 +194,8 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
                         }
                     }
 
-                    Schema.Type.LONG -> {
-                        when (it.logicalType?.name) {
+                    AvroSchema.Type.LONG -> {
+                        when (it.knownLogicalTypeName) {
                             null -> {
                                 AnyValueDecoder { LocalTime.ofNanoOfDay(decoder.decodeLong() * NANOS_PER_MILLISECOND) }
                             }
@@ -208,7 +208,7 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
                         }
                     }
 
-                    Schema.Type.STRING -> {
+                    AvroSchema.Type.STRING -> {
                         AnyValueDecoder { LocalTime.parse(decoder.decodeString()) }
                     }
 
@@ -224,10 +224,10 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
 }
 
 public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateTime::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.LONG).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS))
+        } ?: logicalTypeSchema(AvroSchema.Type.LONG, LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS)
     }
 
     override fun serializeAvro(
@@ -236,21 +236,21 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
     ) {
         with(encoder) {
             if (currentWriterSchema.isUnion) {
-                trySelectTypeNameFromUnion(Schema.Type.LONG) ||
-                    trySelectTypeNameFromUnion(Schema.Type.STRING) ||
-                    throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.STRING)
+                trySelectTypeNameFromUnion(AvroSchema.Type.LONG) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.STRING) ||
+                    throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
             when (currentWriterSchema.type) {
-                Schema.Type.LONG ->
-                    when (currentWriterSchema.logicalType?.name) {
+                AvroSchema.Type.LONG ->
+                    when (currentWriterSchema.knownLogicalTypeName) {
                         LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> encodeLong(value.toInstant(ZoneOffset.UTC).toEpochMicros())
                         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS -> encodeLong(value.toInstant(ZoneOffset.UTC).toEpochMilli())
-                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, Schema.Type.LONG)
+                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, AvroSchema.Type.LONG)
                     }
 
-                Schema.Type.STRING -> encodeString(value.toString())
+                AvroSchema.Type.STRING -> encodeString(value.toString())
 
-                else -> throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.STRING)
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
         }
     }
@@ -264,10 +264,10 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
 
     override fun deserializeAvro(decoder: AvroDecoder): LocalDateTime {
         return with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", Schema.Type.LONG) }) {
+            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG) }) {
                 when (it.type) {
-                    Schema.Type.LONG ->
-                        when (it.logicalType?.name) {
+                    AvroSchema.Type.LONG ->
+                        when (it.knownLogicalTypeName) {
                             LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> {
                                 AnyValueDecoder { LocalDateTime.ofInstant(Instant.ofEpochMilli(decoder.decodeLong()), ZoneOffset.UTC) }
                             }
@@ -279,7 +279,7 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
                             else -> null
                         }
 
-                    Schema.Type.STRING -> {
+                    AvroSchema.Type.STRING -> {
                         AnyValueDecoder { LocalDateTime.parse(decoder.decodeString()) }
                     }
 
@@ -295,10 +295,10 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
 }
 
 public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.LONG).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS))
+        } ?: logicalTypeSchema(AvroSchema.Type.LONG, LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS)
     }
 
     override fun serializeAvro(
@@ -307,21 +307,21 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
     ) {
         with(encoder) {
             if (currentWriterSchema.isUnion) {
-                trySelectTypeNameFromUnion(Schema.Type.LONG) ||
-                    trySelectTypeNameFromUnion(Schema.Type.STRING) ||
-                    throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.STRING)
+                trySelectTypeNameFromUnion(AvroSchema.Type.LONG) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.STRING) ||
+                    throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
             when (currentWriterSchema.type) {
-                Schema.Type.LONG ->
-                    when (currentWriterSchema.logicalType?.name) {
+                AvroSchema.Type.LONG ->
+                    when (currentWriterSchema.knownLogicalTypeName) {
                         LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> encodeLong(value.toEpochMicros())
                         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS -> encodeLong(value.toEpochMilli())
-                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, Schema.Type.LONG)
+                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, AvroSchema.Type.LONG)
                     }
 
-                Schema.Type.STRING -> encodeString(value.toString())
+                AvroSchema.Type.STRING -> encodeString(value.toString())
 
-                else -> throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.STRING)
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
         }
     }
@@ -335,10 +335,10 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
 
     override fun deserializeAvro(decoder: AvroDecoder): Instant =
         with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", Schema.Type.LONG) }) {
+            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG) }) {
                 when (it.type) {
-                    Schema.Type.LONG ->
-                        when (it.logicalType?.name) {
+                    AvroSchema.Type.LONG ->
+                        when (it.knownLogicalTypeName) {
                             LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> {
                                 AnyValueDecoder { Instant.ofEpochMilli(decoder.decodeLong()) }
                             }
@@ -350,7 +350,7 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
                             else -> null
                         }
 
-                    Schema.Type.STRING -> {
+                    AvroSchema.Type.STRING -> {
                         AnyValueDecoder { Instant.parse(decoder.decodeString()) }
                     }
 
@@ -365,10 +365,10 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
 }
 
 public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.LONG).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MICROS))
+        } ?: logicalTypeSchema(AvroSchema.Type.LONG, LOGICAL_TYPE_NAME_TIMESTAMP_MICROS)
     }
 
     override fun serializeAvro(
@@ -377,21 +377,21 @@ public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.
     ) {
         with(encoder) {
             if (currentWriterSchema.isUnion) {
-                trySelectTypeNameFromUnion(Schema.Type.LONG) ||
-                    trySelectTypeNameFromUnion(Schema.Type.STRING) ||
-                    throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.STRING)
+                trySelectTypeNameFromUnion(AvroSchema.Type.LONG) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.STRING) ||
+                    throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
             when (currentWriterSchema.type) {
-                Schema.Type.LONG ->
-                    when (currentWriterSchema.logicalType?.name) {
+                AvroSchema.Type.LONG ->
+                    when (currentWriterSchema.knownLogicalTypeName) {
                         LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> encodeLong(value.toEpochMicros())
                         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS -> encodeLong(value.toEpochMilli())
-                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIMESTAMP_MICROS, Schema.Type.LONG)
+                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIMESTAMP_MICROS, AvroSchema.Type.LONG)
                     }
 
-                Schema.Type.STRING -> encodeString(value.toString())
+                AvroSchema.Type.STRING -> encodeString(value.toString())
 
-                else -> throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.STRING)
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
         }
     }
@@ -405,10 +405,10 @@ public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.
 
     override fun deserializeAvro(decoder: AvroDecoder): Instant {
         with(decoder) {
-            return decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", Schema.Type.LONG, Schema.Type.STRING) }) {
+            return decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG, AvroSchema.Type.STRING) }) {
                 when (it.type) {
-                    Schema.Type.LONG ->
-                        when (it.logicalType?.name) {
+                    AvroSchema.Type.LONG ->
+                        when (it.knownLogicalTypeName) {
                             LOGICAL_TYPE_NAME_TIMESTAMP_MICROS, null -> {
                                 AnyValueDecoder { Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS) }
                             }
@@ -420,7 +420,7 @@ public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.
                             else -> null
                         }
 
-                    Schema.Type.STRING -> {
+                    AvroSchema.Type.STRING -> {
                         AnyValueDecoder { Instant.parse(decoder.decodeString()) }
                     }
 
@@ -443,7 +443,7 @@ private fun Instant.toEpochMicros() = ChronoUnit.MICROS.between(Instant.EPOCH, t
  * [avro spec](https://avro.apache.org/docs/1.12.1/specification/#duration)
  */
 public object JavaDurationSerializer : AvroSerializer<Duration>(Duration::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
         } ?: AvroDurationSerializer.DURATION_SCHEMA
@@ -497,7 +497,7 @@ public object JavaDurationSerializer : AvroSerializer<Duration>(Duration::class.
  * [avro spec](https://avro.apache.org/docs/1.12.1/specification/#duration)
  */
 public object JavaPeriodSerializer : AvroSerializer<Period>(Period::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
         } ?: AvroDurationSerializer.DURATION_SCHEMA

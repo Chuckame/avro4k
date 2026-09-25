@@ -40,8 +40,8 @@ import java.util.concurrent.atomic.AtomicReference
 import com.github.avrokotlin.avro4k.toJsonElement as avroSchemaToJson
 
 // The conversions between Apache's Schema and avro4k's AvroSchema. Hosted in core (JVM only) until core drops its Apache
-// dependency, so core can convert at its public boundaries while its internals move to AvroSchema; apache-interop's public
-// toAvro4k()/toApacheSchema() delegate here.
+// dependency, as core still hands Apache's model to Apache's own classes (the object container files, the validating
+// codec, the generic data values); apache-interop's public toAvro4k()/toApacheSchema() delegate here.
 //
 // ## Pairing ("two-way seeding")
 //
@@ -133,35 +133,22 @@ public fun apacheToAvro4kUncached(schema: Schema): AvroSchema = ApacheToAvro4k(c
  * until it is converted itself: the json route cannot reuse an existing Apache node, as Apache's parser copies every record
  * it resolves, even the ones handed to it with `Parser.addTypes`.
  *
+ * The logical types that Apache does not know, like avro4k's own `char` or a user serializer's custom one, are kept:
+ * Apache's parser, which the json route goes through, drops them (its `getLogicalType()` is null, only the `logicalType`
+ * prop is left), while the schemas avro4k used to generate directly with Apache's API had them. So each node whose
+ * logical type Apache does not know gets it back (`LogicalType(name).addToSchema`), and the Apache form of a generated
+ * schema is the one avro4k generated before. A known logical type that Apache rejects as invalid stays dropped, as
+ * Apache would.
+ *
  * Only for long-lived schema instances: the caches are O(capacity) per insert. Use [avro4kToApacheUncached] for a schema
  * created per call.
  */
 @InternalAvro4kApi
-public fun avro4kToApache(schema: AvroSchema): Schema = avro4kToApache(schema, keepUnknownLogicalTypes = false)
-
-/**
- * [avro4kToApache] for the schemas core generates (`Avro.schema()`), cached and paired the same way, which also
- * keeps the logical types that Apache does not know, like avro4k's own `char` or a user serializer's custom one.
- *
- * Apache's parser, which the json route goes through, drops a logical type it does not know (its `getLogicalType()` is
- * null, only the `logicalType` prop is left), while the schemas core used to build directly with Apache's API had them,
- * and core's runtime still reads them from Apache's `getLogicalType()` until the encoders and decoders read `AvroSchema`.
- * So each node whose logical type Apache does not know gets it back, exactly as the former generation set it
- * (`LogicalType(name).addToSchema`). A known logical type that Apache rejects as invalid stays dropped, as Apache would,
- * since the former generation could not produce one.
- */
-internal fun avro4kToApacheKeepingUnknownLogicalTypes(schema: AvroSchema): Schema = avro4kToApache(schema, keepUnknownLogicalTypes = true)
-
-private fun avro4kToApache(
-    schema: AvroSchema,
-    keepUnknownLogicalTypes: Boolean,
-): Schema {
+public fun avro4kToApache(schema: AvroSchema): Schema {
     apacheByAvro4k.pairedWith(schema)?.let { return it }
     val parsed = avro4kToApacheUncached(schema)
-    if (keepUnknownLogicalTypes) {
-        // before seeding, while the parsed nodes are still private to this call
-        parsed.restoreUnknownLogicalTypes(identitySet())
-    }
+    // before seeding, while the parsed nodes are still private to this call
+    parsed.restoreUnknownLogicalTypes(identitySet())
     val created = ArrayList<Pair<AvroSchema, Schema>>()
     pairParsedNodes(schema, parsed, identitySet(), identitySet(), created)
     return seed(schema, parsed, created, contended = apacheByAvro4k, fresh = avro4kByApache)
@@ -415,7 +402,7 @@ private val APACHE_BUILT_IN_LOGICAL_TYPES =
         "local-timestamp-nanos"
     )
 
-/** See [avro4kToApacheKeepingUnknownLogicalTypes]. Each node is visited once: named types and recursive records are shared. */
+/** See [avro4kToApache]. Each node is visited once: named types and recursive records are shared. */
 private fun Schema.restoreUnknownLogicalTypes(visited: MutableSet<Schema>) {
     if (!visited.add(this)) return
     val logicalTypeName = getProp(LogicalType.LOGICAL_TYPE_PROP)

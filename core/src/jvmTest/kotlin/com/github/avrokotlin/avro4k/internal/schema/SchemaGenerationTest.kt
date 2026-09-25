@@ -42,11 +42,11 @@ import org.apache.avro.Schema
 import java.math.BigDecimal
 
 /**
- * The schema generation builds [AvroSchema]s, and `Avro.schema()` returns their Apache form. The generated
- * schemas themselves are pinned by the `schema/` suite; these tests pin what the switch had to preserve or add.
+ * The schema generation builds [AvroSchema]s, which `Avro.schema()` returns; the tests compare their Apache form. The
+ * generated schemas themselves are pinned by the `schema/` suite; these tests pin what the switch had to preserve or add.
  */
 internal class SchemaGenerationTest : StringSpec({
-    "both forms of a generated schema come from one cache entry, and are paired node by node" {
+    "a generated schema comes from one cache entry, and its Apache form is paired with it node by node" {
         val avro = Avro {}
         val descriptor = WithEnums.serializer().descriptor
         val apache = avro.apacheSchema(descriptor)

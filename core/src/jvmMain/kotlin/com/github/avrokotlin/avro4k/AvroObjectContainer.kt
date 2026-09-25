@@ -1,5 +1,7 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
+import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import com.github.avrokotlin.avro4k.internal.decodeWithApacheDecoder
 import com.github.avrokotlin.avro4k.internal.encodeWithApacheEncoder
 import kotlinx.serialization.DeserializationStrategy
@@ -33,7 +35,7 @@ public sealed class AvroObjectContainer(
      * Note that the output stream is not closed after the operation, which means you need to handle it to avoid resource leaks.
      */
     public fun <T> openWriter(
-        schema: Schema,
+        schema: AvroSchema,
         serializer: SerializationStrategy<T>,
         outputStream: OutputStream,
         builder: AvroObjectContainerBuilder.() -> Unit = {},
@@ -41,7 +43,8 @@ public sealed class AvroObjectContainer(
         val datumWriter: DatumWriter<T> = KotlinxSerializationDatumWriter(serializer, avro)
         val dataFileWriter = DataFileWriter(datumWriter)
         builder(AvroObjectContainerBuilder(dataFileWriter))
-        dataFileWriter.create(schema, outputStream)
+        // Apache's file writer needs its own model, for the header: converted once per file, through the cached converter
+        dataFileWriter.create(avro4kToApache(schema), outputStream)
         return AvroObjectContainerWriter(dataFileWriter)
     }
 
@@ -147,38 +150,44 @@ public class AvroObjectContainerMetadataDumper internal constructor(private val 
     }
 }
 
+/** Converts the file's writer schema once, in [setSchema], which Apache's file writer calls once per file. */
 private class KotlinxSerializationDatumWriter<T>(
     private val serializer: SerializationStrategy<T>,
     private val avro: Avro,
 ) : DatumWriter<T> {
-    private lateinit var writerSchema: Schema
+    private lateinit var apacheWriterSchema: Schema
+    private lateinit var writerSchema: AvroSchema
 
     override fun setSchema(schema: Schema) {
-        writerSchema = schema
+        apacheWriterSchema = schema
+        writerSchema = apacheToAvro4k(schema)
     }
 
     override fun write(
         datum: T,
         encoder: org.apache.avro.io.Encoder,
     ) {
-        avro.encodeWithApacheEncoder(writerSchema, serializer, datum, encoder)
+        avro.encodeWithApacheEncoder(apacheWriterSchema, writerSchema, serializer, datum, encoder)
     }
 }
 
+/** Converts the file's writer schema once, in [setSchema], which Apache's file reader calls once per file. */
 private class KotlinxSerializationDatumReader<T>(
     private val deserializer: DeserializationStrategy<T>,
     private val avro: Avro,
 ) : DatumReader<T> {
-    private lateinit var writerSchema: Schema
+    private lateinit var apacheWriterSchema: Schema
+    private lateinit var writerSchema: AvroSchema
 
     override fun setSchema(schema: Schema) {
-        writerSchema = schema
+        apacheWriterSchema = schema
+        writerSchema = apacheToAvro4k(schema)
     }
 
     override fun read(
         reuse: T?,
         decoder: org.apache.avro.io.Decoder,
     ): T {
-        return avro.decodeWithApacheDecoder(writerSchema, deserializer, decoder)
+        return avro.decodeWithApacheDecoder(apacheWriterSchema, writerSchema, deserializer, decoder)
     }
 }

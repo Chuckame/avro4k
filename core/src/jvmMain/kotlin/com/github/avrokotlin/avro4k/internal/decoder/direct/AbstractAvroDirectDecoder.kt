@@ -1,9 +1,8 @@
 package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.AvroSchemaDecoder
-import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
@@ -28,20 +27,17 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.internal.AbstractCollectionSerializer
 import kotlinx.serialization.modules.SerializersModule
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericData
-import org.apache.avro.generic.GenericFixed
 
 @OptIn(ExperimentalSerializationApi::class)
 internal abstract class AbstractAvroDirectDecoder(
     internal val avro: Avro,
     protected val binaryDecoder: AvroBinaryDecoder,
-) : AbstractInterceptingDecoder(), AvroSchemaDecoder {
-    abstract override var currentAvroSchema: AvroSchema
+) : AbstractInterceptingDecoder(), AvroDecoder {
+    /** The writer schema of the value being decoded; a union until [decodeAndResolveUnion] selects its branch. */
+    abstract var currentAvroSchema: AvroSchema
 
-    /** The Apache-typed facade over [currentAvroSchema], for the public API only: see [apacheFacadeOf]. */
-    final override val currentWriterSchema: Schema
-        get() = apacheFacadeOf(currentAvroSchema)
+    final override val currentWriterSchema: AvroSchema
+        get() = currentAvroSchema
 
     private var decodedCollectionSize = -1
 
@@ -285,15 +281,11 @@ internal abstract class AbstractAvroDirectDecoder(
         }
     }
 
-    /**
-     * A [GenericFixed] still carries an Apache schema, until the public API is `AvroSchema`-typed: the one of the facade
-     * ([currentWriterSchema]), which is the caller's own Apache node, as before.
-     */
-    override fun decodeFixed(): GenericFixed {
+    override fun decodeFixed(): ByteArray {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.BYTES -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readBytes())
-            AvroSchema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readFixed(currentAvroSchema.fixedSize))
-            AvroSchema.Type.STRING -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readStringBytes())
+            AvroSchema.Type.BYTES -> binaryDecoder.readBytes()
+            AvroSchema.Type.FIXED -> binaryDecoder.readFixed(currentAvroSchema.fixedSize)
+            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes()
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.FIXED, AvroSchema.Type.BYTES, AvroSchema.Type.STRING)
         }
     }

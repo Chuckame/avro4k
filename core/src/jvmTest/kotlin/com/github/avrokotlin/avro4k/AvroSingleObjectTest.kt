@@ -16,7 +16,7 @@ internal class AvroSingleObjectTest : StringSpec({
             42.0
         )
     val schema = Avro.apacheSchema(OrderEvent.serializer())
-    val schemas = mapOf(SchemaNormalization.parsingFingerprint64(schema) to schema)
+    val schemas = mapOf(SchemaNormalization.parsingFingerprint64(schema) to schema.toAvro4k())
     val avroSingleObject = AvroSingleObject(schemas::get)
 
     "support writing avro single object" {

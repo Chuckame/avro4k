@@ -6,9 +6,12 @@ import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
-import com.github.avrokotlin.avro4k.internal.copy
+import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.isUnion
+import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
 import com.github.avrokotlin.avro4k.logicalTypeMismatchError
 import com.github.avrokotlin.avro4k.trySelectFixedSchemaForSize
 import com.github.avrokotlin.avro4k.trySelectLogicalTypeFromUnion
@@ -19,8 +22,6 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
-import org.apache.avro.LogicalType
-import org.apache.avro.Schema
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -39,11 +40,11 @@ internal val KotlinStdLibSerializersModule: SerializersModule
 public object KotlinUuidSerializer : AvroSerializer<Uuid>(Uuid::class.qualifiedName!!) {
     internal const val LOGICAL_TYPE_NAME = "uuid"
 
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull { element ->
             element.stringable?.createSchema()
                 ?: element.fixed?.createSchema(element)
-                    ?.copy(logicalType = LogicalType(LOGICAL_TYPE_NAME))
+                    ?.withLogicalType(LOGICAL_TYPE_NAME)
                     ?.also {
                         if (it.fixedSize != 16) {
                             throw SerializationException(
@@ -51,7 +52,7 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>(Uuid::class.qualifiedN
                             )
                         }
                     }
-        } ?: Schema.create(Schema.Type.STRING).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME))
+        } ?: logicalTypeSchema(AvroSchema.Type.STRING, LOGICAL_TYPE_NAME)
     }
 
     override fun serializeAvro(
@@ -60,15 +61,15 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>(Uuid::class.qualifiedN
     ) {
         with(encoder) {
             if (currentWriterSchema.isUnion) {
-                trySelectLogicalTypeFromUnion(LOGICAL_TYPE_NAME, Schema.Type.FIXED) ||
-                    trySelectTypeNameFromUnion(Schema.Type.STRING) ||
+                trySelectLogicalTypeFromUnion(LOGICAL_TYPE_NAME, AvroSchema.Type.FIXED) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.STRING) ||
                     trySelectFixedSchemaForSize(16) ||
-                    throw unsupportedWriterTypeError(Schema.Type.STRING, Schema.Type.FIXED)
+                    throw unsupportedWriterTypeError(AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
             }
             when (currentWriterSchema.type) {
-                Schema.Type.STRING -> encodeString(value.toString())
-                Schema.Type.FIXED -> encodeFixed(value.toByteArray())
-                else -> throw unsupportedWriterTypeError(Schema.Type.STRING, Schema.Type.FIXED)
+                AvroSchema.Type.STRING -> encodeString(value.toString())
+                AvroSchema.Type.FIXED -> encodeFixed(value.toByteArray())
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
             }
         }
     }
@@ -85,16 +86,16 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>(Uuid::class.qualifiedN
             return decodeResolvingAny({
                 UnexpectedDecodeSchemaError(
                     "Uuid",
-                    Schema.Type.STRING,
-                    Schema.Type.FIXED
+                    AvroSchema.Type.STRING,
+                    AvroSchema.Type.FIXED
                 )
             }) { schema ->
                 when (schema.type) {
-                    Schema.Type.STRING -> {
+                    AvroSchema.Type.STRING -> {
                         AnyValueDecoder { Uuid.parse(decoder.decodeString()) }
                     }
 
-                    Schema.Type.FIXED -> {
+                    AvroSchema.Type.FIXED -> {
                         if (schema.fixedSize == 16) {
                             AnyValueDecoder { Uuid.fromByteArray(decoder.decodeBytes()) }
                         } else {
@@ -124,10 +125,10 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>(Uuid::class.qualifiedN
  * Also supports string type for ISO-8601 representation.
  */
 public object KotlinInstantSerializer : AvroSerializer<Instant>(Instant::class.qualifiedName!!) {
-    override fun getSchema(context: SchemaSupplierContext): Schema {
+    override fun getSchema(context: SchemaSupplierContext): AvroSchema {
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
-        } ?: Schema.create(Schema.Type.LONG).copy(logicalType = LogicalType(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS))
+        } ?: logicalTypeSchema(AvroSchema.Type.LONG, LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS)
     }
 
     override fun serializeAvro(
@@ -136,13 +137,13 @@ public object KotlinInstantSerializer : AvroSerializer<Instant>(Instant::class.q
     ) {
         with(encoder) {
             if (currentWriterSchema.isUnion) {
-                trySelectTypeNameFromUnion(Schema.Type.LONG) ||
-                    trySelectTypeNameFromUnion(Schema.Type.STRING) ||
-                    throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.STRING)
+                trySelectTypeNameFromUnion(AvroSchema.Type.LONG) ||
+                    trySelectTypeNameFromUnion(AvroSchema.Type.STRING) ||
+                    throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
             when (currentWriterSchema.type) {
-                Schema.Type.LONG ->
-                    when (currentWriterSchema.logicalType?.name) {
+                AvroSchema.Type.LONG ->
+                    when (currentWriterSchema.knownLogicalTypeName) {
                         LOGICAL_TYPE_NAME_TIMESTAMP_NANOS ->
                             encodeLong(value.toExactEpochNanos())
 
@@ -152,12 +153,12 @@ public object KotlinInstantSerializer : AvroSerializer<Instant>(Instant::class.q
                         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS ->
                             encodeLong(value.toExactEpochMillis())
 
-                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, Schema.Type.LONG)
+                        else -> throw logicalTypeMismatchError(LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, AvroSchema.Type.LONG)
                     }
 
-                Schema.Type.STRING -> encodeString(value.toString())
+                AvroSchema.Type.STRING -> encodeString(value.toString())
 
-                else -> throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.STRING)
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.STRING)
             }
         }
     }
@@ -171,10 +172,10 @@ public object KotlinInstantSerializer : AvroSerializer<Instant>(Instant::class.q
 
     override fun deserializeAvro(decoder: AvroDecoder): Instant =
         with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", Schema.Type.LONG) }) {
+            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG) }) {
                 when (it.type) {
-                    Schema.Type.LONG ->
-                        when (it.logicalType?.name) {
+                    AvroSchema.Type.LONG ->
+                        when (it.knownLogicalTypeName) {
                             LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> {
                                 AnyValueDecoder { Instant.fromEpochMilliseconds(decoder.decodeLong()) }
                             }
@@ -190,7 +191,7 @@ public object KotlinInstantSerializer : AvroSerializer<Instant>(Instant::class.q
                             else -> null
                         }
 
-                    Schema.Type.STRING -> {
+                    AvroSchema.Type.STRING -> {
                         AnyValueDecoder { Instant.parse(decoder.decodeString()) }
                     }
 

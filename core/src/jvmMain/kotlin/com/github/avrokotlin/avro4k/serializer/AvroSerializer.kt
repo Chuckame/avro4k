@@ -10,7 +10,8 @@ import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroStringable
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
-import com.github.avrokotlin.avro4k.internal.apacheToAvro4kUncached
+import com.github.avrokotlin.avro4k.Name
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.findAnnotation
 import com.github.avrokotlin.avro4k.internal.findElementAnnotation
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
@@ -23,7 +24,8 @@ import kotlinx.serialization.descriptors.buildSerialDescriptor
 import kotlinx.serialization.descriptors.nullable
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import org.apache.avro.Schema
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Base class for custom Avro serializers. It also provides a way to define custom Avro schema.
@@ -143,7 +145,7 @@ public val ElementLocation.stringable: AvroStringable?
  * Creates a string schema from the [AvroStringable] annotation.
  */
 @ExperimentalAvro4kApi
-public fun AvroStringable.createSchema(): Schema = Schema.create(Schema.Type.STRING)
+public fun AvroStringable.createSchema(): AvroSchema = AvroSchema.StringSchema()
 
 /**
  * Shorthand for [findAnnotation] with [AvroFixed] as it is a built-in annotation.
@@ -161,15 +163,20 @@ public val ElementLocation.fixed: AvroFixed?
  *   name (e.g. `com.example.MyRecord.myField`), so that two records' fields never have the same fixed name.
  */
 @ExperimentalAvro4kApi
-public fun AvroFixed.createSchema(elementLocation: ElementLocation): Schema {
+public fun AvroFixed.createSchema(elementLocation: ElementLocation): AvroSchema {
     val descriptor = elementLocation.descriptor
     if (descriptor.isInline) {
-        // A name with a dot is a full name for Apache, which then ignores the namespace argument
-        return Schema.createFixed(descriptor.nonNullSerialName, descriptor.findAnnotation<AvroDoc>()?.value, null, size).also { fixed ->
-            descriptor.findAnnotation<AvroAlias>()?.value?.forEach { fixed.addAlias(it) }
-        }
+        // A name with a dot is a full name, and then the namespace argument is ignored
+        val name = Name(descriptor.nonNullSerialName, null)
+        return AvroSchema.FixedSchema(
+            name = name,
+            size = size,
+            doc = descriptor.findAnnotation<AvroDoc>()?.value,
+            // relative to the fixed's namespace; its own full name as an alias is a no-op, dropped as the model rejects it
+            aliases = descriptor.findAnnotation<AvroAlias>()?.value?.mapNotNullTo(LinkedHashSet()) { alias -> Name(alias, name.space).takeIf { it != name } } ?: emptySet()
+        )
     }
-    return Schema.createFixed(descriptor.getElementName(elementLocation.elementIndex), null, descriptor.nonNullSerialName, size)
+    return AvroSchema.FixedSchema(Name(descriptor.getElementName(elementLocation.elementIndex), descriptor.nonNullSerialName), size)
 }
 
 @ExperimentalAvro4kApi
@@ -180,18 +187,65 @@ public data class ElementLocation
     )
 
 internal fun interface AvroSchemaSupplier {
-    fun getSchema(context: SchemaSupplierContext): Schema
+    fun getSchema(context: SchemaSupplierContext): AvroSchema
 }
 
 /**
- * The schema of this supplier as avro4k's [AvroSchema], for the schema generation, which builds [AvroSchema]s while the
- * public [AvroSchemaSupplier.getSchema] still returns Apache's `Schema`, until core's public API switches to `AvroSchema`.
- *
- * Converted with the **uncached** converter: `getSchema` may create a new schema on each call (most built-in serializers
- * do), and a key created per call must not go in the identity caches (`WeakIdentityKeyCache`'s KDoc). It runs once per
- * generated schema, a cold path: `Avro.schema()` caches the result per descriptor.
+ * A schema of [type] (a primitive, or bytes) with the logical type [logicalTypeName]: the `logicalType` prop, then
+ * [additionalProps], in this order.
  */
-internal fun AvroSchemaSupplier.getAvroSchema(context: SchemaSupplierContext): AvroSchema = apacheToAvro4kUncached(getSchema(context))
+internal fun logicalTypeSchema(
+    type: AvroSchema.Type,
+    logicalTypeName: String,
+    vararg additionalProps: Pair<String, JsonElement>,
+): AvroSchema {
+    val props = logicalTypeProps(emptyMap(), logicalTypeName, additionalProps)
+    return when (type) {
+        AvroSchema.Type.BOOLEAN -> AvroSchema.BooleanSchema(props)
+        AvroSchema.Type.INT -> AvroSchema.IntSchema(props)
+        AvroSchema.Type.LONG -> AvroSchema.LongSchema(props)
+        AvroSchema.Type.FLOAT -> AvroSchema.FloatSchema(props)
+        AvroSchema.Type.DOUBLE -> AvroSchema.DoubleSchema(props)
+        AvroSchema.Type.STRING -> AvroSchema.StringSchema(props)
+        AvroSchema.Type.BYTES -> AvroSchema.BytesSchema(props)
+        else -> throw IllegalArgumentException("Not a primitive type: $type")
+    }
+}
+
+/**
+ * A copy of this schema (a fixed, a primitive or bytes) with the logical type [logicalTypeName], after its own props,
+ * then [additionalProps]: the props Apache's `LogicalType.addToSchema` adds, in its order.
+ */
+internal fun AvroSchema.withLogicalType(
+    logicalTypeName: String,
+    vararg additionalProps: Pair<String, JsonElement>,
+): AvroSchema {
+    val props = logicalTypeProps((this as ResolvedSchema).props, logicalTypeName, additionalProps)
+    return when (this) {
+        is AvroSchema.FixedSchema -> copy(props = props)
+        is AvroSchema.BooleanSchema -> copy(props = props)
+        is AvroSchema.IntSchema -> copy(props = props)
+        is AvroSchema.LongSchema -> copy(props = props)
+        is AvroSchema.FloatSchema -> copy(props = props)
+        is AvroSchema.DoubleSchema -> copy(props = props)
+        is AvroSchema.StringSchema -> copy(props = props)
+        is AvroSchema.BytesSchema -> copy(props = props)
+        else -> throw IllegalArgumentException("A logical type cannot be added to a $type schema")
+    }
+}
+
+private fun logicalTypeProps(
+    props: Map<String, JsonElement>,
+    logicalTypeName: String,
+    additionalProps: Array<out Pair<String, JsonElement>>,
+): Map<String, JsonElement> =
+    LinkedHashMap(props).apply {
+        put("logicalType", JsonPrimitive(logicalTypeName))
+        additionalProps.forEach { (key, value) -> put(key, value) }
+    }
+
+/** The schema of this supplier, for the schema generation. It runs once per generated schema: `Avro.schema()` caches it. */
+internal fun AvroSchemaSupplier.getAvroSchema(context: SchemaSupplierContext): AvroSchema = getSchema(context)
 
 @OptIn(SealedSerializationApi::class)
 internal class SerialDescriptorWithAvroSchemaDelegate(

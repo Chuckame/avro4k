@@ -132,6 +132,32 @@ after the fixed, instead of a value class named after the file (`TestSchema`). G
 fields as `ByteArray` must now go through `.value`. The `duration` fixed is unchanged (see
 [`m3-09-fixed-naming.md`](m3-09-fixed-naming.md)).
 
+## Public API on `AvroSchema` (from [`m3-12.md`](m3-12.md), §4 — the `core.api` diff)
+
+Every schema in core's public API is avro4k's own `AvroSchema`; names and parameter lists are unchanged. Apache users
+convert with the `apache-interop` module: `apacheSchema.toAvro4k()`, `avroSchema.toApacheSchema()`.
+
+| API | v2 | v3 |
+|---|---|---|
+| `Avro.schema(descriptor)`, `Avro.schema(serializer)`, `Avro.schema<T>()` | `Schema` | `AvroSchema` |
+| `Avro.encodeToByteArray` / `decodeFromByteArray` with a `writerSchema` (+ reified) | `Schema` | `AvroSchema` |
+| `encodeToSink` / `decodeFromSource` (kotlinx-io, okio), `encodeToStream` / `decodeFromStream`, `decodeFromByteBuffer` | `writerSchema: Schema` | `AvroSchema` |
+| `AvroEncoder.currentWriterSchema`, `AvroDecoder.currentWriterSchema` | `Schema` | `AvroSchema` |
+| `AvroDecoder.decodeFixed()` | `GenericFixed` | `ByteArray` (for a `GenericFixed`: `GenericData.Fixed(currentWriterSchema.toApacheSchema(), decodeFixed())`) |
+| `decodeResolving*` resolver lambdas | `(Schema) -> …` | `(AvroSchema) -> …` |
+| `AvroSerializer.getSchema(context)` and all built-in serializers | `Schema` | `AvroSchema` (from Apache: `toAvro4k()`) |
+| `AvroStringable.createSchema()`, `AvroFixed.createSchema(elementLocation)` | `Schema` | `AvroSchema` |
+| `AvroSingleObject(schemaRegistry)` lambda, `encodeToSink` / `encodeToStream` / `encodeToByteArray(writerSchema, …)` | `Schema` | `AvroSchema` |
+| `AvroObjectContainer.openWriter(schema, …)` | `Schema` | `AvroSchema` |
+| `MissingFieldsEncodingException(fields, writerSchema[, descriptor])` | `List<Schema.Field>, Schema` | `List<AvroSchema.RecordSchema.Field>, AvroSchema` |
+| internal-API (`@InternalAvro4kApi`): `AnySerializer` hooks, `trySelectNamedSchema`, `namedSchemaNotFoundInUnionError`, `isNamedSchema` | `Schema`, `Schema.Type` | `AvroSchema`, `AvroSchema.Type` |
+
+Behaviour to call out: `AvroSchema.toString()` is not json (`toJsonElement()`); `toApacheSchema()` keeps `char` and custom
+logical types; an Apache schema equal to one already converted maps to the first one's conversion (docs/aliases of the
+first win, as the v2 caches did); `MissingFieldsEncodingException` prints the model's json; built-in serializers ignore
+unknown or invalid logical types on every schema; still Apache-typed: `encodeToGenericData` / `decodeFromGenericData`,
+`ListRecord`, `Record`, `AvroObjectContainerBuilder.codec`.
+
 ## Collected so far
 
 One line each, with where the details are. Not rewritten here.
@@ -153,3 +179,4 @@ One line each, with where the details are. Not rewritten here.
   and reserved-prop errors are `SerializationException`s; `Avro.schema()`'s default nodes are parser-typed; plus
   `AvroTypeException` for an invalid default, to change when Apache leaves core ("M3-13 / M3-14").
 - This file, "Fixed type names".
+- [`m3-12.md`](m3-12.md), §4: the public API on `AvroSchema` (section above), with its behaviour notes.

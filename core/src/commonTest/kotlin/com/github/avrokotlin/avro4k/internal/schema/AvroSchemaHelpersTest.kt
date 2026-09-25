@@ -339,4 +339,19 @@ class AvroSchemaHelpersTest {
         UnionSchema(StringSchema(), arrayModel).isNonNullScalarType() shouldBe false
         union.isNonNullScalarType() shouldBe false
     }
+
+    @Test
+    fun `knownLogicalTypeName is the name of a valid logical type of the specification - memoized per instance`() {
+        val date = IntSchema(mapOf("logicalType" to JsonPrimitive("date")))
+        date.knownLogicalTypeName shouldBe "date"
+        date.knownLogicalTypeName shouldBe "date" // the memoized value
+        LongSchema(mapOf("logicalType" to JsonPrimitive("date"))).knownLogicalTypeName.shouldBeNull() // invalid on a long
+        IntSchema(mapOf("logicalType" to JsonPrimitive("char"))).knownLogicalTypeName.shouldBeNull() // not the specification's
+        IntSchema().knownLogicalTypeName.shouldBeNull()
+        FixedSchema(Name("f"), 16, props = mapOf("logicalType" to JsonPrimitive("uuid"))).knownLogicalTypeName shouldBe "uuid"
+        FixedSchema(Name("f"), 8, props = mapOf("logicalType" to JsonPrimitive("uuid"))).knownLogicalTypeName.shouldBeNull()
+        BytesSchema(mapOf("logicalType" to JsonPrimitive("decimal"), "precision" to JsonPrimitive(4))).knownLogicalTypeName shouldBe "decimal"
+        BytesSchema(mapOf("logicalType" to JsonPrimitive("decimal"))).knownLogicalTypeName.shouldBeNull() // no precision
+        UnionSchema(IntSchema(), StringSchema()).knownLogicalTypeName.shouldBeNull()
+    }
 }

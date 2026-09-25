@@ -2,7 +2,6 @@ package com.github.avrokotlin.avro4k.kafka.confluent
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.internal.copy
-import com.github.avrokotlin.avro4k.schema
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 import io.confluent.kafka.serializers.NonRecordContainer
@@ -50,14 +49,14 @@ class AbstractAvro4kKafkaSerializerTest : StringSpec() {
         }
         // The following seems "natural", but it infers the Schema from the value's type and not from static analysis as done in the core module
         listOf<Pair<Any, Schema>>(
-            TestData("test", 24) to Avro.schema<TestData>(),
-            SomeEnum.B to Avro.schema<SomeEnum>(),
+            TestData("test", 24) to Avro.apacheSchema<TestData>(),
+            SomeEnum.B to Avro.apacheSchema<SomeEnum>(),
             listOf("one", "two", 3) to Schema.createArray(Schema.create(Schema.Type.STRING)),
             setOf<Any>(1, 2L, 3L) to Schema.createArray(Schema.create(Schema.Type.INT)),
             arrayOf(1, 2, 3) to Schema.createArray(Schema.create(Schema.Type.INT)),
             Utf8("string") to Schema.create(Schema.Type.STRING),
             "string" to Schema.create(Schema.Type.STRING),
-            mapOf(15 to "str") to Avro.schema<Map<String, String>>(),
+            mapOf(15 to "str") to Avro.apacheSchema<Map<String, String>>(),
             'A' to Schema.create(Schema.Type.INT).copy(logicalTypeName = "char"),
             42 to Schema.create(Schema.Type.INT),
             42L to Schema.create(Schema.Type.LONG),
@@ -66,8 +65,8 @@ class AbstractAvro4kKafkaSerializerTest : StringSpec() {
             true to Schema.create(Schema.Type.BOOLEAN),
             byteArrayOf(1, 2, 3) to Schema.create(Schema.Type.BYTES),
             ByteBuffer.wrap(byteArrayOf(1, 2, 3)) to Schema.create(Schema.Type.BYTES),
-            Avro.schema<SomeEnum>().let { GenericData.EnumSymbol(it, "B") to it },
-            Avro.schema<TestData>().let {
+            Avro.apacheSchema<SomeEnum>().let { GenericData.EnumSymbol(it, "B") to it },
+            Avro.apacheSchema<TestData>().let {
                 GenericData.Record(it).apply {
                     put(0, "str")
                     put(1, 17)

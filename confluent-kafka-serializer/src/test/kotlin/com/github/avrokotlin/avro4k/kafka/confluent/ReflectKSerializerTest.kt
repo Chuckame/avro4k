@@ -4,7 +4,6 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAlias
 import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.internal.copy
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.should
 import io.kotest.matchers.shouldBe
@@ -21,7 +20,7 @@ import org.apache.avro.generic.GenericRecord
 class ReflectKSerializerTest : StringSpec() {
     init {
         "ENUM should be deserialized as concrete class" {
-            val schema = Avro.schema<TestEnum>()
+            val schema = Avro.apacheSchema<TestEnum>()
 
             Avro.decodeFromByteArray(schema, ReflectKSerializer(), byteArrayOf(2)) shouldBe TestEnum.B
         }
@@ -119,13 +118,13 @@ class ReflectKSerializerTest : StringSpec() {
             Avro.decodeFromByteArray(schema, ReflectKSerializer(), bytes) shouldBe GenericData.Fixed(schema, byteArrayOf(1, 2, 3))
         }
         "RECORD should be deserialized as concrete class" {
-            val schema = Avro.schema<TheRecord>()
+            val schema = Avro.apacheSchema<TheRecord>()
             val bytes = Avro.encodeToByteArray(schema, TheRecord("Hello", null))
 
             Avro.decodeFromByteArray(schema, ReflectKSerializer(), bytes) shouldBe TheRecord("Hello", null)
         }
         "RECORD should be deserialized as concrete class based on the alias when registered in the serializers module" {
-            val schema = Avro.schema<TheRecord>().copy(name = "ns.theRecord", namespace = "")
+            val schema = Avro.apacheSchema<TheRecord>().copy(name = "ns.theRecord", namespace = "")
             val bytes = Avro.encodeToByteArray(schema, TheRecord("Hello", null))
 
             // not specifying the configured Avro instance should fallback on deserializing as GenericRecord

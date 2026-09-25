@@ -1,14 +1,14 @@
 package com.github.avrokotlin.avro4k.internal.decoder
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.AvroSchemaDecoder
-import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.SerializationWorkflow
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
+import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import com.github.avrokotlin.avro4k.internal.defaultValueBytes
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.resolveDefaultBranch
@@ -44,9 +44,7 @@ import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
 import kotlinx.serialization.modules.SerializersModule
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
-import org.apache.avro.generic.GenericFixed
 
 /**
  * Decodes the default value of a reader field that is missing from the writer schema, straight from the [JsonElement]
@@ -66,15 +64,14 @@ internal class JsonDefaultDecoder(
     private val avro: Avro,
     private val value: JsonElement,
     schema: AvroSchema,
-) : AbstractDecoder(), AvroSchemaDecoder {
+) : AbstractDecoder(), AvroDecoder {
     /**
      * The given schema, unless it is a union: then the branch matching the kind of [value].
      */
-    override val currentAvroSchema: AvroSchema = schema.resolveDefaultBranch(value)
+    val currentAvroSchema: AvroSchema = schema.resolveDefaultBranch(value)
 
-    /** The Apache-typed facade over [currentAvroSchema], for the public API only: see [apacheFacadeOf]. */
-    override val currentWriterSchema: Schema
-        get() = apacheFacadeOf(currentAvroSchema)
+    override val currentWriterSchema: AvroSchema
+        get() = currentAvroSchema
 
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
@@ -256,13 +253,9 @@ internal class JsonDefaultDecoder(
         }
     }
 
-    /**
-     * A [GenericFixed] still carries an Apache schema, until the public API is `AvroSchema`-typed: the one of the facade
-     * ([currentWriterSchema]), which is the reader schema's Apache node, as before.
-     */
-    override fun decodeFixed(): GenericFixed {
+    override fun decodeFixed(): ByteArray {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, bytesValue())
+            AvroSchema.Type.FIXED -> bytesValue()
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.FIXED)
         }
     }
@@ -274,13 +267,22 @@ internal class JsonDefaultDecoder(
     override fun decodeValue(): Any {
         return when (currentAvroSchema.type) {
             AvroSchema.Type.BOOLEAN -> primitive.boolean
+
             AvroSchema.Type.INT -> intValue()
+
             AvroSchema.Type.LONG -> primitive.long
+
             AvroSchema.Type.FLOAT -> primitive.float
+
             AvroSchema.Type.DOUBLE -> primitive.double
+
             AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content
+
             AvroSchema.Type.BYTES -> bytesValue()
-            AvroSchema.Type.FIXED -> decodeFixed()
+
+            // the generic value of a fixed carries its Apache schema, as the former path's: converted here, on this deprecated path only
+            AvroSchema.Type.FIXED -> GenericData.Fixed(avro4kToApache(currentAvroSchema), decodeFixed())
+
             else -> throw UnsupportedOperationException("A default value of type ${currentAvroSchema.type} cannot be decoded as a generic value")
         }
     }

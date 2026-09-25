@@ -10,7 +10,6 @@ import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer
-import org.apache.avro.Schema
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
@@ -18,7 +17,7 @@ import java.nio.ByteBuffer
 @Deprecated("Use encodeToSink instead", ReplaceWith("encodeToSink(writerSchema, serializer, value, outputStream.asSink().buffered())"))
 @ExperimentalAvro4kApi
 public fun <T> Avro.encodeToStream(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
     outputStream: OutputStream,
@@ -38,7 +37,7 @@ public inline fun <reified T> Avro.encodeToStream(
 @Deprecated("Use encodeToSink instead", replaceWith = ReplaceWith("encodeToSink(writerSchema, value, outputStream.asSink().buffered())"))
 @ExperimentalAvro4kApi
 public inline fun <reified T> Avro.encodeToStream(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     value: T,
     outputStream: OutputStream,
 ) {
@@ -48,7 +47,7 @@ public inline fun <reified T> Avro.encodeToStream(
 @Deprecated("Use decodeFromSource instead", replaceWith = ReplaceWith("decodeFromSource(deserializer, inputStream.asSource().buffered())"))
 @ExperimentalAvro4kApi
 public fun <T> Avro.decodeFromStream(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     deserializer: DeserializationStrategy<T>,
     inputStream: InputStream,
 ): T {
@@ -64,7 +63,7 @@ public inline fun <reified T> Avro.decodeFromStream(inputStream: InputStream): T
 @Deprecated("Use decodeFromSource instead", replaceWith = ReplaceWith("decodeFromSource(writerSchema, inputStream.asSource().buffered())"))
 @ExperimentalAvro4kApi
 public inline fun <reified T> Avro.decodeFromStream(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     inputStream: InputStream,
 ): T {
     return decodeFromSource(writerSchema, inputStream.asSource().buffered())
@@ -83,7 +82,7 @@ public inline fun <reified T> Avro.decodeFromStream(
 public inline fun <reified T> Avro.decodeFromByteBuffer(
     input: ByteBuffer,
     deserializer: DeserializationStrategy<T> = serializersModule.serializer<T>(),
-    writerSchema: Schema = schema(deserializer.descriptor),
+    writerSchema: AvroSchema = schema(deserializer.descriptor),
 ): T {
     return decodeFromByteBufferInternal(writerSchema, deserializer, input)
 }
@@ -96,7 +95,7 @@ public inline fun <reified T> Avro.decodeFromByteBuffer(
  */
 @InternalAvro4kApi
 public fun <T> Avro.decodeFromByteBufferInternal(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     deserializer: DeserializationStrategy<T>,
     input: ByteBuffer,
 ): T {

@@ -10,12 +10,11 @@ import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer
 import okio.BufferedSink
 import okio.BufferedSource
-import org.apache.avro.Schema
 
 @Deprecated("Use kotlinx.io's encodeToSink instead")
 @ExperimentalAvro4kApi
 public fun <T> Avro.encodeToSink(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
     sink: BufferedSink,
@@ -39,7 +38,7 @@ public inline fun <reified T> Avro.encodeToSink(
 @Deprecated("Use kotlinx.io's encodeToSink instead")
 @ExperimentalAvro4kApi
 public inline fun <reified T> Avro.encodeToSink(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     value: T,
     sink: BufferedSink,
 ) {
@@ -51,7 +50,7 @@ public inline fun <reified T> Avro.encodeToSink(
 @Deprecated("Use kotlinx.io's decodeFromSource instead")
 @ExperimentalAvro4kApi
 public fun <T> Avro.decodeFromSource(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     deserializer: DeserializationStrategy<T>,
     source: BufferedSource,
 ): T {
@@ -97,7 +96,7 @@ public inline fun <reified T> Avro.decodeFromSource(source: BufferedSource): T {
 @Deprecated("Use kotlinx.io's decodeFromSource instead")
 @ExperimentalAvro4kApi
 public inline fun <reified T> Avro.decodeFromSource(
-    writerSchema: Schema,
+    writerSchema: AvroSchema,
     source: BufferedSource,
 ): T {
     val serializer = serializersModule.serializer<T>()

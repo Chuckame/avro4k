@@ -74,6 +74,17 @@ public sealed class AvroSchema(
     public open val fullName: String get() = simpleName
     public abstract val simpleName: String
 
+    /**
+     * Memo of [com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName], which the serializers read per value:
+     * [NotComputed] until the first read. Computed lazily because it depends on the subclass's own fields (a fixed's
+     * size), which are not set yet while this constructor runs. Racy single-check: every thread computes the same
+     * immutable value (a `String` or null), so a lost or repeated write is harmless. Takes no part in `equals`,
+     * `hashCode` or `toString`.
+     */
+    internal var knownLogicalTypeNameMemo: Any? = NotComputed
+
+    internal object NotComputed
+
     internal open fun equals(
         other: Any?,
         seen: MutableSet<SeenPair>,

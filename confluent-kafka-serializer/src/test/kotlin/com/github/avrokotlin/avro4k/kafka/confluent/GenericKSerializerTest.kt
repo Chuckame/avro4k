@@ -3,7 +3,6 @@ package com.github.avrokotlin.avro4k.kafka.confluent
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.encodeToByteArray
-import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -123,7 +122,7 @@ class GenericKSerializerTest : StringSpec() {
             @Serializable
             data class TheRecord(val field1: String, val field2: Int)
 
-            val schema = Avro.schema<TheRecord>()
+            val schema = Avro.apacheSchema<TheRecord>()
             val value =
                 GenericData.Record(schema).apply {
                     put("field1", "Hello")
@@ -140,7 +139,7 @@ class GenericKSerializerTest : StringSpec() {
             val schema =
                 Schema.createUnion(
                     Schema.create(Schema.Type.INT),
-                    Avro.schema<TheRecord>()
+                    Avro.apacheSchema<TheRecord>()
                 )
 
             val value =
@@ -167,7 +166,7 @@ class GenericKSerializerTest : StringSpec() {
                 @AvroFixed(3) val fixed: ByteArray,
             )
 
-            val schema = Avro.schema<TheRecord>()
+            val schema = Avro.apacheSchema<TheRecord>()
             val bytes = Avro.encodeToByteArray(schema, TheRecord("Hello", null, byteArrayOf(1, 2, 3)))
 
             Avro.decodeFromByteArray(schema, GenericKSerializer(), bytes) shouldBe

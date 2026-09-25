@@ -7,7 +7,6 @@ import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.schema.fields
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.generic.GenericFixed
 
 internal class RecordAsMapDirectDecoder(
     private val writerRecordSchema: AvroSchema,
@@ -70,7 +69,7 @@ internal class RecordAsMapDirectDecoder(
         return super.decodeChar()
     }
 
-    override fun decodeFixed(): GenericFixed {
+    override fun decodeFixed(): ByteArray {
         ensureNotFieldNameDecoding()
         return super.decodeFixed()
     }

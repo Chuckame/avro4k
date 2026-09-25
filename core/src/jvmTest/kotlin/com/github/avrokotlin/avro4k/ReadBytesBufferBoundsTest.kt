@@ -121,7 +121,7 @@ internal class ReadBytesBufferBoundsTest : StringSpec({
 
         val decoded =
             Avro.decodeWithApacheDecoder(
-                Avro.schema<BytesRecord>(),
+                Avro.apacheSchema<BytesRecord>(),
                 Avro.serializersModule.serializer<BytesRecord>(),
                 DecoderFactory.get().directBinaryDecoder(ByteBufferInputStream(listOf(head, tail)), null)
             )
@@ -146,9 +146,9 @@ internal class ReadBytesBufferBoundsTest : StringSpec({
         @Serializable(with = BytesAsFixedSerializer::class) val payload: ByteArray,
     )
 
-    /** Forces the `Schema.Type.BYTES -> GenericData.Fixed(...)` branch of `decodeFixed()`. */
+    /** Forces the bytes writer schema branch of `decodeFixed()`. */
     private object BytesAsFixedSerializer : AvroSerializer<ByteArray>("BytesAsFixed") {
-        override fun getSchema(context: SchemaSupplierContext): Schema = Schema.create(Schema.Type.BYTES)
+        override fun getSchema(context: SchemaSupplierContext): CoreSchema = Schema.create(Schema.Type.BYTES).toCoreSchema()
 
         override fun serializeAvro(
             encoder: AvroEncoder,
@@ -157,6 +157,6 @@ internal class ReadBytesBufferBoundsTest : StringSpec({
             encoder.encodeBytes(value)
         }
 
-        override fun deserializeAvro(decoder: AvroDecoder): ByteArray = decoder.decodeFixed().bytes()
+        override fun deserializeAvro(decoder: AvroDecoder): ByteArray = decoder.decodeFixedBytes()
     }
 }

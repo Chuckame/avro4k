@@ -13,7 +13,6 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonNull
-import org.apache.avro.generic.GenericFixed
 
 internal class RecordDirectDecoder(
     private val writerRecordSchema: AvroSchema,
@@ -88,7 +87,7 @@ internal class RecordDirectDecoder(
         }
     }
 
-    override fun decodeFixed(): GenericFixed {
+    override fun decodeFixed(): ByteArray {
         return when (val element = currentDecodingStep) {
             is DecodingStep.DeserializeWriterField -> super.decodeFixed()
             is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeFixed()
