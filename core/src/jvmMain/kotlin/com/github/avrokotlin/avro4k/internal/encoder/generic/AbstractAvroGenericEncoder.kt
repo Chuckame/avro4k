@@ -18,25 +18,25 @@ internal abstract class AbstractAvroGenericEncoder : AbstractAvroEncoder() {
         get() = avro.serializersModule
 
     override fun getRecordEncoder(descriptor: SerialDescriptor): CompositeEncoder {
-        return RecordGenericEncoder(descriptor, currentWriterSchema, avro) { encodeValue(it) }
+        return RecordGenericEncoder(descriptor, currentAvroSchema, avro) { encodeValue(it) }
     }
 
     override fun getPolymorphicEncoder(descriptor: SerialDescriptor): CompositeEncoder {
-        return PolymorphicEncoder(avro, currentWriterSchema) { encodeValue(it) }
+        return PolymorphicEncoder(avro, currentAvroSchema) { encodeValue(it) }
     }
 
     override fun getArrayEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
-        return ArrayGenericEncoder(avro, collectionSize, currentWriterSchema) { encodeValue(it) }
+        return ArrayGenericEncoder(avro, collectionSize, currentAvroSchema) { encodeValue(it) }
     }
 
     override fun getMapEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
-        return MapGenericEncoder(avro, collectionSize, currentWriterSchema) { encodeValue(it) }
+        return MapGenericEncoder(avro, collectionSize, currentAvroSchema) { encodeValue(it) }
     }
 
     override fun encodeBytesUnchecked(value: ByteArray) {

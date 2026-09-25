@@ -1,33 +1,35 @@
 package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.apacheFacadeOf
+import com.github.avrokotlin.avro4k.internal.schema.elementType
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericArray
 import org.apache.avro.generic.GenericData
 
 internal class ArrayGenericEncoder(
     override val avro: Avro,
     arraySize: Int,
-    private val schema: Schema,
+    private val schema: AvroSchema,
     private val onEncoded: (GenericArray<*>) -> Unit,
 ) : AbstractAvroGenericEncoder() {
     private val values: Array<Any?> = Array(arraySize) { null }
     private var index = 0
 
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        currentWriterSchema = schema.elementType
+        currentAvroSchema = schema.elementType
         return true
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
-        onEncoded(GenericData.Array(schema, values.asList()))
+        onEncoded(GenericData.Array(apacheFacadeOf(schema), values.asList()))
     }
 
     override fun encodeValue(value: Any) {

@@ -20,7 +20,8 @@ public fun <T> Avro.encodeToGenericData(
     value: T,
 ): Any? {
     var result: Any? = null
-    AvroValueGenericEncoder(this, writerSchema) {
+    // converted once per call, identity-cached: the encoders only read the AvroSchema
+    AvroValueGenericEncoder(this, apacheToAvro4k(writerSchema)) {
         result = it
     }.encodeSerializableValue(serializer, value)
     return result

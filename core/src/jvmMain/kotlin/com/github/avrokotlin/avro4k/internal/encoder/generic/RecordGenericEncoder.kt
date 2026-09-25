@@ -3,23 +3,24 @@
 package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ListRecord
+import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
-import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
+import com.github.avrokotlin.avro4k.internal.schema.fields
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 
 @Suppress("FunctionName")
 internal fun RecordGenericEncoder(
     descriptor: SerialDescriptor,
-    schema: Schema,
+    schema: AvroSchema,
     avro: Avro,
     onEncoded: (GenericRecord) -> Unit,
 ): CompositeEncoder {
-    return when (val encodingWorkflow = avro.recordResolver.resolveFields(apacheToAvro4k(schema), descriptor).encoding) {
+    return when (val encodingWorkflow = avro.recordResolver.resolveFields(schema, descriptor).encoding) {
         is EncodingWorkflow.ExactMatch -> RecordContiguousExactEncoder(schema, avro, onEncoded)
 
         is EncodingWorkflow.ContiguousWithSkips -> RecordContiguousSkippingEncoder(encodingWorkflow.fieldsToSkip, schema, avro, onEncoded)
@@ -27,14 +28,14 @@ internal fun RecordGenericEncoder(
         is EncodingWorkflow.NonContiguous -> RecordNonContiguousEncoder(encodingWorkflow.descriptorToWriterFieldIndex, schema, avro, onEncoded)
 
         is EncodingWorkflow.MissingWriterFields -> throw SerializationException(
-            "Missing writer fields ${schema.fields.filter { it.pos() in encodingWorkflow.missingWriterFields }}} from the descriptor $descriptor"
+            "Missing writer fields ${encodingWorkflow.missingWriterFields.map { schema.fields[it].name }} from the descriptor $descriptor"
         )
     }
 }
 
 private class RecordNonContiguousEncoder(
     private val descriptorToWriterFieldIndex: IntArray,
-    schema: Schema,
+    schema: AvroSchema,
     avro: Avro,
     onEncoded: (GenericRecord) -> Unit,
 ) : AbstractRecordGenericEncoder(avro, schema, onEncoded) {
@@ -54,7 +55,7 @@ private class RecordNonContiguousEncoder(
 
 private class RecordContiguousSkippingEncoder(
     private val skippedElements: BooleanArray,
-    schema: Schema,
+    schema: AvroSchema,
     avro: Avro,
     onEncoded: (GenericRecord) -> Unit,
 ) : AbstractRecordGenericEncoder(avro, schema, onEncoded) {
@@ -74,7 +75,7 @@ private class RecordContiguousSkippingEncoder(
 }
 
 private class RecordContiguousExactEncoder(
-    schema: Schema,
+    schema: AvroSchema,
     avro: Avro,
     onEncoded: (GenericRecord) -> Unit,
 ) : AbstractRecordGenericEncoder(avro, schema, onEncoded) {
@@ -90,30 +91,29 @@ private class RecordContiguousExactEncoder(
 
 private abstract class AbstractRecordGenericEncoder(
     override val avro: Avro,
-    private val schema: Schema,
+    private val schema: AvroSchema,
     private val onEncoded: (GenericRecord) -> Unit,
 ) : AbstractAvroGenericEncoder() {
     private val fieldValues: Array<Any?> = Array(schema.fields.size) { null }
 
-    private lateinit var currentField: Schema.Field
+    private var currentFieldIndex = -1
 
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     protected fun setWriterField(writerFieldIndex: Int) {
-        val field = schema.fields[writerFieldIndex]
-        currentField = field
-        currentWriterSchema = field.schema()
+        currentFieldIndex = writerFieldIndex
+        currentAvroSchema = schema.fields[writerFieldIndex].schema
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
-        onEncoded(ListRecord(schema, fieldValues.asList()))
+        onEncoded(ListRecord(apacheFacadeOf(schema), fieldValues.asList()))
     }
 
     override fun encodeValue(value: Any) {
-        fieldValues[currentField.pos()] = value
+        fieldValues[currentFieldIndex] = value
     }
 
     override fun encodeNullUnchecked() {
-        fieldValues[currentField.pos()] = null
+        fieldValues[currentFieldIndex] = null
     }
 }

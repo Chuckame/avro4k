@@ -83,13 +83,14 @@ internal fun <T> Avro.decodeWithValidation(
     return decodeWithBinaryDecoder(writerSchema, deserializer, decoder)
 }
 
+/** Converts the Apache [writerSchema] once per call, like [decodeWithBinaryDecoder]. */
 private fun <T> Avro.encodeWithBinaryEncoder(
     writerSchema: Schema,
     serializer: SerializationStrategy<T>,
     value: T,
     binaryEncoder: AvroBinaryEncoder,
 ) {
-    AvroValueDirectEncoder(writerSchema, this, binaryEncoder)
+    AvroValueDirectEncoder(apacheToAvro4k(writerSchema), this, binaryEncoder)
         .encodeSerializableValue(serializer, value)
 }
 

@@ -82,10 +82,7 @@ internal fun Schema.nonFailingAliases(): Set<String> {
     }
 }
 
-internal fun Schema.isFullNameOrAliasMatch(descriptor: SerialDescriptor): Boolean {
-    return isFullNameOrAliasMatch(descriptor.nonNullSerialName, descriptor::aliases)
-}
-
+/** For the serializers, which still read Apache's `Schema` until the public API is `AvroSchema`-typed. */
 internal fun Schema.isFullNameOrAliasMatch(
     fullName: String,
     aliases: () -> Set<String>,

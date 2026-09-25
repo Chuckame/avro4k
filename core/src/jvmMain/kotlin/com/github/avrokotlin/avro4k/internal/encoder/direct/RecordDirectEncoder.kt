@@ -1,25 +1,26 @@
 package com.github.avrokotlin.avro4k.internal.encoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.MissingFieldsEncodingException
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
-import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
+import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
-import org.apache.avro.Schema
 
 @Suppress("FunctionName")
 internal fun RecordDirectEncoder(
     descriptor: SerialDescriptor,
-    schema: Schema,
+    writerSchema: AvroSchema,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ): CompositeEncoder {
-    // Temporary: the encoders still hold Apache schemas while the record workflows are keyed by AvroSchema, so each record
-    // looks its writer schema up in the identity-cached converter until the encoders read AvroSchema too.
-    return when (val encodingWorkflow = avro.recordResolver.resolveFields(apacheToAvro4k(schema), descriptor).encoding) {
+    // the caller checked the type: a record
+    val schema = writerSchema as RecordSchema
+    return when (val encodingWorkflow = avro.recordResolver.resolveFields(schema, descriptor).encoding) {
         is EncodingWorkflow.ExactMatch -> RecordContiguousExactEncoder(schema, avro, binaryEncoder)
 
         is EncodingWorkflow.ContiguousWithSkips -> RecordContiguousSkippingEncoder(encodingWorkflow.fieldsToSkip, schema, avro, binaryEncoder)
@@ -37,21 +38,29 @@ internal fun RecordDirectEncoder(
                 encodingWorkflow.descriptorToWriterFieldIndex[index]
             }
 
-        is EncodingWorkflow.MissingWriterFields -> throw MissingFieldsEncodingException(
-            schema.fields.filter { it.pos() in encodingWorkflow.missingWriterFields },
-            schema,
-            descriptor
-        )
+        is EncodingWorkflow.MissingWriterFields -> throw missingFieldsError(schema, encodingWorkflow, descriptor)
     }
+}
+
+/** The message of the public, Apache-typed constructor, built from avro4k's own schema. */
+internal fun missingFieldsError(
+    schema: RecordSchema,
+    workflow: EncodingWorkflow.MissingWriterFields,
+    descriptor: SerialDescriptor,
+): MissingFieldsEncodingException {
+    val missingFields = workflow.missingWriterFields.joinToString("', '") { schema.fields[it].name }
+    return MissingFieldsEncodingException(
+        "Missing required fields '$missingFields' when encoding with writer schema ${schema.toSchemaJsonString()} from descriptor $descriptor"
+    )
 }
 
 private class RecordNonContiguousEncoder(
     private val descriptorToWriterFieldIndex: IntArray,
-    private val schema: Schema,
+    private val schema: RecordSchema,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
@@ -62,19 +71,19 @@ private class RecordNonContiguousEncoder(
             return false
         }
         super.encodeElement(descriptor, index)
-        currentWriterSchema = schema.fields[writerFieldIndex].schema()
+        currentAvroSchema = schema.fields[writerFieldIndex].schema
         return true
     }
 }
 
 private class RecordContiguousSkippingEncoder(
     private val skippedElements: BooleanArray,
-    private val schema: Schema,
+    private val schema: RecordSchema,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
     private var nextWriterFieldIndex = 0
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
@@ -84,24 +93,24 @@ private class RecordContiguousSkippingEncoder(
             return false
         }
         super.encodeElement(descriptor, index)
-        currentWriterSchema = schema.fields[nextWriterFieldIndex++].schema()
+        currentAvroSchema = schema.fields[nextWriterFieldIndex++].schema
         return true
     }
 }
 
 private class RecordContiguousExactEncoder(
-    private val schema: Schema,
+    private val schema: RecordSchema,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        currentWriterSchema = schema.fields[index].schema()
+        currentAvroSchema = schema.fields[index].schema
         return true
     }
 }

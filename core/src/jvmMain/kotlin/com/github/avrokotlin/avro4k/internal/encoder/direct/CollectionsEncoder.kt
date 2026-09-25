@@ -1,11 +1,13 @@
 package com.github.avrokotlin.avro4k.internal.encoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
+import com.github.avrokotlin.avro4k.internal.schema.elementType
+import com.github.avrokotlin.avro4k.internal.schema.valueType
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.Schema
 
-internal class MapDirectEncoder(private val schema: Schema, mapSize: Int, avro: Avro, binaryEncoder: AvroBinaryEncoder) :
+internal class MapDirectEncoder(private val schema: AvroSchema, mapSize: Int, avro: Avro, binaryEncoder: AvroBinaryEncoder) :
     AbstractAvroDirectEncoder(avro, binaryEncoder) {
     init {
         binaryEncoder.writeMapStart(mapSize.toLong())
@@ -15,10 +17,10 @@ internal class MapDirectEncoder(private val schema: Schema, mapSize: Int, avro: 
         binaryEncoder.writeMapEnd()
     }
 
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     companion object {
-        private val STRING_SCHEMA = Schema.create(Schema.Type.STRING)
+        private val STRING_SCHEMA = AvroSchema.StringSchema()
     }
 
     override fun encodeElement(
@@ -26,7 +28,7 @@ internal class MapDirectEncoder(private val schema: Schema, mapSize: Int, avro: 
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        currentWriterSchema =
+        currentAvroSchema =
             if (index % 2 == 0) {
                 binaryEncoder.startItem()
                 STRING_SCHEMA
@@ -38,7 +40,7 @@ internal class MapDirectEncoder(private val schema: Schema, mapSize: Int, avro: 
 }
 
 internal class ArrayDirectEncoder(
-    private val arraySchema: Schema,
+    private val arraySchema: AvroSchema,
     arraySize: Int,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
@@ -47,7 +49,7 @@ internal class ArrayDirectEncoder(
         binaryEncoder.writeArrayStart(arraySize.toLong())
     }
 
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
@@ -55,7 +57,7 @@ internal class ArrayDirectEncoder(
     ): Boolean {
         super.encodeElement(descriptor, index)
         binaryEncoder.startItem()
-        currentWriterSchema = arraySchema.elementType
+        currentAvroSchema = arraySchema.elementType
         return true
     }
 

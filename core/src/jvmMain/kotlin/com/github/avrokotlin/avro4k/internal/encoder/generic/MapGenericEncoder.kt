@@ -1,16 +1,17 @@
 package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.internal.schema.valueType
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.Schema
 
-private val STRING_SCHEMA = Schema.create(Schema.Type.STRING)
+private val STRING_SCHEMA = AvroSchema.StringSchema()
 
 internal class MapGenericEncoder(
     override val avro: Avro,
     mapSize: Int,
-    private val schema: Schema,
+    private val schema: AvroSchema,
     private val onEncoded: (Map<String, Any?>) -> Unit,
 ) : AbstractAvroGenericEncoder() {
     /**
@@ -22,14 +23,14 @@ internal class MapGenericEncoder(
     private val entries: MutableMap<String, Any?> = LinkedHashMap(mapSize)
     private var currentKey: String? = null
 
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        currentWriterSchema =
+        currentAvroSchema =
             if (index % 2 == 0) {
                 currentKey = null
                 STRING_SCHEMA

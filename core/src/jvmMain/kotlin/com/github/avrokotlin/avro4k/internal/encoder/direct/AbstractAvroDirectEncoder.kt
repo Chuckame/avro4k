@@ -1,8 +1,10 @@
 package com.github.avrokotlin.avro4k.internal.encoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.encoder.AbstractAvroEncoder
+import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
@@ -10,10 +12,9 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.modules.SerializersModule
-import org.apache.avro.Schema
 
 internal class AvroValueDirectEncoder(
-    override var currentWriterSchema: Schema,
+    override var currentAvroSchema: AvroSchema,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder)
@@ -26,25 +27,25 @@ internal sealed class AbstractAvroDirectEncoder(
         get() = avro.serializersModule
 
     override fun getRecordEncoder(descriptor: SerialDescriptor): CompositeEncoder {
-        return RecordDirectEncoder(descriptor, currentWriterSchema, avro, binaryEncoder)
+        return RecordDirectEncoder(descriptor, currentAvroSchema, avro, binaryEncoder)
     }
 
     override fun getPolymorphicEncoder(descriptor: SerialDescriptor): CompositeEncoder {
-        return PolymorphicDirectEncoder(avro, currentWriterSchema, binaryEncoder)
+        return PolymorphicDirectEncoder(avro, currentAvroSchema, binaryEncoder)
     }
 
     override fun getArrayEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
-        return ArrayDirectEncoder(currentWriterSchema, collectionSize, avro, binaryEncoder)
+        return ArrayDirectEncoder(currentAvroSchema, collectionSize, avro, binaryEncoder)
     }
 
     override fun getMapEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
-        return MapDirectEncoder(currentWriterSchema, collectionSize, avro, binaryEncoder)
+        return MapDirectEncoder(currentAvroSchema, collectionSize, avro, binaryEncoder)
     }
 
     override fun encodeUnionIndexUnchecked(index: Int) {
@@ -87,8 +88,17 @@ internal sealed class AbstractAvroDirectEncoder(
         binaryEncoder.writeString(value)
     }
 
+    /**
+     * The symbol's index in the writer enum: one hash lookup ([AvroSchema.EnumSchema.getSymbolIndexOrNull]). A symbol the
+     * writer enum does not have fails, as Apache's writer does: the enum's default symbol is for readers resolving an
+     * unknown writer symbol, never written in place of a value.
+     */
     override fun encodeEnumUnchecked(symbol: String) {
-        binaryEncoder.writeEnum(currentWriterSchema.getEnumOrdinalChecked(symbol))
+        val enumSchema = currentAvroSchema as AvroSchema.EnumSchema
+        val index =
+            enumSchema.getSymbolIndexOrNull(symbol)
+                ?: throw SerializationException("Enum symbol $symbol not found in schema ${enumSchema.toSchemaJsonString()}")
+        binaryEncoder.writeEnum(index)
     }
 
     override fun encodeFixedUnchecked(value: ByteArray) {
@@ -96,18 +106,10 @@ internal sealed class AbstractAvroDirectEncoder(
     }
 }
 
-private fun Schema.getEnumOrdinalChecked(symbol: String): Int {
-    return try {
-        getEnumOrdinal(symbol)
-    } catch (e: Exception) {
-        throw SerializationException("Enum symbol $symbol not found in schema $this", e)
-    }
-}
-
 @OptIn(ExperimentalSerializationApi::class)
 internal class PolymorphicDirectEncoder(
     private val avro: Avro,
-    private val schema: Schema,
+    private val schema: AvroSchema,
     private val binaryEncoder: AvroBinaryEncoder,
 ) : AbstractEncoder() {
     override val serializersModule: SerializersModule

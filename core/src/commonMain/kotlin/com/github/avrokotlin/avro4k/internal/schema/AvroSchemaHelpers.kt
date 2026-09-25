@@ -12,6 +12,12 @@ import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.toJsonElement
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.roundToLong
 
 /*
  * The helpers that the runtime (encoders, decoders, resolvers), the serializers and the schema visitors use on Apache's
@@ -220,6 +226,67 @@ internal fun AvroSchema.getIndexLogicallyTyped(
     val index = getIndexLogicallyTyped(logicalTypeName, firstExpectedType)
     if (index >= 0) return index
     return getIndexLogicallyTyped(logicalTypeName, secondExpectedType)
+}
+
+/**
+ * False when this schema's `logicalType` names one of the specification's logical types (Apache Java's built-in ones) but
+ * breaks its rules, e.g. `date` on a string, `uuid` on a `fixed` of another size than 16, or `decimal` without a positive
+ * int `precision`: the specification says an implementation must then ignore the logical type and use the underlying
+ * type, which is what Apache's `getLogicalType()` returns (null). True otherwise, including for no logical type and for
+ * any other name (avro4k's own `char`, a user's custom one), which avro4k resolves by name.
+ *
+ * Mirrors Apache Java 1.12's `LogicalTypes.fromSchemaIgnoreInvalid(schema) != null` for those names. Allocation-free: a
+ * few map lookups for a decimal, a type compare otherwise.
+ */
+internal fun AvroSchema.hasValidLogicalType(): Boolean {
+    val name = logicalTypeName ?: return true
+    val props = (this as? ResolvedSchema)?.props ?: return true
+    val validForType =
+        when (name) {
+            "decimal" -> isValidDecimal(props)
+
+            "big-decimal" -> type === Type.BYTES
+
+            "duration" -> this is FixedSchema && size == 12
+
+            "uuid" -> type === Type.STRING || (this is FixedSchema && size == 16)
+
+            "date", "time-millis" -> type === Type.INT
+
+            "time-micros", "timestamp-millis", "timestamp-micros", "timestamp-nanos",
+            "local-timestamp-millis", "local-timestamp-micros", "local-timestamp-nanos",
+            -> type === Type.LONG
+
+            else -> return true
+        }
+    // Apache rejects a logical type next to one of its Java-binding props, when that prop is a string
+    return validForType &&
+        !props.isStringProp("avro.java.string") &&
+        !props.isStringProp("java-class") &&
+        !props.isStringProp("java-key-class") &&
+        !props.isStringProp("java-element-class")
+}
+
+private fun Map<String, JsonElement>.isStringProp(key: String): Boolean = (this[key] as? JsonPrimitive)?.isString == true
+
+/** Apache's `Decimal` rules: an int `precision` > 0 that the fixed size can hold, an int `scale` (0 when absent) in `0..precision`. */
+private fun AvroSchema.isValidDecimal(props: Map<String, JsonElement>): Boolean {
+    if (type !== Type.BYTES && type !== Type.FIXED) return false
+    val precision = props.intProp("precision") ?: return false
+    val scale = if ("scale" in props) props.intProp("scale") ?: return false else 0
+    if (precision <= 0 || scale < 0 || scale > precision) return false
+    if (this is FixedSchema) {
+        val maxPrecision = floor(log10(2.0) * (8 * size - 1)).roundToLong()
+        if (precision > maxPrecision) return false
+    }
+    return true
+}
+
+/** The prop as an `Int`, when it is a json integer in the `Int` range (Apache reads it as an `Integer`), else null. */
+private fun Map<String, JsonElement>.intProp(key: String): Int? {
+    val value = this[key] as? JsonPrimitive ?: return null
+    if (value.isString || value is JsonNull) return null
+    return value.content.toIntOrNull()
 }
 
 /**
