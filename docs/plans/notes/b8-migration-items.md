@@ -199,6 +199,11 @@ These are **silent**: the same code behaves differently on the JVM and elsewhere
 - **Error messages** name classes by their qualified name on the JVM and native, by their simple name on JS.
 - `AnySerializer`'s encoding hook for non-serializable types takes a `Class` on the JVM (unchanged) and a `KClass` on
   the other platforms (internal API).
+- **`AnySerializer` encoding of generic classes** (from [`m3-15.md`](m3-15.md)): on JS and native, without reflection,
+  the type arguments of a runtime class are unknown, so a generic serializable class that is neither a `Collection` nor
+  a `Map` (e.g. `Pair`, `Triple`, a user's `Box<T>`) is **not inferred** when encoded as `Any` — it fails with "Cannot
+  find serializer". The JVM infers it with nullable-`Any` type arguments, as before. Workaround: a contextual
+  serializer, or overriding the `KClass` hook.
 - The deprecated `AvroDecoder.decodeValue()` of a fixed field default returns an Apache `GenericData.Fixed` on the JVM,
   a `ByteArray` elsewhere.
 - IDE JSON highlighting of `@AvroProp`/`@AvroDefault` values is gone (the JVM-only `@Language` annotation was dropped).

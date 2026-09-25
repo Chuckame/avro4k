@@ -20,9 +20,11 @@ Here are the main features:
 - **Kafka confluent's schema registry ready** thanks to the [confluent-kafka-serializer module](confluent-kafka-serializer/README.md), allowing to use avro4k in any kafka or spring cloud project :white_check_mark:
 - **Official gradle plugin** to generate (not only) data classes from avro schemas :wrench: (check the [gradle-plugin](gradle-plugin/README.md) documentation for more details)
 
-> [!WARNING]
-> **Important**: As of today, avro4k is **only available for JVM platform**, and theoretically for android platform (as apache avro library is already **android-ready**). <br/>If
-> you would like to have js/wasm/native compatible platforms, please put a :thumbsup: on [this issue](https://github.com/avro-kotlin/avro4k/issues/207)
+> [!NOTE]
+> **Platforms**: the core runs on the JVM, JS (browser and Node.js) and Kotlin/Native (Apple, Linux, Windows and Android native targets): schema
+> generation, and binary encoding and decoding of your classes and the Kotlin types (`Uuid`, `Instant`, `Duration`…) through the `Avro` API.
+> <br/>These stay **JVM-only** for now: `AvroObjectContainer` and `AvroSingleObject`, the Java types (`UUID`, `BigDecimal`, `BigInteger`, `java.time`…), the Apache Avro
+> interop (`GenericData`, Apache `Schema`), and `validateSerialization` (ignored on the other platforms). wasm is not supported yet.
 
 # Quick start
 
