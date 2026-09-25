@@ -6,7 +6,6 @@ import com.github.avrokotlin.avro4k.toAvro4k
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
-import io.kotest.matchers.types.shouldNotBeSameInstanceAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -60,20 +59,16 @@ internal class RecordResolverTest : StringSpec({
         }
     }
 
-    "two structurally equal but distinct schema instances resolve to their own, equivalent workflows" {
+    "two structurally equal but distinct schema instances resolve to the same workflow" {
         val resolver = RecordResolver(Avro)
         val copy = recordSchema("TwoFields", """{"name":"a","type":"int"},{"name":"b","type":"string"}""")
         copy shouldBe exactSchema
 
-        // Both cache levels keyed by the writer schema match by identity, never by the structural AvroSchema.equals: an equal
-        // copy gets its own workflow, of the same shape, and each instance keeps getting its own.
+        // Identity matching in the inline cache and in the identity layer must not shortcut the equality layer behind
+        // them: an equal copy (a writer schema parsed per call) gets the workflow already resolved for the first one.
         val original = resolver.resolveFields(exactSchema, exactDescriptor)
-        val copied = resolver.resolveFields(copy, exactDescriptor)
-        copied shouldNotBeSameInstanceAs original
-        copied.encoding shouldBe original.encoding
-        copied.decoding.toList() shouldBe original.decoding.toList()
+        resolver.resolveFields(copy, exactDescriptor) shouldBeSameInstanceAs original
         resolver.resolveFields(exactSchema, exactDescriptor) shouldBeSameInstanceAs original
-        resolver.resolveFields(copy, exactDescriptor) shouldBeSameInstanceAs copied
     }
 
     "keeps resolving correctly with far more distinct pairs than the inline cache capacity" {

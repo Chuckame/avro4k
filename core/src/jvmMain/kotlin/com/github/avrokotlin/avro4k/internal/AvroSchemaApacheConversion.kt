@@ -81,11 +81,28 @@ private val avro4kByApache = WeakIdentityKeyCache<Schema, Link<AvroSchema>>()
 private val apacheByAvro4k = WeakIdentityKeyCache<AvroSchema, Link<Schema>>()
 
 /**
+ * Apache schema -> its conversion, matched by **equality**: the fallback of [apacheToAvro4k] when the instance it is given
+ * was never converted. It only holds *canonical* instances, the roots whose conversion was seeded, so a schema that is
+ * fresh but equal on every call (parsed per message, or re-parsed by a registry lookup) returns the canonical conversion
+ * without walking or seeding anything: seeding its nodes would insert into the copy-on-write identity tables on every
+ * call, each insertion copying a table that grows until the garbage collector drops the dead keys. Same seeding rule as
+ * `IdentityFirstCache`. The key set is bounded by the number of distinct schemas an application converts.
+ *
+ * Its values are held strongly, but an avro4k node references no Apache node, so an entry never keeps its key alive.
+ */
+private val avro4kByEqualApache = WeakKeyCache<Schema, AvroSchema>()
+
+/**
  * Converts [schema] to avro4k's [AvroSchema], cached by identity and paired both ways: every node of the result maps back
  * to its Apache node through [avro4kToApache], and every Apache node visited maps to its avro4k node.
  *
- * Only for long-lived schema instances: the caches are O(capacity) per insert. Use [apacheToAvro4kUncached] for a schema
- * created per call.
+ * On an identity miss, a schema **equal** to one already converted (Apache's `equals`, which ignores docs and aliases,
+ * as the model's does for records) returns that one's conversion, without converting or pairing anything: so an
+ * equal-but-fresh instance per call costs a hash and an `equals`, never a conversion or a cache insertion. For such an
+ * instance, the result converts back to the canonical Apache instance (the one converted first), not to [schema].
+ *
+ * Only the canonical instances go in the caches, which are O(capacity) per insert. Use [apacheToAvro4kUncached] for a
+ * schema that must not be converted through them.
  *
  * Field default values are taken from their json, except that a number is converted to its schema's type, like Apache Avro's
  * [Schema.Field.defaultVal] does: an integer literal like `36` as the default of a `float` field becomes `36.0`.
@@ -94,9 +111,14 @@ private val apacheByAvro4k = WeakIdentityKeyCache<AvroSchema, Link<Schema>>()
 @InternalAvro4kApi
 public fun apacheToAvro4k(schema: Schema): AvroSchema {
     avro4kByApache.pairedWith(schema)?.let { return it }
+    avro4kByEqualApache.getOrNull(schema)?.let { return it }
     val conversion = ApacheToAvro4k(cached = true)
     val converted = conversion.convert(schema)
-    return seed(schema, converted, conversion.created, contended = avro4kByApache, fresh = apacheByAvro4k)
+    val result = seed(schema, converted, conversion.created, contended = avro4kByApache, fresh = apacheByAvro4k)
+    // Only this instance, whose conversion is now paired, becomes canonical. If an equal one won meanwhile (a race), this
+    // one stays paired by identity only: at most one extra conversion per racing thread, never one per call.
+    avro4kByEqualApache.putIfAbsent(schema, result)
+    return result
 }
 
 /** Like [apacheToAvro4k], without reading or writing any cache: for a schema created per call (e.g. a `getSchema()` result). */
@@ -151,9 +173,12 @@ public fun avro4kToApacheUncached(schema: AvroSchema): Schema {
     return Schema.Parser(NameValidator.NO_VALIDATION).parse(Json.encodeToString(JsonElement.serializer(), schema.avroSchemaToJson()))
 }
 
-/** Number of entries of both caches, stale ones included. For tests. */
+/** Number of entries of both identity caches, stale ones included. For tests. */
 @InternalAvro4kApi
 public fun apacheConversionCacheSize(): Int = avro4kByApache.size + apacheByAvro4k.size
+
+/** Number of canonical Apache schemas matched by equality, stale ones included. For tests. */
+internal fun apacheConversionEqualityCacheSize(): Int = avro4kByEqualApache.size
 
 /**
  * One cache value: a link to the node paired with the key, either strong (the key is the origin of the pair) or weak (the

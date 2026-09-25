@@ -3,7 +3,7 @@ package com.github.avrokotlin.avro4k.serializer
 import com.github.avrokotlin.avro4k.AvroConfiguration
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
-import com.github.avrokotlin.avro4k.internal.WeakIdentityKeyCache
+import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -46,7 +46,13 @@ internal val AnyTypeSerializersModule: SerializersModule
 public open class AnySerializer : KSerializer<Any> {
     // No need to use a WeakHashMap with class keys
     private val encodingCache = ConcurrentHashMap<Class<out Any>, SerializationStrategy<Any>>()
-    private val decodingCache = WeakIdentityKeyCache<AvroSchema, DeserializationStrategy<Any>>()
+
+    /**
+     * By writer schema, identity first, backed by equality: a writer schema handed in fresh (but equal) on every call —
+     * parsed per message, or re-parsed by a registry lookup — hits the equality layer instead of resolving its strategy
+     * again, and is never remembered by identity (see [IdentityFirstCache]). `internal` for tests.
+     */
+    internal val decodingCache = IdentityFirstCache<AvroSchema, DeserializationStrategy<Any>>()
 
     /**
      * Provides the nullable version of this [AnySerializer].
@@ -114,12 +120,11 @@ public open class AnySerializer : KSerializer<Any> {
     override fun deserialize(decoder: Decoder): Any {
         decoder as AbstractAvroDirectDecoder
         val writerSchema = decoder.currentAvroSchema
-        // getOrNull first: the getOrPut lambda captures, so it would be allocated on every hit.
+        // getOrPut is inline: no capturing lambda is allocated per call.
         val serializer =
-            decodingCache.getOrNull(writerSchema)
-                ?: decodingCache.getOrPut(writerSchema) {
-                    decoder.serializersModule.resolveDeserializationStrategy(writerSchema, decoder, decoder.avro.configuration)
-                }
+            decodingCache.getOrPut(writerSchema) {
+                decoder.serializersModule.resolveDeserializationStrategy(writerSchema, decoder, decoder.avro.configuration)
+            }
         return decoder.decodeSerializableValue(serializer)
     }
 

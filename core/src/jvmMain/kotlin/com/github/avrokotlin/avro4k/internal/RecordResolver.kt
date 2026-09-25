@@ -33,13 +33,24 @@ internal class RecordResolver(
      *
      * Note: We use the descriptor in the key as we could have multiple descriptors for the same record schema, and multiple record schemas for the same descriptor.
      *
-     * The outer (writer schema) level is identity-keyed: [AvroSchema.equals] is a structural walk of the whole schema, and a
-     * writer schema is a long-lived instance (converted once per identity from an Apache schema, or generated once per
-     * descriptor), so an equal-but-distinct instance only costs one more resolution of its workflow. The inner
-     * (descriptor) level is an [IdentityFirstCache]: record descriptors are mostly stable instances, but a generic record
-     * (`Box<T>`) obtained through a fresh top-level serializer is an equal-but-distinct instance per call.
+     * Both levels are [IdentityFirstCache]s: an identity layer answers the usual case (the same instance again) with
+     * reference comparisons only, and an equality layer behind it catches equal-but-distinct instances.
+     * - Outer (writer schema) level: a writer schema is usually a long-lived instance (generated once per descriptor, or
+     *   converted once per Apache schema instance), but a caller may also hand in a **fresh but equal** schema on every
+     *   call (parsed per message, or returned by a registry lookup that re-parses). Such an instance hits the equality
+     *   layer ([AvroSchema.equals], a structural walk, only on an identity miss; a record's hash is its name's), so its
+     *   workflow is not resolved again, and it is never remembered by identity: only the instance that missed both
+     *   layers becomes the canonical key. Identity alone would re-resolve the workflow and insert into the copy-on-write
+     *   identity table on every such call.
+     * - Inner (descriptor) level: record descriptors are mostly stable instances, but a generic record (`Box<T>`)
+     *   obtained through a fresh top-level serializer is an equal-but-distinct instance per call.
+     *
+     * Equality is the model's: a record's aliases and doc take no part in it, so two writer schemas that differ only
+     * by their aliases share one workflow, the one resolved for the first of them.
+     *
+     * `internal` for tests.
      */
-    private val fieldCache = WeakIdentityKeyCache<AvroSchema, IdentityFirstCache<SerialDescriptor, SerializationWorkflow>>()
+    internal val fieldCache = IdentityFirstCache<AvroSchema, IdentityFirstCache<SerialDescriptor, SerializationWorkflow>>()
 
     /**
      * Inline (first-level) cache in front of [fieldCache], holding the last [INLINE_CACHE_CAPACITY] resolved
@@ -99,9 +110,9 @@ internal class RecordResolver(
                 return memo.workflow
             }
         }
-        // getOrNull first: no lambda is allocated on a hit. The outer lambda captures nothing anyway (a singleton).
+        // Both getOrPut are inline: no lambda is allocated, on a hit or a miss.
         val workflow =
-            (fieldCache.getOrNull(writerSchema) ?: fieldCache.getOrPut(writerSchema) { IdentityFirstCache() })
+            fieldCache.getOrPut(writerSchema) { IdentityFirstCache() }
                 .getOrPut(classDescriptor) {
                     loadCache(classDescriptor, writerSchema)
                 }

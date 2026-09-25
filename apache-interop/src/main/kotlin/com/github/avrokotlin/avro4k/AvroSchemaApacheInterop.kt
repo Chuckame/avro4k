@@ -15,6 +15,12 @@ import org.apache.avro.Schema
  * this very instance, and so does every sub-schema. The cached results are shared: they must not be mutated
  * (`addProp`…).
  *
+ * A schema that was never converted but is **equal** to one already converted (Apache's `equals`, which ignores docs and
+ * aliases) returns the conversion of that first, *canonical*, instance, without walking this one: so a schema parsed
+ * again for every message costs a hash and an `equals` per call, not a conversion. For such a schema,
+ * `toAvro4k().toApacheSchema()` returns the canonical Apache instance, not this one, and its aliases and docs are the
+ * canonical instance's.
+ *
  * Field default values are taken from their json, except that a number is converted to its schema's type, like Apache Avro's
  * [Schema.Field.defaultVal] does: an integer literal like `36` as the default of a `float` field becomes `36.0`.
  * The field's sort order, when not the default ascending one, is kept as the field's `order` prop, like in the schema's json.

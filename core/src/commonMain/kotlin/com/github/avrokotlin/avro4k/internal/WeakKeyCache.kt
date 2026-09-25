@@ -23,12 +23,12 @@ import com.github.avrokotlin.avro4k.InternalAvro4kApi
  *   of the cache, i.e. a leak bounded by the number of distinct keys ever inserted.
  *
  * Callers, and why each one's key set is bounded:
- * - [IdentityFirstCache]'s equality layer (`Avro.schemaCache`, `RecordResolver`'s per-schema descriptor level,
- *   `PolymorphicResolver`): serial descriptors. Fresh-per-call descriptors are equal to the stored one, so the key set
+ * - [IdentityFirstCache]'s equality layer over serial descriptors (`Avro.schemaCache`, `RecordResolver`'s per-schema
+ *   descriptor level, `PolymorphicResolver`). Fresh-per-call descriptors are equal to the stored one, so the key set
  *   is the set of distinct serializable types an application uses.
- * - `RecordResolver.fieldCache` (outer level), `AnySerializer.decodingCache`, `AvroSingleObject.fingerprintCache`: writer
- *   schemas, a small set per application (equal re-parsed schemas hit the stored one). They become identity-keyed once
- *   the runtime reads `AvroSchema`.
+ * - [IdentityFirstCache]'s equality layer over writer schemas (`RecordResolver.fieldCache`'s outer level,
+ *   `AnySerializer.decodingCache`), the fingerprints of `AvroSingleObject`, and the equality fallback of the Apache
+ *   schema conversion: writer schemas, a small set per application (equal re-parsed schemas hit the stored one).
  * - Confluent's `Serializers.cache`: registry schemas, bounded by the schema ids a consumer sees.
  */
 @InternalAvro4kApi
