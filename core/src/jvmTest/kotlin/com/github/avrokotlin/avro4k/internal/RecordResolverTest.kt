@@ -1,10 +1,12 @@
 package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.apacheSchema
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.toAvro4k
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
+import io.kotest.matchers.types.shouldNotBeSameInstanceAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -21,7 +23,7 @@ import java.util.concurrent.TimeUnit
 internal class RecordResolverTest : StringSpec({
     val exactDescriptor = TwoFields.serializer().descriptor
     val reorderedDescriptor = TwoFieldsReordered.serializer().descriptor
-    val exactSchema = Avro.apacheSchema(exactDescriptor)
+    val exactSchema = Avro.avroSchema(exactDescriptor)
     val reorderedSchema = recordSchema("ReorderedWriter", """{"name":"b","type":"string"},{"name":"a","type":"int"}""")
 
     "returns the very same workflow instance for repeated calls with the same pair" {
@@ -58,12 +60,20 @@ internal class RecordResolverTest : StringSpec({
         }
     }
 
-    "two structurally equal but distinct schema instances resolve to the same workflow" {
+    "two structurally equal but distinct schema instances resolve to their own, equivalent workflows" {
         val resolver = RecordResolver(Avro)
-        val copy = Schema.Parser().parse(exactSchema.toString())
+        val copy = recordSchema("TwoFields", """{"name":"a","type":"int"},{"name":"b","type":"string"}""")
+        copy shouldBe exactSchema
 
-        // Identity matching in the inline cache must not shortcut the weak-key cache, which matches by equality.
-        resolver.resolveFields(exactSchema, exactDescriptor) shouldBeSameInstanceAs resolver.resolveFields(copy, exactDescriptor)
+        // Both cache levels keyed by the writer schema match by identity, never by the structural AvroSchema.equals: an equal
+        // copy gets its own workflow, of the same shape, and each instance keeps getting its own.
+        val original = resolver.resolveFields(exactSchema, exactDescriptor)
+        val copied = resolver.resolveFields(copy, exactDescriptor)
+        copied shouldNotBeSameInstanceAs original
+        copied.encoding shouldBe original.encoding
+        copied.decoding.toList() shouldBe original.decoding.toList()
+        resolver.resolveFields(exactSchema, exactDescriptor) shouldBeSameInstanceAs original
+        resolver.resolveFields(copy, exactDescriptor) shouldBeSameInstanceAs copied
     }
 
     "keeps resolving correctly with far more distinct pairs than the inline cache capacity" {
@@ -83,7 +93,7 @@ internal class RecordResolverTest : StringSpec({
 
     "is safe under concurrent use of a single resolver" {
         val resolver = RecordResolver(Avro)
-        val pairs: List<Pair<Schema, SerialDescriptor>> =
+        val pairs: List<Pair<AvroSchema, SerialDescriptor>> =
             listOf(
                 exactSchema to exactDescriptor,
                 exactSchema to reorderedDescriptor,
@@ -128,10 +138,10 @@ internal class RecordResolverTest : StringSpec({
     private data class TwoFieldsReordered(val b: String, val a: Int)
 }
 
-private fun recordSchema(name: String, fields: String): Schema = Schema.Parser().parse("""{"type":"record","name":"$name","fields":[$fields]}""")
+private fun recordSchema(name: String, fields: String): AvroSchema = Schema.Parser().parse("""{"type":"record","name":"$name","fields":[$fields]}""").toAvro4k()
 
 /** A writer schema with [leading] extra fields the class descriptor does not know about, so they get skipped. */
-private fun evolvedSchema(leading: Int): Schema =
+private fun evolvedSchema(leading: Int): AvroSchema =
     recordSchema(
         "Evolved$leading",
         (0 until leading).joinToString("") { """{"name":"x$it","type":"int"},""" } + """{"name":"a","type":"int"},{"name":"b","type":"string"}"""

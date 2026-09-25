@@ -11,6 +11,7 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.CoreSchema
 import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4kUncached
 import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import com.github.avrokotlin.avro4k.internal.isValidDefaultFor
 import com.github.avrokotlin.avro4k.internal.resolveDefaultBranch
@@ -30,7 +31,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import org.apache.avro.LogicalType
 import org.apache.avro.Schema
 import java.math.BigDecimal
@@ -110,8 +116,10 @@ internal class SchemaGenerationTest : StringSpec({
             }
             listOf("null", "a", "5", "1.0").forEach { annotation ->
                 withClue("${field.name} with @AvroDefault($annotation)") {
+                    // the decoder reads the reader schema a writer schema resolves against: the same rule must come out of
+                    // the generated schema and of its Apache form converted back, logical types included
                     runCatching { AvroDefault(annotation).toFieldDefault(field.schema) }.toString() shouldBe
-                        runCatching { AvroDefault(annotation).toFieldDefault(apacheFieldSchema) }.toString()
+                        runCatching { AvroDefault(annotation).toFieldDefault(apacheToAvro4kUncached(apacheFieldSchema)) }.toString()
                 }
             }
         }
@@ -248,4 +256,44 @@ internal class SchemaGenerationTest : StringSpec({
 
 private fun JsonElement.resolveDefaultBranch(schema: AvroSchema) = schema.resolveDefaultBranch(this)
 
-private fun JsonElement.resolveDefaultBranch(schema: Schema) = schema.resolveDefaultBranch(this)
+// The rules as they were written over Apache's Schema, for the decoder, before the decoders read AvroSchema: a frozen
+// reference copy, so the AvroSchema rules stay pinned to Apache's model.
+
+private fun JsonElement.resolveDefaultBranch(schema: Schema): Schema {
+    if (schema.type != Schema.Type.UNION) return schema
+    return schema.types.first { isValidDefaultFor(it) }
+}
+
+private fun JsonElement.isValidDefaultFor(
+    schema: Schema,
+    allowAnyCodePoint: Boolean = false,
+): Boolean =
+    when (schema.type) {
+        Schema.Type.ARRAY -> this is JsonArray && all { it.isValidDefaultFor(schema.elementType, allowAnyCodePoint) }
+
+        Schema.Type.MAP -> this is JsonObject && values.all { it.isValidDefaultFor(schema.valueType, allowAnyCodePoint) }
+
+        Schema.Type.RECORD ->
+            this is JsonObject &&
+                schema.fields.all { field -> this[field.name()]?.isValidDefaultFor(field.schema(), allowAnyCodePoint) ?: field.hasDefaultValue() }
+
+        Schema.Type.UNION -> schema.types.any { isValidDefaultFor(it, allowAnyCodePoint) }
+
+        Schema.Type.NULL -> this is JsonNull
+
+        Schema.Type.BOOLEAN -> this is JsonPrimitive && !isString && booleanOrNull != null
+
+        Schema.Type.INT -> isNumberLiteral() && (this as JsonPrimitive).content.toIntOrNull() != null
+
+        Schema.Type.LONG -> isNumberLiteral() && (this as JsonPrimitive).content.toLongOrNull() != null
+
+        Schema.Type.FLOAT, Schema.Type.DOUBLE -> isNumberLiteral() && (this as JsonPrimitive).content.toDoubleOrNull() != null
+
+        Schema.Type.STRING, Schema.Type.ENUM -> this is JsonPrimitive && isString
+
+        Schema.Type.BYTES, Schema.Type.FIXED -> this is JsonPrimitive && isString && (allowAnyCodePoint || content.all { it.code <= 0xFF })
+
+        null -> error("no type")
+    }
+
+private fun JsonElement.isNumberLiteral() = this is JsonPrimitive && this !is JsonNull && !isString && booleanOrNull == null

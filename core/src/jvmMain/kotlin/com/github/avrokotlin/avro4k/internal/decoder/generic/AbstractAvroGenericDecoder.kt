@@ -1,9 +1,12 @@
 package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.AvroDecoder
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaDecoder
+import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toDoubleExact
 import com.github.avrokotlin.avro4k.internal.toFloatExact
@@ -21,6 +24,7 @@ import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.AbstractDecoder
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.modules.SerializersModule
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericArray
 import org.apache.avro.generic.GenericContainer
 import org.apache.avro.generic.GenericEnumSymbol
@@ -29,9 +33,18 @@ import org.apache.avro.generic.IndexedRecord
 import java.math.BigDecimal
 import java.nio.ByteBuffer
 
+/**
+ * Decodes the values of Apache's generic data model. Their own schemas (a [GenericContainer]'s, an [IndexedRecord]'s) are
+ * Apache schemas, converted to [AvroSchema] through the identity-cached converter: a lookup per record or array, accepted on
+ * this deprecated path.
+ */
 @OptIn(ExperimentalSerializationApi::class)
-internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDecoder {
+internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroSchemaDecoder {
     internal abstract val avro: Avro
+
+    /** The Apache-typed facade over [currentAvroSchema], for the public API only: see [apacheFacadeOf]. */
+    final override val currentWriterSchema: Schema
+        get() = apacheFacadeOf(currentAvroSchema)
 
     abstract override fun decodeNotNullMark(): Boolean
 
@@ -53,14 +66,14 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                     is GenericArray<*> ->
                         ArrayGenericDecoder(
                             collection = value,
-                            writerSchema = value.schema,
+                            writerSchema = apacheToAvro4k(value.schema),
                             avro = avro
                         )
 
                     is Collection<*> ->
                         ArrayGenericDecoder(
                             collection = value,
-                            writerSchema = currentWriterSchema,
+                            writerSchema = currentAvroSchema,
                             avro = avro
                         )
 
@@ -72,7 +85,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                     is Map<*, *> ->
                         MapGenericDecoder(
                             value as Map<CharSequence, Any?>,
-                            currentWriterSchema,
+                            currentAvroSchema,
                             avro
                         )
 
@@ -87,8 +100,8 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
 
             is PolymorphicKind ->
                 when (val value = decodeValue()) {
-                    is GenericContainer -> PolymorphicGenericDecoder(avro, descriptor, value.schema, value)
-                    else -> PolymorphicGenericDecoder(avro, descriptor, currentWriterSchema, value)
+                    is GenericContainer -> PolymorphicGenericDecoder(avro, descriptor, apacheToAvro4k(value.schema), value)
+                    else -> PolymorphicGenericDecoder(avro, descriptor, currentAvroSchema, value)
                 }
 
             else -> throw SerializationException("Unsupported descriptor for structure decoding: $descriptor")

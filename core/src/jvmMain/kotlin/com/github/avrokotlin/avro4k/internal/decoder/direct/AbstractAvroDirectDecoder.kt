@@ -1,11 +1,17 @@
 package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.AvroDecoder
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaDecoder
+import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
+import com.github.avrokotlin.avro4k.internal.schema.enumSymbols
+import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
+import com.github.avrokotlin.avro4k.internal.schema.types
 import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toFloatExact
 import com.github.avrokotlin.avro4k.internal.toIntExact
@@ -30,8 +36,13 @@ import org.apache.avro.generic.GenericFixed
 internal abstract class AbstractAvroDirectDecoder(
     internal val avro: Avro,
     protected val binaryDecoder: AvroBinaryDecoder,
-) : AbstractInterceptingDecoder(), AvroDecoder {
-    abstract override var currentWriterSchema: Schema
+) : AbstractInterceptingDecoder(), AvroSchemaDecoder {
+    abstract override var currentAvroSchema: AvroSchema
+
+    /** The Apache-typed facade over [currentAvroSchema], for the public API only: see [apacheFacadeOf]. */
+    final override val currentWriterSchema: Schema
+        get() = apacheFacadeOf(currentAvroSchema)
+
     private var decodedCollectionSize = -1
 
     override val serializersModule: SerializersModule
@@ -75,77 +86,77 @@ internal abstract class AbstractAvroDirectDecoder(
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
         return when (descriptor.kind) {
             StructureKind.LIST ->
-                when (currentWriterSchema.type) {
-                    Schema.Type.ARRAY ->
+                when (currentAvroSchema.type) {
+                    AvroSchema.Type.ARRAY ->
                         ArrayBlockDirectDecoder(
-                            currentWriterSchema,
+                            currentAvroSchema,
                             decodeFirstBlock = decodedCollectionSize == -1,
                             { decodedCollectionSize = it },
                             avro,
                             binaryDecoder
                         )
 
-                    else -> throw unsupportedWriterTypeError(Schema.Type.ARRAY)
+                    else -> throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
 
             StructureKind.MAP ->
-                when (currentWriterSchema.type) {
-                    Schema.Type.MAP ->
+                when (currentAvroSchema.type) {
+                    AvroSchema.Type.MAP ->
                         MapBlockDirectDecoder(
-                            currentWriterSchema,
+                            currentAvroSchema,
                             decodeFirstBlock = decodedCollectionSize == -1,
                             { decodedCollectionSize = it },
                             avro,
                             binaryDecoder
                         )
 
-                    Schema.Type.RECORD ->
+                    AvroSchema.Type.RECORD ->
                         RecordAsMapDirectDecoder(
-                            currentWriterSchema,
+                            currentAvroSchema,
                             avro,
                             binaryDecoder
                         )
 
-                    else -> throw unsupportedWriterTypeError(Schema.Type.MAP)
+                    else -> throw unsupportedWriterTypeError(AvroSchema.Type.MAP)
                 }
 
             StructureKind.CLASS, StructureKind.OBJECT ->
-                when (currentWriterSchema.type) {
-                    Schema.Type.RECORD -> RecordDirectDecoder(currentWriterSchema, descriptor, avro, binaryDecoder)
-                    else -> throw unsupportedWriterTypeError(Schema.Type.RECORD)
+                when (currentAvroSchema.type) {
+                    AvroSchema.Type.RECORD -> RecordDirectDecoder(currentAvroSchema, descriptor, avro, binaryDecoder)
+                    else -> throw unsupportedWriterTypeError(AvroSchema.Type.RECORD)
                 }
 
-            is PolymorphicKind -> PolymorphicDecoder(avro, descriptor, currentWriterSchema, binaryDecoder)
+            is PolymorphicKind -> PolymorphicDecoder(avro, descriptor, currentAvroSchema, binaryDecoder)
 
             else -> throw SerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
     }
 
     private fun decodeAndResolveUnion() {
-        if (currentWriterSchema.type == Schema.Type.UNION) {
-            currentWriterSchema = currentWriterSchema.types[binaryDecoder.readIndex()]
+        if (currentAvroSchema.type == AvroSchema.Type.UNION) {
+            currentAvroSchema = currentAvroSchema.types[binaryDecoder.readIndex()]
         }
     }
 
     override fun decodeNotNullMark(): Boolean {
         decodeAndResolveUnion()
 
-        return currentWriterSchema.type != Schema.Type.NULL
+        return currentAvroSchema.type != AvroSchema.Type.NULL
     }
 
     override fun decodeNull(): Nothing? {
-        if (currentWriterSchema.type != Schema.Type.NULL) {
-            throw unsupportedWriterTypeError(Schema.Type.NULL)
+        if (currentAvroSchema.type != AvroSchema.Type.NULL) {
+            throw unsupportedWriterTypeError(AvroSchema.Type.NULL)
         }
         binaryDecoder.readNull()
         return null
     }
 
     override fun decodeBoolean(): Boolean {
-        return when (currentWriterSchema.type) {
-            Schema.Type.BOOLEAN -> binaryDecoder.readBoolean()
-            Schema.Type.STRING -> binaryDecoder.readString().toBooleanStrict()
-            else -> throw unsupportedWriterTypeError(Schema.Type.BOOLEAN, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.BOOLEAN -> binaryDecoder.readBoolean()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().toBooleanStrict()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.BOOLEAN, AvroSchema.Type.STRING)
         }
     }
 
@@ -158,100 +169,100 @@ internal abstract class AbstractAvroDirectDecoder(
     }
 
     override fun decodeInt(): Int {
-        return when (currentWriterSchema.type) {
-            Schema.Type.INT -> binaryDecoder.readInt()
-            Schema.Type.LONG -> binaryDecoder.readLong().toIntExact()
-            Schema.Type.STRING -> binaryDecoder.readString().toInt()
-            else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.LONG, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.INT -> binaryDecoder.readInt()
+            AvroSchema.Type.LONG -> binaryDecoder.readLong().toIntExact()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().toInt()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeLong(): Long {
-        return when (currentWriterSchema.type) {
-            Schema.Type.LONG -> binaryDecoder.readLong()
-            Schema.Type.INT -> binaryDecoder.readInt().toLong()
-            Schema.Type.STRING -> binaryDecoder.readString().toLong()
-            else -> throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.INT, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.LONG -> binaryDecoder.readLong()
+            AvroSchema.Type.INT -> binaryDecoder.readInt().toLong()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().toLong()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeFloat(): Float {
-        return when (currentWriterSchema.type) {
-            Schema.Type.FLOAT -> binaryDecoder.readFloat()
-            Schema.Type.DOUBLE -> binaryDecoder.readDouble().toFloatExact()
-            Schema.Type.STRING -> binaryDecoder.readString().toFloat()
-            else -> throw unsupportedWriterTypeError(Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.FLOAT -> binaryDecoder.readFloat()
+            AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble().toFloatExact()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().toFloat()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.FLOAT, AvroSchema.Type.DOUBLE, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeDouble(): Double {
-        return when (currentWriterSchema.type) {
-            Schema.Type.FLOAT -> binaryDecoder.readFloat().toDouble()
-            Schema.Type.DOUBLE -> binaryDecoder.readDouble()
-            Schema.Type.STRING -> binaryDecoder.readString().toDouble()
-            else -> throw unsupportedWriterTypeError(Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.FLOAT -> binaryDecoder.readFloat().toDouble()
+            AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().toDouble()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.DOUBLE, AvroSchema.Type.FLOAT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeChar(): Char {
-        return when (currentWriterSchema.type) {
-            Schema.Type.INT -> binaryDecoder.readInt().toChar()
-            Schema.Type.STRING -> binaryDecoder.readStringBytes().decodeToString().single()
-            else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.INT -> binaryDecoder.readInt().toChar()
+            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes().decodeToString().single()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeString(): String {
-        return when (currentWriterSchema.type) {
-            Schema.Type.STRING -> binaryDecoder.readString()
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.STRING -> binaryDecoder.readString()
 
-            Schema.Type.BYTES -> binaryDecoder.readBytes().decodeToString()
+            AvroSchema.Type.BYTES -> binaryDecoder.readBytes().decodeToString()
 
-            Schema.Type.FIXED -> binaryDecoder.readFixed(currentWriterSchema.fixedSize).decodeToString()
+            AvroSchema.Type.FIXED -> binaryDecoder.readFixed(currentAvroSchema.fixedSize).decodeToString()
 
-            Schema.Type.BOOLEAN -> binaryDecoder.readBoolean().toString()
+            AvroSchema.Type.BOOLEAN -> binaryDecoder.readBoolean().toString()
 
-            Schema.Type.INT -> binaryDecoder.readInt().toString()
+            AvroSchema.Type.INT -> binaryDecoder.readInt().toString()
 
-            Schema.Type.LONG -> binaryDecoder.readLong().toString()
+            AvroSchema.Type.LONG -> binaryDecoder.readLong().toString()
 
-            Schema.Type.FLOAT -> binaryDecoder.readFloat().toString()
+            AvroSchema.Type.FLOAT -> binaryDecoder.readFloat().toString()
 
-            Schema.Type.DOUBLE -> binaryDecoder.readDouble().toString()
+            AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble().toString()
 
-            Schema.Type.ENUM -> currentWriterSchema.enumSymbols[binaryDecoder.readEnum()]
+            AvroSchema.Type.ENUM -> currentAvroSchema.enumSymbols[binaryDecoder.readEnum()]
 
             else -> throw unsupportedWriterTypeError(
-                Schema.Type.STRING,
-                Schema.Type.BYTES,
-                Schema.Type.FIXED,
-                Schema.Type.BOOLEAN,
-                Schema.Type.INT,
-                Schema.Type.LONG,
-                Schema.Type.FLOAT,
-                Schema.Type.DOUBLE,
-                Schema.Type.ENUM
+                AvroSchema.Type.STRING,
+                AvroSchema.Type.BYTES,
+                AvroSchema.Type.FIXED,
+                AvroSchema.Type.BOOLEAN,
+                AvroSchema.Type.INT,
+                AvroSchema.Type.LONG,
+                AvroSchema.Type.FLOAT,
+                AvroSchema.Type.DOUBLE,
+                AvroSchema.Type.ENUM
             )
         }
     }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int {
-        return when (currentWriterSchema.type) {
-            Schema.Type.ENUM -> {
-                if (currentWriterSchema.isFullNameOrAliasMatch(enumDescriptor)) {
-                    val enumSymbol = currentWriterSchema.enumSymbols[binaryDecoder.readEnum()]
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.ENUM -> {
+                if (currentAvroSchema.isFullNameOrAliasMatch(enumDescriptor)) {
+                    val enumSymbol = currentAvroSchema.enumSymbols[binaryDecoder.readEnum()]
                     enumDescriptor.getEnumIndex(enumSymbol)
                 } else {
-                    throw unsupportedWriterTypeError(Schema.Type.ENUM, Schema.Type.STRING)
+                    throw unsupportedWriterTypeError(AvroSchema.Type.ENUM, AvroSchema.Type.STRING)
                 }
             }
 
-            Schema.Type.STRING -> {
+            AvroSchema.Type.STRING -> {
                 val enumSymbol = binaryDecoder.readString()
                 enumDescriptor.getEnumIndex(enumSymbol)
             }
 
-            else -> throw unsupportedWriterTypeError(Schema.Type.ENUM, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.ENUM, AvroSchema.Type.STRING)
         }
     }
 
@@ -261,25 +272,29 @@ internal abstract class AbstractAvroDirectDecoder(
             idx
         } else {
             avro.enumResolver.getDefaultValueIndex(this)
-                ?: throw SerializationException("Unknown enum symbol name '$enumName' for Enum '${this.serialName}' for writer schema $currentWriterSchema")
+                ?: throw SerializationException("Unknown enum symbol name '$enumName' for Enum '${this.serialName}' for writer schema ${currentAvroSchema.toSchemaJsonString()}")
         }
     }
 
     override fun decodeBytes(): ByteArray {
-        return when (currentWriterSchema.type) {
-            Schema.Type.BYTES -> binaryDecoder.readBytes()
-            Schema.Type.FIXED -> binaryDecoder.readFixed(currentWriterSchema.fixedSize)
-            Schema.Type.STRING -> binaryDecoder.readStringBytes()
-            else -> throw unsupportedWriterTypeError(Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.BYTES -> binaryDecoder.readBytes()
+            AvroSchema.Type.FIXED -> binaryDecoder.readFixed(currentAvroSchema.fixedSize)
+            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.BYTES, AvroSchema.Type.FIXED, AvroSchema.Type.STRING)
         }
     }
 
+    /**
+     * A [GenericFixed] still carries an Apache schema, until the public API is `AvroSchema`-typed: the one of the facade
+     * ([currentWriterSchema]), which is the caller's own Apache node, as before.
+     */
     override fun decodeFixed(): GenericFixed {
-        return when (currentWriterSchema.type) {
-            Schema.Type.BYTES -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readBytes())
-            Schema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readFixed(currentWriterSchema.fixedSize))
-            Schema.Type.STRING -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readStringBytes())
-            else -> throw unsupportedWriterTypeError(Schema.Type.FIXED, Schema.Type.BYTES, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.BYTES -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readBytes())
+            AvroSchema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readFixed(currentAvroSchema.fixedSize))
+            AvroSchema.Type.STRING -> GenericData.Fixed(currentWriterSchema, binaryDecoder.readStringBytes())
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.FIXED, AvroSchema.Type.BYTES, AvroSchema.Type.STRING)
         }
     }
 }
@@ -287,17 +302,17 @@ internal abstract class AbstractAvroDirectDecoder(
 private class PolymorphicDecoder(
     avro: Avro,
     descriptor: SerialDescriptor,
-    schema: Schema,
+    schema: AvroSchema,
     private val binaryDecoder: AvroBinaryDecoder,
 ) : AbstractPolymorphicDecoder(avro, descriptor, schema) {
     override fun tryFindSerialNameForUnion(
         namesAndAliasesToSerialName: Map<String, String>,
-        schema: Schema,
-    ): Pair<String, Schema>? {
+        schema: AvroSchema,
+    ): Pair<String, AvroSchema>? {
         return tryFindSerialName(namesAndAliasesToSerialName, schema.types[binaryDecoder.readIndex()])
     }
 
-    override fun newDecoder(chosenSchema: Schema): Decoder {
+    override fun newDecoder(chosenSchema: AvroSchema): Decoder {
         return AvroValueDirectDecoder(chosenSchema, avro, binaryDecoder)
     }
 }

@@ -1,20 +1,22 @@
 package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
+import com.github.avrokotlin.avro4k.internal.schema.skip
+import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonNull
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericFixed
 
 internal class RecordDirectDecoder(
-    private val writerRecordSchema: Schema,
+    private val writerRecordSchema: AvroSchema,
     descriptor: SerialDescriptor,
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
@@ -24,7 +26,7 @@ internal class RecordDirectDecoder(
     private lateinit var currentDecodingStep: DecodingStep.ValidatedDecodingStep
     private var nextDecodingStepIndex = 0
 
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         var field: DecodingStep
@@ -44,19 +46,19 @@ internal class RecordDirectDecoder(
                     throw SerializationException(
                         "Reader field '${descriptor.nonNullSerialName}.${descriptor.getElementName(
                             field.elementIndex
-                        )}' has no corresponding field in writer schema $writerRecordSchema"
+                        )}' has no corresponding field in writer schema ${writerRecordSchema.toSchemaJsonString()}"
                     )
                 }
 
                 is DecodingStep.DeserializeWriterField -> {
                     currentDecodingStep = field
-                    currentWriterSchema = field.schema
+                    currentAvroSchema = field.schema
                     return field.elementIndex
                 }
 
                 is DecodingStep.GetDefaultValue -> {
                     currentDecodingStep = field
-                    currentWriterSchema = field.schema
+                    currentAvroSchema = field.schema
                     return field.elementIndex
                 }
             }
@@ -161,66 +163,5 @@ internal class RecordDirectDecoder(
             is DecodingStep.DeserializeWriterField -> super.decodeBytes()
             is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeBytes()
         }
-    }
-}
-
-private fun AvroBinaryDecoder.skip(s: Schema) {
-    val schema =
-        if (s.isUnion) {
-            s.types[readIndex()]
-        } else {
-            s
-        }
-    @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
-    when (schema.type) {
-        Schema.Type.BOOLEAN -> readBoolean()
-
-        Schema.Type.INT -> readInt()
-
-        Schema.Type.LONG -> readLong()
-
-        Schema.Type.FLOAT -> readFloat()
-
-        Schema.Type.DOUBLE -> readDouble()
-
-        Schema.Type.STRING -> skipString()
-
-        Schema.Type.BYTES -> skipBytes()
-
-        Schema.Type.FIXED -> skipFixed(schema.fixedSize)
-
-        Schema.Type.ENUM -> readEnum()
-
-        Schema.Type.ARRAY -> {
-            var arrayBlockItems: Long = skipArray()
-            while (arrayBlockItems > 0L) {
-                for (i in 0L until arrayBlockItems) {
-                    skip(schema.elementType)
-                }
-                arrayBlockItems = skipArray()
-            }
-        }
-
-        Schema.Type.MAP -> {
-            var mapBlockItems: Long = skipMap()
-            while (mapBlockItems > 0L) {
-                for (i in 0L until mapBlockItems) {
-                    skipString()
-                    skip(schema.valueType)
-                }
-                mapBlockItems = skipMap()
-            }
-        }
-
-        Schema.Type.NULL -> readNull()
-
-        Schema.Type.RECORD -> {
-            schema.fields.forEach {
-                skip(it.schema())
-            }
-        }
-
-        // Impossible to go to this branch, as the schema is resolved earlier in this method
-        Schema.Type.UNION -> throw UnsupportedOperationException("Union type should be already resolved")
     }
 }

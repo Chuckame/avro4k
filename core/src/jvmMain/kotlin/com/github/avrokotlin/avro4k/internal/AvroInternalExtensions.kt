@@ -93,11 +93,16 @@ private fun <T> Avro.encodeWithBinaryEncoder(
         .encodeSerializableValue(serializer, value)
 }
 
+/**
+ * The entry points still take an Apache [writerSchema] until the public API is `AvroSchema`-typed: it is converted here,
+ * once per call, through the identity-cached converter (a schema from `Avro.schema()` is already paired, so that is a
+ * hit). The decoders then only read the [com.github.avrokotlin.avro4k.AvroSchema].
+ */
 private fun <T> Avro.decodeWithBinaryDecoder(
     writerSchema: Schema,
     deserializer: DeserializationStrategy<T>,
     binaryDecoder: AvroBinaryDecoder,
 ): T {
-    return AvroValueDirectDecoder(writerSchema, this, binaryDecoder)
+    return AvroValueDirectDecoder(apacheToAvro4k(writerSchema), this, binaryDecoder)
         .decodeSerializableValue(deserializer)
 }

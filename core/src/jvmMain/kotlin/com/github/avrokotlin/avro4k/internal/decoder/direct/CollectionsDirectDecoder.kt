@@ -1,20 +1,22 @@
 package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
+import com.github.avrokotlin.avro4k.internal.schema.elementType
+import com.github.avrokotlin.avro4k.internal.schema.valueType
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.Schema
 
 internal class ArrayBlockDirectDecoder(
-    private val arraySchema: Schema,
+    private val arraySchema: AvroSchema,
     private val decodeFirstBlock: Boolean,
     private val onCollectionSizeDecoded: (Int) -> Unit,
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {
         return if (decodeFirstBlock) {
@@ -29,7 +31,7 @@ internal class ArrayBlockDirectDecoder(
         index: Int,
     ) {
         // reset the current writer schema in of the element is a union (as a union is resolved)
-        currentWriterSchema = arraySchema.elementType
+        currentAvroSchema = arraySchema.elementType
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -41,13 +43,13 @@ internal class ArrayBlockDirectDecoder(
 }
 
 internal class MapBlockDirectDecoder(
-    private val mapSchema: Schema,
+    private val mapSchema: AvroSchema,
     private val decodeFirstBlock: Boolean,
     private val onCollectionSizeDecoded: (Int) -> Unit,
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {
         return if (decodeFirstBlock) {
@@ -62,7 +64,7 @@ internal class MapBlockDirectDecoder(
         index: Int,
     ) {
         // reset the current writer schema in of the element is a union (as a union is resolved)
-        currentWriterSchema = if (index % 2 == 0) KEY_SCHEMA else mapSchema.valueType
+        currentAvroSchema = if (index % 2 == 0) KEY_SCHEMA else mapSchema.valueType
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -73,6 +75,6 @@ internal class MapBlockDirectDecoder(
     }
 
     companion object {
-        private val KEY_SCHEMA = Schema.create(Schema.Type.STRING)
+        private val KEY_SCHEMA = AvroSchema.StringSchema()
     }
 }

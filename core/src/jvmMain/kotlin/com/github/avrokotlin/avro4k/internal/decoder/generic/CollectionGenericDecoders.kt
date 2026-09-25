@@ -1,17 +1,21 @@
 package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
+import com.github.avrokotlin.avro4k.internal.schema.elementType
+import com.github.avrokotlin.avro4k.internal.schema.isUnion
+import com.github.avrokotlin.avro4k.internal.schema.types
+import com.github.avrokotlin.avro4k.internal.schema.valueType
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
-import org.apache.avro.Schema
 
 internal class MapGenericDecoder(
     private val map: Map<CharSequence, Any?>,
-    private val writerSchema: Schema,
+    private val writerSchema: AvroSchema,
     override val avro: Avro,
 ) : AbstractAvroGenericDecoder() {
     /**
@@ -28,7 +32,7 @@ internal class MapGenericDecoder(
      * Whether the element being decoded is an entry's key (even index) or its value (odd index).
      *
      * It is set by [decodeSerializableElement] and [decodeInlineElement] *before* the element is read, so
-     * that a serializer reading [currentWriterSchema] before decoding sees the right schema, and again by
+     * that a serializer reading [currentAvroSchema] before decoding sees the right schema, and again by
      * [advance] when the element is read, which covers the primitive `decode*Element` methods that
      * [kotlinx.serialization.encoding.AbstractDecoder] does not let us intercept.
      */
@@ -38,14 +42,14 @@ internal class MapGenericDecoder(
      * The generic tree decoder does not resolve unions, so a nullable map (a record field, a map value…)
      * comes with its `["null", map]` union as writer schema: pick its map branch.
      */
-    private val mapSchema: Schema =
+    private val mapSchema: AvroSchema =
         if (writerSchema.isUnion) {
-            writerSchema.types.firstOrNull { it.type == Schema.Type.MAP } ?: writerSchema
+            writerSchema.types.firstOrNull { it.type === AvroSchema.Type.MAP } ?: writerSchema
         } else {
             writerSchema
         }
 
-    override val currentWriterSchema: Schema
+    override val currentAvroSchema: AvroSchema
         get() = if (positionedOnKey) STRING_SCHEMA else mapSchema.valueType
 
     private fun advance(): Any? {
@@ -110,13 +114,13 @@ internal class MapGenericDecoder(
     override fun decodeSequentially() = true
 
     companion object {
-        private val STRING_SCHEMA = Schema.create(Schema.Type.STRING)
+        private val STRING_SCHEMA = AvroSchema.StringSchema()
     }
 }
 
 internal class ArrayGenericDecoder(
     private val collection: Collection<Any?>,
-    private val writerSchema: Schema,
+    private val writerSchema: AvroSchema,
     override val avro: Avro,
 ) : AbstractAvroGenericDecoder() {
     private val iterator = collection.iterator()
@@ -124,7 +128,7 @@ internal class ArrayGenericDecoder(
     private var currentItem: Any? = null
     private var decodedNullMark = false
 
-    override val currentWriterSchema: Schema
+    override val currentAvroSchema: AvroSchema
         get() = writerSchema.elementType
 
     override fun decodeNotNullMark(): Boolean {

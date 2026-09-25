@@ -18,14 +18,11 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
-import org.apache.avro.Schema
 import com.github.avrokotlin.avro4k.internal.schema.asSchemaList as avroSchemaList
 
-// The rules for field default values, shared by the schema generation (on AvroSchema) and by the decoding of a field
-// missing from the writer schema (still on Apache's Schema until the decoders read AvroSchema; the Apache-typed variants
-// below go away then).
-// Each rule is written once, over the kind of schema (AvroSchema.Type) and plain facts about the field's schema; the two
-// variants of each function only walk their own schema model and delegate to it.
+// The rules for field default values, shared by the schema generation and by the decoding of a field missing from the
+// writer schema, so that both always agree. Each rule is written once, over the kind of schema (AvroSchema.Type) and
+// plain facts about the field's schema.
 
 /**
  * The default value of a field as json, exactly as the schema generation writes it in the field's schema, and as it is
@@ -39,13 +36,6 @@ internal fun AvroDefault.toFieldDefault(fieldSchema: AvroSchema): JsonElement =
     toFieldDefault(
         isNullable = fieldSchema.isNullable,
         isChar = fieldSchema.avroSchemaList().any { it.logicalTypeName == CHAR_LOGICAL_TYPE_NAME }
-    )
-
-/** [toFieldDefault] for an Apache schema: the decoder's reader schema, until the decoders read `AvroSchema`. */
-internal fun AvroDefault.toFieldDefault(fieldSchema: Schema): JsonElement =
-    toFieldDefault(
-        isNullable = fieldSchema.isNullable,
-        isChar = fieldSchema.asSchemaList().any { it.logicalType?.name == CHAR_LOGICAL_TYPE_NAME }
     )
 
 private fun AvroDefault.toFieldDefault(
@@ -121,26 +111,7 @@ internal fun JsonElement.isValidDefaultFor(
         else -> isValidDefaultForLeaf(schema.type, allowAnyCodePoint)
     }
 
-/** [isValidDefaultFor] for an Apache schema: the decoder's reader schema, until the decoders read `AvroSchema`. */
-internal fun JsonElement.isValidDefaultFor(
-    schema: Schema,
-    allowAnyCodePoint: Boolean = false,
-): Boolean =
-    when (schema.type) {
-        Schema.Type.ARRAY -> this is JsonArray && all { it.isValidDefaultFor(schema.elementType, allowAnyCodePoint) }
-
-        Schema.Type.MAP -> this is JsonObject && values.all { it.isValidDefaultFor(schema.valueType, allowAnyCodePoint) }
-
-        Schema.Type.RECORD ->
-            this is JsonObject &&
-                schema.fields.all { field -> this[field.name()]?.isValidDefaultFor(field.schema(), allowAnyCodePoint) ?: field.hasDefaultValue() }
-
-        Schema.Type.UNION -> schema.types.any { isValidDefaultFor(it, allowAnyCodePoint) }
-
-        else -> isValidDefaultForLeaf(schema.type.toAvroSchemaType(), allowAnyCodePoint)
-    }
-
-/** The rule of [isValidDefaultFor] for the schemas that contain no other schema, shared by both schema models. */
+/** The rule of [isValidDefaultFor] for the schemas that contain no other schema. */
 private fun JsonElement.isValidDefaultForLeaf(
     type: AvroSchema.Type,
     allowAnyCodePoint: Boolean,
@@ -160,26 +131,8 @@ private fun JsonElement.isValidDefaultForLeaf(
 
         AvroSchema.Type.BYTES, AvroSchema.Type.FIXED -> this is JsonPrimitive && isString && (allowAnyCodePoint || content.all { it.code <= 0xFF })
 
-        // Composite schemas are walked by the callers, each over its own model
+        // Composite schemas are walked by the caller
         AvroSchema.Type.ARRAY, AvroSchema.Type.MAP, AvroSchema.Type.RECORD, AvroSchema.Type.UNION -> error("Not a leaf schema type: $type")
-    }
-
-private fun Schema.Type.toAvroSchemaType(): AvroSchema.Type =
-    when (this) {
-        Schema.Type.RECORD -> AvroSchema.Type.RECORD
-        Schema.Type.ENUM -> AvroSchema.Type.ENUM
-        Schema.Type.ARRAY -> AvroSchema.Type.ARRAY
-        Schema.Type.MAP -> AvroSchema.Type.MAP
-        Schema.Type.UNION -> AvroSchema.Type.UNION
-        Schema.Type.FIXED -> AvroSchema.Type.FIXED
-        Schema.Type.STRING -> AvroSchema.Type.STRING
-        Schema.Type.BYTES -> AvroSchema.Type.BYTES
-        Schema.Type.INT -> AvroSchema.Type.INT
-        Schema.Type.LONG -> AvroSchema.Type.LONG
-        Schema.Type.FLOAT -> AvroSchema.Type.FLOAT
-        Schema.Type.DOUBLE -> AvroSchema.Type.DOUBLE
-        Schema.Type.BOOLEAN -> AvroSchema.Type.BOOLEAN
-        Schema.Type.NULL -> AvroSchema.Type.NULL
     }
 
 private fun JsonElement.isNumberLiteral() = this is JsonPrimitive && this !is JsonNull && !isString && booleanOrNull == null
@@ -194,12 +147,6 @@ private fun JsonElement.isNumberLiteral() = this is JsonPrimitive && this !is Js
 internal fun AvroSchema.resolveDefaultBranch(value: JsonElement): AvroSchema {
     if (this !is UnionSchema) return this
     return types.firstOrNull { value.isValidDefaultFor(it) } ?: throw noCompatibleBranchError(toSchemaJsonString(), value)
-}
-
-/** [resolveDefaultBranch] for an Apache schema: the decoder's reader schema, until the decoders read `AvroSchema`. */
-internal fun Schema.resolveDefaultBranch(value: JsonElement): Schema {
-    if (type != Schema.Type.UNION) return this
-    return types.firstOrNull { value.isValidDefaultFor(it) } ?: throw noCompatibleBranchError(toString(), value)
 }
 
 private fun noCompatibleBranchError(

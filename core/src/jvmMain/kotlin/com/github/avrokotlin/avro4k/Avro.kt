@@ -47,7 +47,7 @@ public sealed class Avro(
     internal val schemaCache = IdentityFirstCache<SerialDescriptor, GeneratedSchema>()
 
     internal val recordResolver = RecordResolver(this)
-    internal val polymorphicResolver = PolymorphicResolver(serializersModule) { schema(it).fullName }
+    internal val polymorphicResolver = PolymorphicResolver(serializersModule) { avroSchema(it).fullName }
     internal val enumResolver = EnumResolver()
 
     public companion object Default : Avro(

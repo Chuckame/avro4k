@@ -1,14 +1,15 @@
 package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonNull
-import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 
 internal class RecordGenericDecoder(
@@ -17,11 +18,11 @@ internal class RecordGenericDecoder(
     override val avro: Avro,
 ) : AbstractAvroGenericDecoder() {
     // from descriptor element index to schema field
-    private val classDescriptor = avro.recordResolver.resolveFields(record.schema, descriptor)
+    private val classDescriptor = avro.recordResolver.resolveFields(apacheToAvro4k(record.schema), descriptor)
     private lateinit var currentElement: DecodingStep.ValidatedDecodingStep
     private var nextDecodingStep = 0
 
-    override val currentWriterSchema: Schema
+    override val currentAvroSchema: AvroSchema
         get() = currentElement.schema
 
     override fun decodeNotNullMark() =

@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import com.github.avrokotlin.avro4k.internal.decoder.generic.AvroValueGenericDecoder
 import com.github.avrokotlin.avro4k.internal.encoder.generic.AvroValueGenericEncoder
 import kotlinx.serialization.DeserializationStrategy
@@ -51,7 +52,8 @@ public fun <T> Avro.decodeFromGenericData(
     deserializer: DeserializationStrategy<T>,
     value: Any?,
 ): T {
-    return AvroValueGenericDecoder(this, value, writerSchema)
+    // converted once per call, identity-cached: the decoders only read the AvroSchema
+    return AvroValueGenericDecoder(this, value, apacheToAvro4k(writerSchema))
         .decodeSerializableValue(deserializer)
 }
 

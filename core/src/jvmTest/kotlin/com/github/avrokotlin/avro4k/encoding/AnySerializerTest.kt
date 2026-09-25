@@ -11,7 +11,7 @@ import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
 import com.github.avrokotlin.avro4k.serializer.AnySerializer
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
-import com.github.avrokotlin.avro4k.stubWriterSchema
+import com.github.avrokotlin.avro4k.toAvro4k
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.should
 import io.kotest.matchers.shouldBe
@@ -57,7 +57,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             every { decoder.avro } returns Avro
-            decoder.stubWriterSchema(Schema.createUnion())
+            decoder.stubWriterSchemas(Schema.createUnion(Schema.create(Schema.Type.INT)))
 
             assertThrows<UnsupportedOperationException> { AnySerializer().deserialize(decoder) }
         }
@@ -65,7 +65,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             every { decoder.avro } returns Avro
-            decoder.stubWriterSchema(Schema.create(Schema.Type.NULL))
+            decoder.stubWriterSchemas(Schema.create(Schema.Type.NULL))
 
             assertThrows<UnsupportedOperationException> { AnySerializer().deserialize(decoder) }
         }
@@ -220,7 +220,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            decoder.stubWriterSchema(Avro.apacheSchema<List<PolymorphicType?>>())
+            decoder.stubWriterSchemas(Avro.apacheSchema<List<PolymorphicType?>>())
             val serializer =
                 object : AnySerializer() {
                     override fun SerializersModule.resolveArrayDeserializationStrategy(writerSchema: CoreSchema) =
@@ -254,7 +254,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            decoder.stubWriterSchema(Avro.apacheSchema<Map<String, String>>())
+            decoder.stubWriterSchemas(Avro.apacheSchema<Map<String, String>>())
             val serializer =
                 object : AnySerializer() {
                     override fun SerializersModule.resolveMapDeserializationStrategy(writerSchema: CoreSchema) =
@@ -284,7 +284,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            decoder.stubWriterSchema(Avro.apacheSchema<RecordType>())
+            decoder.stubWriterSchemas(Avro.apacheSchema<RecordType>())
             val serializer =
                 object : AnySerializer() {
                     override fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: CoreSchema) =
@@ -299,7 +299,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            decoder.stubWriterSchema(Avro.apacheSchema<SomeEnum>())
+            decoder.stubWriterSchemas(Avro.apacheSchema<SomeEnum>())
             val serializer =
                 object : AnySerializer() {
                     override fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: CoreSchema) =
@@ -314,7 +314,7 @@ class AnySerializerTest : StringSpec() {
             val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
-            decoder.stubWriterSchema(Schema.createFixed("the.name", null, null, 5))
+            decoder.stubWriterSchemas(Schema.createFixed("the.name", null, null, 5))
             val serializer =
                 object : AnySerializer() {
                     override fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: CoreSchema) =
@@ -466,4 +466,13 @@ class AnySerializerTest : StringSpec() {
         val firstField: String,
         val secondField: Int?,
     )
+}
+
+/**
+ * Stubs both forms of the writer schema of a mocked core decoder: [AnySerializer] reads the `AvroSchema` one, and hands the
+ * Apache one to its hooks.
+ */
+private fun AbstractAvroDirectDecoder.stubWriterSchemas(writerSchema: Schema) {
+    every { currentAvroSchema } returns writerSchema.toAvro4k()
+    every { currentWriterSchema } returns writerSchema
 }

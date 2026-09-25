@@ -267,7 +267,7 @@ private class ApacheToAvro4k(private val cached: Boolean) {
                         schema = convert(field.schema()),
                         defaultValue = if (field.hasDefaultValue()) field.defaultValueAsJson() else null,
                         doc = field.doc(),
-                        aliases = field.aliases(),
+                        aliases = field.aliases() - field.name(),
                         props = field.propsWithOrder()
                     )
                 }.forEach { fields += it }
@@ -476,8 +476,16 @@ private fun JsonNode.toJsonElement(schema: Schema?): JsonElement {
     }
 }
 
+/**
+ * The aliases of a named schema, without its own full name: Apache accepts a named schema listing itself as an alias (a
+ * no-op, as the name already matches), which the model rejects. Dropped here, so that every schema Apache accepts at
+ * core's entry points converts. The same holds for a field listing its own name as an alias.
+ */
 private val Schema.aliasesWithSpace: Set<Name>
-    get() = aliases.map { Name(it, namespace) }.toSet()
+    get() {
+        val name = Name(this.name, namespace)
+        return aliases.mapNotNullTo(LinkedHashSet()) { alias -> Name(alias, namespace).takeIf { it != name } }
+    }
 
 /**
  * The field order is not a prop in Apache Avro, but it is one in [AvroSchema], as in the schema's json.

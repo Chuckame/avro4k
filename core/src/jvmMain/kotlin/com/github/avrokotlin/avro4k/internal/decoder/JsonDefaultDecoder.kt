@@ -1,7 +1,9 @@
 package com.github.avrokotlin.avro4k.internal.decoder
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.AvroDecoder
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaDecoder
+import com.github.avrokotlin.avro4k.apacheFacadeOf
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
@@ -11,6 +13,12 @@ import com.github.avrokotlin.avro4k.internal.defaultValueBytes
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.resolveDefaultBranch
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
+import com.github.avrokotlin.avro4k.internal.schema.elementType
+import com.github.avrokotlin.avro4k.internal.schema.fields
+import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
+import com.github.avrokotlin.avro4k.internal.schema.types
+import com.github.avrokotlin.avro4k.internal.schema.valueType
 import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toFloatExact
 import com.github.avrokotlin.avro4k.internal.toIntExact
@@ -45,7 +53,7 @@ import org.apache.avro.generic.GenericFixed
  * parsed from its `@AvroDefault` (or the implicit `null`, `[]` or `{}`), against the reader field's [schema].
  *
  * The json is never converted to an intermediate value tree: each node is decoded against the schema at its position,
- * a union being resolved to the first branch the json is valid for ([resolveDefaultBranch]), so [currentWriterSchema] is
+ * a union being resolved to the first branch the json is valid for ([resolveDefaultBranch]), so [currentAvroSchema] is
  * never a union. A record goes through the [com.github.avrokotlin.avro4k.internal.RecordResolver] workflow of its reader
  * schema, its fields being read from the json object by name, and a field the json leaves out taking its own default.
  *
@@ -57,12 +65,16 @@ import org.apache.avro.generic.GenericFixed
 internal class JsonDefaultDecoder(
     private val avro: Avro,
     private val value: JsonElement,
-    schema: Schema,
-) : AbstractDecoder(), AvroDecoder {
+    schema: AvroSchema,
+) : AbstractDecoder(), AvroSchemaDecoder {
     /**
      * The given schema, unless it is a union: then the branch matching the kind of [value].
      */
-    override val currentWriterSchema: Schema = schema.resolveDefaultBranch(value)
+    override val currentAvroSchema: AvroSchema = schema.resolveDefaultBranch(value)
+
+    /** The Apache-typed facade over [currentAvroSchema], for the public API only: see [apacheFacadeOf]. */
+    override val currentWriterSchema: Schema
+        get() = apacheFacadeOf(currentAvroSchema)
 
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
@@ -84,29 +96,29 @@ internal class JsonDefaultDecoder(
         return when (descriptor.kind) {
             StructureKind.LIST ->
                 when {
-                    value is JsonArray && currentWriterSchema.type == Schema.Type.ARRAY ->
-                        ArrayJsonDefaultDecoder(avro, value, currentWriterSchema.elementType)
+                    value is JsonArray && currentAvroSchema.type == AvroSchema.Type.ARRAY ->
+                        ArrayJsonDefaultDecoder(avro, value, currentAvroSchema.elementType)
 
-                    else -> throw unsupportedWriterTypeError(Schema.Type.ARRAY)
+                    else -> throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
 
             StructureKind.MAP ->
                 when {
-                    value is JsonObject && currentWriterSchema.type == Schema.Type.MAP ->
-                        MapJsonDefaultDecoder(avro, value, currentWriterSchema.valueType)
+                    value is JsonObject && currentAvroSchema.type == AvroSchema.Type.MAP ->
+                        MapJsonDefaultDecoder(avro, value, currentAvroSchema.valueType)
 
-                    else -> throw unsupportedWriterTypeError(Schema.Type.MAP)
+                    else -> throw unsupportedWriterTypeError(AvroSchema.Type.MAP)
                 }
 
             StructureKind.CLASS, StructureKind.OBJECT ->
                 when {
-                    value is JsonObject && currentWriterSchema.type == Schema.Type.RECORD ->
-                        RecordJsonDefaultDecoder(avro, value, currentWriterSchema, descriptor)
+                    value is JsonObject && currentAvroSchema.type == AvroSchema.Type.RECORD ->
+                        RecordJsonDefaultDecoder(avro, value, currentAvroSchema, descriptor)
 
-                    else -> throw unsupportedWriterTypeError(Schema.Type.RECORD)
+                    else -> throw unsupportedWriterTypeError(AvroSchema.Type.RECORD)
                 }
 
-            is PolymorphicKind -> PolymorphicJsonDefaultDecoder(avro, descriptor, currentWriterSchema, value)
+            is PolymorphicKind -> PolymorphicJsonDefaultDecoder(avro, descriptor, currentAvroSchema, value)
 
             else -> throw SerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
@@ -120,7 +132,7 @@ internal class JsonDefaultDecoder(
             when (value) {
                 is JsonNull -> throw DecodedNullError()
                 is JsonPrimitive -> value
-                else -> throw SerializationException("Not a valid primitive value for schema $currentWriterSchema: $value")
+                else -> throw SerializationException("Not a valid primitive value for schema ${currentAvroSchema.toSchemaJsonString()}: $value")
             }
 
     /**
@@ -128,7 +140,7 @@ internal class JsonDefaultDecoder(
      * its single-character string.
      */
     private fun intValue(): Int =
-        if (currentWriterSchema.logicalType?.name == CHAR_LOGICAL_TYPE_NAME && primitive.isString) {
+        if (currentAvroSchema.logicalTypeName == CHAR_LOGICAL_TYPE_NAME && primitive.isString) {
             primitive.content.single().code
         } else {
             primitive.int
@@ -140,114 +152,118 @@ internal class JsonDefaultDecoder(
      * as a string is written.
      */
     private fun bytesValue(): ByteArray =
-        when (currentWriterSchema.type) {
-            Schema.Type.BYTES -> primitive.content.defaultValueBytes()
-            Schema.Type.FIXED -> primitive.content.defaultValueBytes().copyOf(currentWriterSchema.fixedSize)
+        when (currentAvroSchema.type) {
+            AvroSchema.Type.BYTES -> primitive.content.defaultValueBytes()
+            AvroSchema.Type.FIXED -> primitive.content.defaultValueBytes().copyOf(currentAvroSchema.fixedSize)
             else -> primitive.content.toByteArray()
         }
 
     override fun decodeBoolean(): Boolean {
-        return when (currentWriterSchema.type) {
-            Schema.Type.BOOLEAN -> primitive.boolean
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content.toBoolean()
-            else -> throw unsupportedWriterTypeError(Schema.Type.BOOLEAN, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.BOOLEAN -> primitive.boolean
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toBoolean()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.BOOLEAN, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeByte(): Byte {
-        return when (currentWriterSchema.type) {
-            Schema.Type.INT -> intValue().toByteExact()
-            Schema.Type.LONG -> primitive.long.toByteExact()
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content.toByte()
-            else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.LONG, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.INT -> intValue().toByteExact()
+            AvroSchema.Type.LONG -> primitive.long.toByteExact()
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toByte()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeShort(): Short {
-        return when (currentWriterSchema.type) {
-            Schema.Type.INT -> intValue().toShortExact()
-            Schema.Type.LONG -> primitive.long.toShortExact()
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content.toShort()
-            else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.LONG, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.INT -> intValue().toShortExact()
+            AvroSchema.Type.LONG -> primitive.long.toShortExact()
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toShort()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeInt(): Int {
-        return when (currentWriterSchema.type) {
-            Schema.Type.INT -> intValue()
-            Schema.Type.LONG -> primitive.long.toIntExact()
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content.toInt()
-            else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.LONG, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.INT -> intValue()
+            AvroSchema.Type.LONG -> primitive.long.toIntExact()
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toInt()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeLong(): Long {
-        return when (currentWriterSchema.type) {
-            Schema.Type.LONG -> primitive.long
-            Schema.Type.INT -> intValue().toLong()
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content.toLong()
-            else -> throw unsupportedWriterTypeError(Schema.Type.LONG, Schema.Type.INT, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.LONG -> primitive.long
+            AvroSchema.Type.INT -> intValue().toLong()
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toLong()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeFloat(): Float {
-        return when (currentWriterSchema.type) {
-            Schema.Type.FLOAT -> primitive.float
-            Schema.Type.DOUBLE -> primitive.double.toFloatExact()
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content.toFloat()
-            else -> throw unsupportedWriterTypeError(Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.FLOAT -> primitive.float
+            AvroSchema.Type.DOUBLE -> primitive.double.toFloatExact()
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toFloat()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.FLOAT, AvroSchema.Type.DOUBLE, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeDouble(): Double {
-        return when (currentWriterSchema.type) {
-            Schema.Type.DOUBLE -> primitive.double
-            Schema.Type.FLOAT -> primitive.float.toDouble()
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content.toDouble()
-            else -> throw unsupportedWriterTypeError(Schema.Type.DOUBLE, Schema.Type.FLOAT, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.DOUBLE -> primitive.double
+            AvroSchema.Type.FLOAT -> primitive.float.toDouble()
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toDouble()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.DOUBLE, AvroSchema.Type.FLOAT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeChar(): Char {
-        return when (currentWriterSchema.type) {
-            Schema.Type.INT -> intValue().toChar()
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content.single()
-            else -> throw unsupportedWriterTypeError(Schema.Type.INT, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.INT -> intValue().toChar()
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.single()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeString(): String {
-        return when (currentWriterSchema.type) {
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content
-            Schema.Type.BYTES, Schema.Type.FIXED -> bytesValue().decodeToString()
-            else -> throw unsupportedWriterTypeError(Schema.Type.STRING, Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.ENUM)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content
+            AvroSchema.Type.BYTES, AvroSchema.Type.FIXED -> bytesValue().decodeToString()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.STRING, AvroSchema.Type.BYTES, AvroSchema.Type.FIXED, AvroSchema.Type.ENUM)
         }
     }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int {
-        return when (currentWriterSchema.type) {
-            Schema.Type.STRING, Schema.Type.ENUM -> {
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> {
                 val symbol = primitive.content
                 enumDescriptor.getElementIndex(symbol).takeIf { it >= 0 }
                     ?: avro.enumResolver.getDefaultValueIndex(enumDescriptor)
                     ?: throw SerializationException("Unknown enum symbol '$symbol' for Enum '${enumDescriptor.serialName}'")
             }
 
-            else -> throw unsupportedWriterTypeError(Schema.Type.ENUM, Schema.Type.STRING)
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.ENUM, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeBytes(): ByteArray {
-        return when (currentWriterSchema.type) {
-            Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.STRING, Schema.Type.ENUM -> bytesValue()
-            else -> throw unsupportedWriterTypeError(Schema.Type.BYTES, Schema.Type.FIXED, Schema.Type.STRING)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.BYTES, AvroSchema.Type.FIXED, AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> bytesValue()
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.BYTES, AvroSchema.Type.FIXED, AvroSchema.Type.STRING)
         }
     }
 
+    /**
+     * A [GenericFixed] still carries an Apache schema, until the public API is `AvroSchema`-typed: the one of the facade
+     * ([currentWriterSchema]), which is the reader schema's Apache node, as before.
+     */
     override fun decodeFixed(): GenericFixed {
-        return when (currentWriterSchema.type) {
-            Schema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, bytesValue())
-            else -> throw unsupportedWriterTypeError(Schema.Type.FIXED)
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.FIXED -> GenericData.Fixed(currentWriterSchema, bytesValue())
+            else -> throw unsupportedWriterTypeError(AvroSchema.Type.FIXED)
         }
     }
 
@@ -256,16 +272,16 @@ internal class JsonDefaultDecoder(
      */
     @Deprecated("Use currentWriterSchema to get the schema and then decode the value using the appropriate decode* method")
     override fun decodeValue(): Any {
-        return when (currentWriterSchema.type) {
-            Schema.Type.BOOLEAN -> primitive.boolean
-            Schema.Type.INT -> intValue()
-            Schema.Type.LONG -> primitive.long
-            Schema.Type.FLOAT -> primitive.float
-            Schema.Type.DOUBLE -> primitive.double
-            Schema.Type.STRING, Schema.Type.ENUM -> primitive.content
-            Schema.Type.BYTES -> bytesValue()
-            Schema.Type.FIXED -> decodeFixed()
-            else -> throw UnsupportedOperationException("A default value of type ${currentWriterSchema.type} cannot be decoded as a generic value")
+        return when (currentAvroSchema.type) {
+            AvroSchema.Type.BOOLEAN -> primitive.boolean
+            AvroSchema.Type.INT -> intValue()
+            AvroSchema.Type.LONG -> primitive.long
+            AvroSchema.Type.FLOAT -> primitive.float
+            AvroSchema.Type.DOUBLE -> primitive.double
+            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content
+            AvroSchema.Type.BYTES -> bytesValue()
+            AvroSchema.Type.FIXED -> decodeFixed()
+            else -> throw UnsupportedOperationException("A default value of type ${currentAvroSchema.type} cannot be decoded as a generic value")
         }
     }
 }
@@ -345,7 +361,7 @@ private abstract class SequentialJsonDefaultDecoder(
 private class ArrayJsonDefaultDecoder(
     avro: Avro,
     private val array: JsonArray,
-    private val elementSchema: Schema,
+    private val elementSchema: AvroSchema,
 ) : SequentialJsonDefaultDecoder(avro, array.size, elementsPerItem = 1) {
     override fun elementDecoder(index: Int) = JsonDefaultDecoder(avro, array[index], elementSchema)
 }
@@ -356,7 +372,7 @@ private class ArrayJsonDefaultDecoder(
 private class MapJsonDefaultDecoder(
     avro: Avro,
     map: JsonObject,
-    private val valueSchema: Schema,
+    private val valueSchema: AvroSchema,
 ) : SequentialJsonDefaultDecoder(avro, map.size, elementsPerItem = 2) {
     private val entries = map.entries.iterator()
     private lateinit var currentEntry: Map.Entry<String, JsonElement>
@@ -370,7 +386,7 @@ private class MapJsonDefaultDecoder(
     }
 
     private companion object {
-        val STRING_SCHEMA: Schema = Schema.create(Schema.Type.STRING)
+        val STRING_SCHEMA: AvroSchema = AvroSchema.StringSchema()
     }
 }
 
@@ -383,7 +399,7 @@ private class MapJsonDefaultDecoder(
 private class RecordJsonDefaultDecoder(
     avro: Avro,
     private val record: JsonObject,
-    private val recordSchema: Schema,
+    private val recordSchema: AvroSchema,
     descriptor: SerialDescriptor,
 ) : JsonDefaultCompositeDecoder(avro) {
     private val workflow = avro.recordResolver.resolveFields(recordSchema, descriptor)
@@ -393,7 +409,7 @@ private class RecordJsonDefaultDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         while (nextDecodingStepIndex < workflow.decoding.size) {
             var step = workflow.decoding[nextDecodingStepIndex++]
-            if (step is DecodingStep.DeserializeWriterField && recordSchema.fields[step.writerFieldIndex].name() !in record) {
+            if (step is DecodingStep.DeserializeWriterField && recordSchema.fields[step.writerFieldIndex].name !in record) {
                 step = workflow.missingElements[step.elementIndex]
             }
             when (step) {
@@ -417,7 +433,7 @@ private class RecordJsonDefaultDecoder(
     override fun elementDecoder(index: Int): JsonDefaultDecoder =
         when (val step = currentDecodingStep) {
             is DecodingStep.DeserializeWriterField ->
-                JsonDefaultDecoder(avro, record.getValue(recordSchema.fields[step.writerFieldIndex].name()), step.schema)
+                JsonDefaultDecoder(avro, record.getValue(recordSchema.fields[step.writerFieldIndex].name), step.schema)
 
             is DecodingStep.GetDefaultValue -> JsonDefaultDecoder(avro, step.defaultValue, step.schema)
         }
@@ -426,17 +442,17 @@ private class RecordJsonDefaultDecoder(
 private class PolymorphicJsonDefaultDecoder(
     avro: Avro,
     descriptor: SerialDescriptor,
-    schema: Schema,
+    schema: AvroSchema,
     private val value: JsonElement,
 ) : AbstractPolymorphicDecoder(avro, descriptor, schema) {
     override fun tryFindSerialNameForUnion(
         namesAndAliasesToSerialName: Map<String, String>,
-        schema: Schema,
-    ): Pair<String, Schema>? {
+        schema: AvroSchema,
+    ): Pair<String, AvroSchema>? {
         return schema.types.firstNotNullOfOrNull { tryFindSerialName(namesAndAliasesToSerialName, it) }
     }
 
-    override fun newDecoder(chosenSchema: Schema): Decoder {
+    override fun newDecoder(chosenSchema: AvroSchema): Decoder {
         return JsonDefaultDecoder(avro, value, chosenSchema)
     }
 }

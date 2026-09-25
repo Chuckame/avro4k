@@ -13,6 +13,7 @@ import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.generic.AvroValueGenericDecoder
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
+import com.github.avrokotlin.avro4k.toAvro4k
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
@@ -332,6 +333,23 @@ internal class JsonDefaultDecoderTest : StringSpec({
         val implicitEmptyList: List<Int>,
     )
 }
+
+// The decoders take avro4k's own schema, and this test builds Apache ones (its oracle is the former Apache-typed path):
+// converted through the identity-cached converter, as the entry points do.
+
+private fun JsonDefaultDecoder(
+    avro: Avro,
+    value: JsonElement,
+    schema: Schema,
+) = JsonDefaultDecoder(avro, value, schema.toAvro4k())
+
+private fun AvroValueGenericDecoder(
+    avro: Avro,
+    value: Any?,
+    schema: Schema,
+) = AvroValueGenericDecoder(avro, value, schema.toAvro4k())
+
+private fun AvroDefault.toFieldDefault(schema: Schema) = toFieldDefault(schema.toAvro4k())
 
 private fun <T> assertSameAsFormerPath(
     serializer: KSerializer<T>,

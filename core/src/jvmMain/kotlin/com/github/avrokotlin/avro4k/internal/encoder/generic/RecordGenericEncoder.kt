@@ -5,6 +5,7 @@ package com.github.avrokotlin.avro4k.internal.encoder.generic
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.ListRecord
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
@@ -18,7 +19,7 @@ internal fun RecordGenericEncoder(
     avro: Avro,
     onEncoded: (GenericRecord) -> Unit,
 ): CompositeEncoder {
-    return when (val encodingWorkflow = avro.recordResolver.resolveFields(schema, descriptor).encoding) {
+    return when (val encodingWorkflow = avro.recordResolver.resolveFields(apacheToAvro4k(schema), descriptor).encoding) {
         is EncodingWorkflow.ExactMatch -> RecordContiguousExactEncoder(schema, avro, onEncoded)
 
         is EncodingWorkflow.ContiguousWithSkips -> RecordContiguousSkippingEncoder(encodingWorkflow.fieldsToSkip, schema, avro, onEncoded)

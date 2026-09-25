@@ -1,8 +1,9 @@
 package com.github.avrokotlin.avro4k.serializer
 
 import com.github.avrokotlin.avro4k.AvroConfiguration
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
-import com.github.avrokotlin.avro4k.internal.WeakKeyCache
+import com.github.avrokotlin.avro4k.internal.WeakIdentityKeyCache
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -45,7 +46,7 @@ internal val AnyTypeSerializersModule: SerializersModule
 public open class AnySerializer : KSerializer<Any> {
     // No need to use a WeakHashMap with class keys
     private val encodingCache = ConcurrentHashMap<Class<out Any>, SerializationStrategy<Any>>()
-    private val decodingCache = WeakKeyCache<Schema, DeserializationStrategy<Any>>()
+    private val decodingCache = WeakIdentityKeyCache<AvroSchema, DeserializationStrategy<Any>>()
 
     /**
      * Provides the nullable version of this [AnySerializer].
@@ -112,54 +113,64 @@ public open class AnySerializer : KSerializer<Any> {
 
     override fun deserialize(decoder: Decoder): Any {
         decoder as AbstractAvroDirectDecoder
+        val writerSchema = decoder.currentAvroSchema
+        // getOrNull first: the getOrPut lambda captures, so it would be allocated on every hit.
         val serializer =
-            decodingCache.getOrPut(decoder.currentWriterSchema) {
-                decoder.serializersModule.resolveDeserializationStrategy(decoder.currentWriterSchema, decoder.avro.configuration)
-            }
+            decodingCache.getOrNull(writerSchema)
+                ?: decodingCache.getOrPut(writerSchema) {
+                    decoder.serializersModule.resolveDeserializationStrategy(writerSchema, decoder, decoder.avro.configuration)
+                }
         return decoder.decodeSerializableValue(serializer)
     }
 
-    private fun SerializersModule.resolveDeserializationStrategy(writerSchema: Schema, configuration: AvroConfiguration): DeserializationStrategy<Any> {
-        preResolveDeserializationStrategy(writerSchema)?.let { return it }
+    /**
+     * Only runs on a miss of [decodingCache]. The hooks still take the Apache form of [writerSchema], read from the
+     * decoder's facade, until the public API is `AvroSchema`-typed.
+     */
+    private fun SerializersModule.resolveDeserializationStrategy(
+        writerSchema: AvroSchema,
+        decoder: AbstractAvroDirectDecoder,
+        configuration: AvroConfiguration,
+    ): DeserializationStrategy<Any> {
+        preResolveDeserializationStrategy(decoder.currentWriterSchema)?.let { return it }
         // Let's try to use the logical type's serializer if any
-        writerSchema.logicalType?.name?.let { configuration.logicalTypes[it] }?.let { return it }
+        writerSchema.logicalTypeName?.let { configuration.logicalTypes[it] }?.let { return it }
         // Else infer the serializer from the schema type
-        @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
         return when (writerSchema.type) {
-            Schema.Type.BOOLEAN -> Boolean.serializer()
+            AvroSchema.Type.BOOLEAN -> Boolean.serializer()
 
-            Schema.Type.INT -> Int.serializer()
+            AvroSchema.Type.INT -> Int.serializer()
 
-            Schema.Type.LONG -> Long.serializer()
+            AvroSchema.Type.LONG -> Long.serializer()
 
-            Schema.Type.FLOAT -> Float.serializer()
+            AvroSchema.Type.FLOAT -> Float.serializer()
 
-            Schema.Type.DOUBLE -> Double.serializer()
+            AvroSchema.Type.DOUBLE -> Double.serializer()
 
-            Schema.Type.STRING -> String.serializer()
+            AvroSchema.Type.STRING -> String.serializer()
 
-            Schema.Type.BYTES -> ByteArraySerializer()
+            AvroSchema.Type.BYTES -> ByteArraySerializer()
 
             // Named types and collections can be decoded differently depending on the needs
-            Schema.Type.ARRAY -> resolveArrayDeserializationStrategy(writerSchema)
+            AvroSchema.Type.ARRAY -> resolveArrayDeserializationStrategy(decoder.currentWriterSchema)
 
-            Schema.Type.MAP -> resolveMapDeserializationStrategy(writerSchema)
+            AvroSchema.Type.MAP -> resolveMapDeserializationStrategy(decoder.currentWriterSchema)
 
-            Schema.Type.FIXED -> resolveFixedDeserializationStrategy(writerSchema)
+            AvroSchema.Type.FIXED -> resolveFixedDeserializationStrategy(decoder.currentWriterSchema)
 
-            Schema.Type.ENUM -> resolveEnumDeserializationStrategy(writerSchema)
+            AvroSchema.Type.ENUM -> resolveEnumDeserializationStrategy(decoder.currentWriterSchema)
 
-            Schema.Type.RECORD -> resolveRecordDeserializationStrategy(writerSchema)
+            AvroSchema.Type.RECORD -> resolveRecordDeserializationStrategy(decoder.currentWriterSchema)
 
             // Having an union here is an avro4k error, or a wrong usage of this serializer
-            Schema.Type.UNION -> throw UnsupportedOperationException(
+            AvroSchema.Type.UNION -> throw UnsupportedOperationException(
                 "Do not directly decode values with ${this::class}. " +
                     "Please use Avro.decode methods instead. " +
                     "(error: had to get deserializer of union, which should be resolved by internal decoders before calling deserializers)"
             )
 
             // Having a null here is an avro4k error, or a wrong usage of this serializer
-            Schema.Type.NULL -> throw UnsupportedOperationException(
+            AvroSchema.Type.NULL -> throw UnsupportedOperationException(
                 "Do not directly decode values with ${this::class}. " +
                     "Please use Avro.decode methods instead. " +
                     "(error: had to get deserializer of null, which should be handled by internal decoders)"

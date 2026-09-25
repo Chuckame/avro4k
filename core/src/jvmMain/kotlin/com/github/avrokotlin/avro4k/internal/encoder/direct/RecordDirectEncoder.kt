@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.encoder.direct
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.MissingFieldsEncodingException
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -16,7 +17,9 @@ internal fun RecordDirectEncoder(
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ): CompositeEncoder {
-    return when (val encodingWorkflow = avro.recordResolver.resolveFields(schema, descriptor).encoding) {
+    // Temporary: the encoders still hold Apache schemas while the record workflows are keyed by AvroSchema, so each record
+    // looks its writer schema up in the identity-cached converter until the encoders read AvroSchema too.
+    return when (val encodingWorkflow = avro.recordResolver.resolveFields(apacheToAvro4k(schema), descriptor).encoding) {
         is EncodingWorkflow.ExactMatch -> RecordContiguousExactEncoder(schema, avro, binaryEncoder)
 
         is EncodingWorkflow.ContiguousWithSkips -> RecordContiguousSkippingEncoder(encodingWorkflow.fieldsToSkip, schema, avro, binaryEncoder)

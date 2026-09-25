@@ -1,19 +1,20 @@
 package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
+import com.github.avrokotlin.avro4k.internal.schema.fields
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericFixed
 
 internal class RecordAsMapDirectDecoder(
-    private val writerRecordSchema: Schema,
+    private val writerRecordSchema: AvroSchema,
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
-    override lateinit var currentWriterSchema: Schema
+    override lateinit var currentAvroSchema: AvroSchema
     private var fieldNameToRead: String? = null
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {
@@ -26,10 +27,10 @@ internal class RecordAsMapDirectDecoder(
     ) {
         val field = writerRecordSchema.fields[index / 2]
         if (index % 2 == 0) {
-            currentWriterSchema = KEY_SCHEMA
-            fieldNameToRead = field.name()
+            currentAvroSchema = KEY_SCHEMA
+            fieldNameToRead = field.name
         } else {
-            currentWriterSchema = field.schema()
+            currentAvroSchema = field.schema
             fieldNameToRead = null
         }
     }
@@ -46,7 +47,7 @@ internal class RecordAsMapDirectDecoder(
     }
 
     companion object {
-        private val KEY_SCHEMA = Schema.create(Schema.Type.STRING)
+        private val KEY_SCHEMA = AvroSchema.StringSchema()
     }
 
     override fun decodeBoolean(): Boolean {

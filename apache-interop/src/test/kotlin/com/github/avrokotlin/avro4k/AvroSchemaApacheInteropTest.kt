@@ -127,6 +127,18 @@ class AvroSchemaApacheInteropTest : FunSpec({
         avro4k.convertUncached() shouldBe apacheSchema
     }
 
+    test("a named schema or a field listing its own name as an alias converts, without that no-op alias") {
+        val apache =
+            Schema.Parser().parse(
+                """{"type":"record","name":"R","namespace":"ns","aliases":["ns.R","Old"],"fields":[{"name":"f","type":"int","aliases":["f","g"]}]}"""
+            )
+        val avro4k = apache.toAvro4k() as AvroSchema.RecordSchema
+
+        avro4k.aliases shouldBe setOf(Name("Old", "ns"))
+        avro4k.fields.single().aliases shouldBe setOf("g")
+        avro4k.toApacheSchema() shouldBeSameInstanceAs apache
+    }
+
     test("the known exceptions are still exceptions") {
         // if one of those starts to round-trip, remove it from the list
         schemasFromFiles.filter { (name, schemas) -> name in DEFAULTS_COERCED_BY_APACHE && schemas.first.convertUncached().convertUncached() == schemas.first }

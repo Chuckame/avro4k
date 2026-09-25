@@ -2,7 +2,9 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.AvroAlias
 import com.github.avrokotlin.avro4k.AvroProp
+import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
+import com.github.avrokotlin.avro4k.internal.schema.isFullNameOrAliasMatch
 import kotlinx.io.Buffer
 import kotlinx.io.UnsafeIoApi
 import kotlinx.io.unsafe.UnsafeBufferOperations
@@ -35,10 +37,34 @@ internal inline fun <reified T : Annotation> SerialDescriptor.findElementAnnotat
 @OptIn(ExperimentalSerializationApi::class)
 internal val SerialDescriptor.nonNullSerialName: String get() = nonNullOriginal.serialName
 
-internal fun Schema.asSchemaList(): List<Schema> {
-    if (!isUnion) return listOf(this)
-    return types
-}
+/**
+ * The [AvroSchema.Type] of the same name, for the callers that still name Apache's types (the serializers, until they
+ * read [AvroSchema]). A `when` over an enum: no allocation, no lookup by name.
+ */
+internal fun Schema.Type.toAvroSchemaType(): AvroSchema.Type =
+    when (this) {
+        Schema.Type.RECORD -> AvroSchema.Type.RECORD
+        Schema.Type.ENUM -> AvroSchema.Type.ENUM
+        Schema.Type.ARRAY -> AvroSchema.Type.ARRAY
+        Schema.Type.MAP -> AvroSchema.Type.MAP
+        Schema.Type.UNION -> AvroSchema.Type.UNION
+        Schema.Type.FIXED -> AvroSchema.Type.FIXED
+        Schema.Type.STRING -> AvroSchema.Type.STRING
+        Schema.Type.BYTES -> AvroSchema.Type.BYTES
+        Schema.Type.INT -> AvroSchema.Type.INT
+        Schema.Type.LONG -> AvroSchema.Type.LONG
+        Schema.Type.FLOAT -> AvroSchema.Type.FLOAT
+        Schema.Type.DOUBLE -> AvroSchema.Type.DOUBLE
+        Schema.Type.BOOLEAN -> AvroSchema.Type.BOOLEAN
+        Schema.Type.NULL -> AvroSchema.Type.NULL
+    }
+
+/**
+ * True if the descriptor's serial name or one of its `@AvroAlias`es matches this schema's full name or aliases. A one-line
+ * delegate to the common helper, which cannot see the descriptor helpers; inline, so no bound reference is allocated.
+ */
+@Suppress("NOTHING_TO_INLINE")
+internal inline fun AvroSchema.isFullNameOrAliasMatch(descriptor: SerialDescriptor): Boolean = isFullNameOrAliasMatch(descriptor.nonNullSerialName) { descriptor.aliases }
 
 @InternalAvro4kApi
 public fun Schema.isNamedSchema(): Boolean {

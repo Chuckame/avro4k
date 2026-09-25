@@ -2,14 +2,18 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDefault
+import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
+import com.github.avrokotlin.avro4k.internal.schema.asSchemaList
+import com.github.avrokotlin.avro4k.internal.schema.fields
+import com.github.avrokotlin.avro4k.isNullable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import org.apache.avro.Schema
 
 /**
  * Capacity of the per-[RecordResolver] inline cache. Sized to comfortably hold the record types of a deeply
@@ -29,12 +33,13 @@ internal class RecordResolver(
      *
      * Note: We use the descriptor in the key as we could have multiple descriptors for the same record schema, and multiple record schemas for the same descriptor.
      *
-     * The outer (writer schema) level is equality-keyed until the decoders read `AvroSchema`, when it becomes
-     * identity-keyed. The inner (descriptor) level is an [IdentityFirstCache]: record descriptors are mostly stable
-     * instances, but a generic record (`Box<T>`) obtained through a fresh top-level serializer is an equal-but-distinct
-     * instance per call.
+     * The outer (writer schema) level is identity-keyed: [AvroSchema.equals] is a structural walk of the whole schema, and a
+     * writer schema is a long-lived instance (converted once per identity from an Apache schema, or generated once per
+     * descriptor), so an equal-but-distinct instance only costs one more resolution of its workflow. The inner
+     * (descriptor) level is an [IdentityFirstCache]: record descriptors are mostly stable instances, but a generic record
+     * (`Box<T>`) obtained through a fresh top-level serializer is an equal-but-distinct instance per call.
      */
-    private val fieldCache: Cache<Schema, IdentityFirstCache<SerialDescriptor, SerializationWorkflow>> = WeakKeyCache()
+    private val fieldCache = WeakIdentityKeyCache<AvroSchema, IdentityFirstCache<SerialDescriptor, SerializationWorkflow>>()
 
     /**
      * Inline (first-level) cache in front of [fieldCache], holding the last [INLINE_CACHE_CAPACITY] resolved
@@ -64,7 +69,7 @@ internal class RecordResolver(
      * the encoded/decoded data.
      */
     private class Memo(
-        val writerSchema: Schema,
+        val writerSchema: AvroSchema,
         val classDescriptor: SerialDescriptor,
         val workflow: SerializationWorkflow,
     )
@@ -82,24 +87,24 @@ internal class RecordResolver(
      * - fails if a field is not optional, without a default value and not in the writer schema
      */
     fun resolveFields(
-        writerSchema: Schema,
+        writerSchema: AvroSchema,
         classDescriptor: SerialDescriptor,
     ): SerializationWorkflow {
         val memos = inlineCache
         for (index in memos.indices) {
             val memo = memos[index]
             // Identity is enough: the same instances always resolve to the same workflow. It also avoids
-            // Schema.equals(), which is a deep structural comparison.
+            // AvroSchema.equals(), which is a deep structural comparison.
             if (memo.writerSchema === writerSchema && memo.classDescriptor === classDescriptor) {
                 return memo.workflow
             }
         }
+        // getOrNull first: no lambda is allocated on a hit. The outer lambda captures nothing anyway (a singleton).
         val workflow =
-            fieldCache.getOrPut(writerSchema) {
-                IdentityFirstCache()
-            }.getOrPut(classDescriptor) {
-                loadCache(classDescriptor, writerSchema)
-            }
+            (fieldCache.getOrNull(writerSchema) ?: fieldCache.getOrPut(writerSchema) { IdentityFirstCache() })
+                .getOrPut(classDescriptor) {
+                    loadCache(classDescriptor, writerSchema)
+                }
         memoize(Memo(writerSchema, classDescriptor, workflow))
         return workflow
     }
@@ -125,11 +130,12 @@ internal class RecordResolver(
      */
     private fun loadCache(
         classDescriptor: SerialDescriptor,
-        writerSchema: Schema,
+        writerSchema: AvroSchema,
     ): SerializationWorkflow {
+        val writerRecordSchema = writerSchema as? RecordSchema ?: throw SerializationException("Expected a record writer schema, but had $writerSchema")
         return SerializationWorkflow(
-            computeDecodingSteps(classDescriptor, writerSchema),
-            computeEncodingWorkflow(classDescriptor, writerSchema),
+            computeDecodingSteps(classDescriptor, writerRecordSchema),
+            computeEncodingWorkflow(classDescriptor, writerRecordSchema),
             // computed at most a few times on a race, and then only read: no lock
             lazy(LazyThreadSafetyMode.PUBLICATION) { computeMissingElementSteps(classDescriptor) }
         )
@@ -140,62 +146,62 @@ internal class RecordResolver(
      * [SerializationWorkflow.missingElements].
      */
     private fun computeMissingElementSteps(classDescriptor: SerialDescriptor): Array<DecodingStep> {
-        val readerSchema = avro.schema(classDescriptor)
+        val readerFields = avro.avroSchema(classDescriptor).fields
         return Array(classDescriptor.elementsCount) { elementIndex ->
-            resolveMissingElement(classDescriptor, elementIndex, readerSchema.fields[elementIndex])
+            resolveMissingElement(classDescriptor, elementIndex, readerFields[elementIndex])
         }
     }
 
     private fun computeDecodingSteps(
         classDescriptor: SerialDescriptor,
-        writerSchema: Schema,
+        writerSchema: RecordSchema,
     ): Array<DecodingStep> {
         val decodingSteps = mutableListOf<DecodingStep>()
+        val writerFields = writerSchema.fields
 
-        val writerFieldIndexToElementIndex = Array<Int?>(writerSchema.fields.size) { null }
+        val writerFieldIndexToElementIndex = IntArray(writerFields.size) { -1 }
 
         for (elementIndex in 0 until classDescriptor.elementsCount) {
-            val writerField =
-                writerSchema.findFieldMatchingWithElement(classDescriptor, elementIndex)
-                    ?: continue
+            val writerFieldIndex = writerSchema.findFieldIndexMatchingWithElement(classDescriptor, elementIndex)
+            if (writerFieldIndex < 0) continue
 
-            if (writerFieldIndexToElementIndex[writerField.pos()] != null) {
+            if (writerFieldIndexToElementIndex[writerFieldIndex] >= 0) {
                 throw IllegalStateException(
-                    "The descriptor $classDescriptor has multiple elements matching to the same writer field '$writerField'. " +
+                    "The descriptor $classDescriptor has multiple elements matching to the same writer field '${writerFields[writerFieldIndex].name}'. " +
                         "This is not allowed as it would lead to ambiguous decoding."
                 )
             }
-            writerFieldIndexToElementIndex[writerField.pos()] = elementIndex
+            writerFieldIndexToElementIndex[writerFieldIndex] = elementIndex
         }
 
         val visitedElements = BooleanArray(classDescriptor.elementsCount) { false }
 
-        writerSchema.fields.forEachIndexed { writerFieldIndex, field ->
+        writerFields.forEachIndexed { writerFieldIndex, field ->
             val elementIndex = writerFieldIndexToElementIndex[writerFieldIndex]
             decodingSteps +=
-                if (elementIndex != null) {
+                if (elementIndex >= 0) {
                     visitedElements[elementIndex] = true
                     DecodingStep.DeserializeWriterField(
                         elementIndex = elementIndex,
                         writerFieldIndex = writerFieldIndex,
-                        schema = field.schema()
+                        schema = field.schema
                     )
                 } else {
-                    DecodingStep.SkipWriterField(writerFieldIndex, field.schema())
+                    DecodingStep.SkipWriterField(writerFieldIndex, field.schema)
                 }
         }
 
         if (visitedElements.any { !it }) {
             // TODO we should not need to resolve the whole record's schema, but just extract the fields names, aliases and their order.
             //  However, the schema resolution also handle the union schema ordering based on the default value, which we also need here.
-            val readerSchema = avro.schema(classDescriptor)
+            val readerFields = avro.avroSchema(classDescriptor).fields
 
             // iterate over remaining elements in the class descriptor that are not in the writer schema
             // so it needs to set default values or skip them if they are optional
             visitedElements.forEachIndexed { elementIndex, visited ->
                 if (visited) return@forEachIndexed
 
-                decodingSteps += resolveMissingElement(classDescriptor, elementIndex, readerSchema.fields[elementIndex])
+                decodingSteps += resolveMissingElement(classDescriptor, elementIndex, readerFields[elementIndex])
             }
         }
         return decodingSteps.toTypedArray()
@@ -209,36 +215,37 @@ internal class RecordResolver(
     private fun resolveMissingElement(
         classDescriptor: SerialDescriptor,
         elementIndex: Int,
-        readerField: Schema.Field,
+        readerField: RecordSchema.Field,
     ): DecodingStep {
         val readerDefaultAnnotation = classDescriptor.findElementAnnotation<AvroDefault>(elementIndex)
+        val readerFieldSchema = readerField.schema
         return if (readerDefaultAnnotation != null) {
-            val defaultValue = readerDefaultAnnotation.toFieldDefault(readerField.schema())
+            val defaultValue = readerDefaultAnnotation.toFieldDefault(readerFieldSchema)
             DecodingStep.GetDefaultValue(
                 elementIndex = elementIndex,
-                schema = readerField.schema().resolveDefaultBranch(defaultValue),
+                schema = readerFieldSchema.resolveDefaultBranch(defaultValue),
                 defaultValue = defaultValue
             )
         } else if (classDescriptor.isElementOptional(elementIndex)) {
             // There is already a kotlin default value for this element, so we can skip it.
             // We don't want to put an implicit null/empty collection here as it would override the kotlin default.
             DecodingStep.IgnoreOptionalElement(elementIndex)
-        } else if (avro.configuration.implicitNulls && readerField.schema().isNullable) {
+        } else if (avro.configuration.implicitNulls && readerFieldSchema.isNullable) {
             DecodingStep.GetDefaultValue(
                 elementIndex = elementIndex,
-                schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.NULL },
+                schema = readerFieldSchema.asSchemaList().first { it.type === AvroSchema.Type.NULL },
                 defaultValue = JsonNull
             )
-        } else if (avro.configuration.implicitEmptyCollections && readerField.schema().isTypeOf(Schema.Type.ARRAY)) {
+        } else if (avro.configuration.implicitEmptyCollections && readerFieldSchema.isTypeOf(AvroSchema.Type.ARRAY)) {
             DecodingStep.GetDefaultValue(
                 elementIndex = elementIndex,
-                schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.ARRAY },
+                schema = readerFieldSchema.asSchemaList().first { it.type === AvroSchema.Type.ARRAY },
                 defaultValue = EMPTY_JSON_ARRAY
             )
-        } else if (avro.configuration.implicitEmptyCollections && readerField.schema().isTypeOf(Schema.Type.MAP)) {
+        } else if (avro.configuration.implicitEmptyCollections && readerFieldSchema.isTypeOf(AvroSchema.Type.MAP)) {
             DecodingStep.GetDefaultValue(
                 elementIndex = elementIndex,
-                schema = readerField.schema().asSchemaList().first { it.type === Schema.Type.MAP },
+                schema = readerFieldSchema.asSchemaList().first { it.type === AvroSchema.Type.MAP },
                 defaultValue = EMPTY_JSON_OBJECT
             )
         } else {
@@ -248,7 +255,7 @@ internal class RecordResolver(
 
     private fun computeEncodingWorkflow(
         classDescriptor: SerialDescriptor,
-        writerSchema: Schema,
+        writerSchema: RecordSchema,
     ): EncodingWorkflow {
         // Encoding steps are ordered regarding the class descriptor and not the writer schema.
         // Because kotlinx-serialization doesn't provide a way to encode non-sequentially elements.
@@ -259,20 +266,19 @@ internal class RecordResolver(
         var expectedNextWriterIndex = 0
 
         for (elementIndex in 0 until classDescriptor.elementsCount) {
-            val writerField =
-                writerSchema.findFieldMatchingWithElement(classDescriptor, elementIndex)
-                    ?: continue
+            val writerFieldIndex = writerSchema.findFieldIndexMatchingWithElement(classDescriptor, elementIndex)
+            if (writerFieldIndex < 0) continue
 
-            if (visitedWriterFields[writerField.pos()]) {
+            if (visitedWriterFields[writerFieldIndex]) {
                 throw IllegalStateException(
-                    "The descriptor $classDescriptor has multiple elements matching to the same writer field '$writerField'. " +
+                    "The descriptor $classDescriptor has multiple elements matching to the same writer field '${writerSchema.fields[writerFieldIndex].name}'. " +
                         "This is not allowed as it would lead to ambiguous encoding."
                 )
             }
-            visitedWriterFields[writerField.pos()] = true
-            descriptorToWriterFieldIndex[elementIndex] = writerField.pos()
+            visitedWriterFields[writerFieldIndex] = true
+            descriptorToWriterFieldIndex[elementIndex] = writerFieldIndex
             if (expectedNextWriterIndex != -1) {
-                if (writerField.pos() != expectedNextWriterIndex) {
+                if (writerFieldIndex != expectedNextWriterIndex) {
                     expectedNextWriterIndex = -1
                 } else {
                     expectedNextWriterIndex++
@@ -297,11 +303,23 @@ internal class RecordResolver(
         }
     }
 
-    private fun Schema.findFieldMatchingWithElement(classDescriptor: SerialDescriptor, elementIndex: Int): Schema.Field? =
-        this.findFieldNamedOrAliasedAs(avro.configuration.fieldNamingStrategy.resolve(classDescriptor, elementIndex))
-            ?: classDescriptor.getElementAliases(elementIndex).firstNotNullOfOrNull { this.findFieldNamedOrAliasedAs(it) }
+    /**
+     * The index of the writer field matching the element, or -1: by the element's name (after the naming strategy), then by
+     * its aliases, each looked up among the writer fields' names and aliases ([RecordSchema.getFieldIndexOrNull], a hash
+     * lookup). Runs once per (writer schema, descriptor) pair, when its workflow is resolved, never per value.
+     */
+    private fun RecordSchema.findFieldIndexMatchingWithElement(
+        classDescriptor: SerialDescriptor,
+        elementIndex: Int,
+    ): Int {
+        getFieldIndexOrNull(avro.configuration.fieldNamingStrategy.resolve(classDescriptor, elementIndex))?.let { return it }
+        for (alias in classDescriptor.getElementAliases(elementIndex)) {
+            getFieldIndexOrNull(alias)?.let { return it }
+        }
+        return -1
+    }
 
-    private fun Schema.isTypeOf(expectedType: Schema.Type): Boolean = asSchemaList().any { it.type === expectedType }
+    private fun AvroSchema.isTypeOf(expectedType: AvroSchema.Type): Boolean = asSchemaList().any { it.type === expectedType }
 }
 
 internal class SerializationWorkflow(
@@ -349,7 +367,7 @@ internal sealed interface DecodingStep {
      */
     sealed interface ValidatedDecodingStep : DecodingStep {
         val elementIndex: Int
-        val schema: Schema
+        val schema: AvroSchema
     }
 
     /**
@@ -358,7 +376,7 @@ internal sealed interface DecodingStep {
     data class DeserializeWriterField(
         override val elementIndex: Int,
         val writerFieldIndex: Int,
-        override val schema: Schema,
+        override val schema: AvroSchema,
     ) : DecodingStep, ValidatedDecodingStep
 
     /**
@@ -372,7 +390,7 @@ internal sealed interface DecodingStep {
         /**
          * The reader field's schema, or its branch matching [defaultValue] when it is a union.
          */
-        override val schema: Schema,
+        override val schema: AvroSchema,
         /**
          * Decoded by [com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder] each time the element is read.
          */
@@ -384,7 +402,7 @@ internal sealed interface DecodingStep {
      */
     data class SkipWriterField(
         val writerFieldIndex: Int,
-        val schema: Schema,
+        val schema: AvroSchema,
     ) : DecodingStep
 
     /**
@@ -403,6 +421,3 @@ internal sealed interface DecodingStep {
         val elementIndex: Int,
     ) : DecodingStep
 }
-
-private fun Schema.findFieldNamedOrAliasedAs(name: String): Schema.Field? =
-    getField(name) ?: fields.firstOrNull { name in it.aliases() }
