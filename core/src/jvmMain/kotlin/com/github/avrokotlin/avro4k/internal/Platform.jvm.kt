@@ -31,14 +31,14 @@ import org.apache.avro.generic.GenericData
  * The serializers module of [com.github.avrokotlin.avro4k.Avro.Default]: the serializers of the Java standard library
  * types, of the java.time types, of the Kotlin standard library types, and [com.github.avrokotlin.avro4k.serializer.AnySerializer].
  */
-internal fun defaultSerializersModule(): SerializersModule =
+internal actual fun defaultSerializersModule(): SerializersModule =
     JavaStdLibSerializersModule +
         JavaTimeSerializersModule +
         KotlinStdLibSerializersModule +
         AnyTypeSerializersModule
 
 /** The default of [com.github.avrokotlin.avro4k.AvroConfiguration.logicalTypes]: a new map on each call. */
-internal fun defaultLogicalTypes(): Map<String, KSerializer<out Any>> =
+internal actual fun defaultLogicalTypes(): Map<String, KSerializer<out Any>> =
     mapOf(
         AvroDurationSerializer.LOGICAL_TYPE_NAME to AvroDurationSerializer,
         UUIDSerializer.LOGICAL_TYPE_NAME to UUIDSerializer,
@@ -56,16 +56,16 @@ internal fun defaultLogicalTypes(): Map<String, KSerializer<out Any>> =
  * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization]: wrapped in Apache's validating encoder, which
  * needs the schema in Apache's model (converted through the cached converter).
  */
-internal fun AvroBinaryEncoder.validatingAgainst(writerSchema: AvroSchema): AvroBinaryEncoder = validating(avro4kToApache(writerSchema))
+internal actual fun AvroBinaryEncoder.validatingAgainst(writerSchema: AvroSchema): AvroBinaryEncoder = validating(avro4kToApache(writerSchema))
 
 /** This decoder, checking every call against [writerSchema]: see [validatingAgainst] for the encoder. */
-internal fun AvroBinaryDecoder.validatingAgainst(writerSchema: AvroSchema): AvroBinaryDecoder = validating(avro4kToApache(writerSchema))
+internal actual fun AvroBinaryDecoder.validatingAgainst(writerSchema: AvroSchema): AvroBinaryDecoder = validating(avro4kToApache(writerSchema))
 
 /**
  * The generic value of a fixed default, for the deprecated `AvroDecoder.decodeValue`: an Apache `GenericData.Fixed`
  * carrying its schema in Apache's model, as the generic values of the former default-value path did.
  */
-internal fun genericFixedValue(
+internal actual fun genericFixedValue(
     schema: AvroSchema,
     bytes: ByteArray,
 ): Any = GenericData.Fixed(avro4kToApache(schema), bytes)

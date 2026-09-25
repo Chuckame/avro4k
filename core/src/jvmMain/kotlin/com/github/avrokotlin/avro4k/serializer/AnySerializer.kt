@@ -23,11 +23,11 @@ import java.util.concurrent.ConcurrentHashMap
  * For more customization about named types, see [resolveFixedDeserializationStrategy], [resolveEnumDeserializationStrategy], and [resolveRecordDeserializationStrategy].
  */
 @InternalAvro4kApi
-public open class AnySerializer : AbstractAnySerializer() {
+public actual open class AnySerializer actual constructor() : AbstractAnySerializer() {
     // No need to use a WeakHashMap with class keys
     private val encodingCache = ConcurrentHashMap<Class<out Any>, SerializationStrategy<Any>>()
 
-    override fun serialize(
+    actual override fun serialize(
         encoder: Encoder,
         value: Any,
     ) {

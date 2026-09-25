@@ -44,11 +44,16 @@ kotlin {
 
     // `jvmAndNative`: the platforms with real weak references and identity hash codes, sharing one copy-on-write
     // identity cache (JS has neither, and uses its own `WeakMap` instead).
+    // `nonJvm`: the platforms without the Java standard library and Apache Avro, sharing the Kotlin-only defaults.
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     applyDefaultHierarchyTemplate {
         common {
             group("jvmAndNative") {
                 withJvm()
+                group("native")
+            }
+            group("nonJvm") {
+                withJs()
                 group("native")
             }
         }
