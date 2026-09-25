@@ -180,3 +180,25 @@ One line each, with where the details are. Not rewritten here.
   `AvroTypeException` for an invalid default, to change when Apache leaves core ("M3-13 / M3-14").
 - This file, "Fixed type names".
 - [`m3-12.md`](m3-12.md), §4: the public API on `AvroSchema` (section above), with its behaviour notes.
+- [`m3-13.md`](m3-13.md), §2: an invalid `@AvroDefault` for its field type fails with a `SerializationException` (same
+  message) instead of Apache's `AvroTypeException` (the item m3-09 left for later).
+
+## Platform differences (from [`m3-13.md`](m3-13.md), core moving to `commonMain`) — document prominently
+
+These are **silent**: the same code behaves differently on the JVM and elsewhere.
+
+- **`validateSerialization`** checks every call against the writer schema **only on the JVM** (Apache's
+  `ValidatingEncoder`/`ValidatingDecoder`). On JS and native the flag is ignored for now, until a common validating
+  codec exists.
+- **`Avro.Default`'s serializers module**: the Kotlin standard library serializers and `AnySerializer` everywhere; the
+  java.time, `UUID`, `BigDecimal`, `BigInteger` and `URL` serializers on the JVM only.
+- **`AvroConfiguration.logicalTypes`' defaults** (what `AnySerializer` decodes a logical type to): `duration` as
+  `AvroDuration` everywhere; on the JVM `uuid` as `java.util.UUID`, `date`/`time-*`/`timestamp-*` as java.time types,
+  `decimal`/`big-decimal` as `BigDecimal`; on JS and native `uuid` as `kotlin.uuid.Uuid` and
+  `timestamp-millis`/`-micros` as `kotlin.time.Instant` (the others decode as their underlying Avro type).
+- **Error messages** name classes by their qualified name on the JVM and native, by their simple name on JS.
+- `AnySerializer`'s encoding hook for non-serializable types takes a `Class` on the JVM (unchanged) and a `KClass` on
+  the other platforms (internal API).
+- The deprecated `AvroDecoder.decodeValue()` of a fixed field default returns an Apache `GenericData.Fixed` on the JVM,
+  a `ByteArray` elsewhere.
+- IDE JSON highlighting of `@AvroProp`/`@AvroDefault` values is gone (the JVM-only `@Language` annotation was dropped).

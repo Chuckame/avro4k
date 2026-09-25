@@ -5,11 +5,6 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.codec.ApacheDecoderAdapter
 import com.github.avrokotlin.avro4k.internal.codec.ApacheEncoderAdapter
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.codec.validating
-import com.github.avrokotlin.avro4k.internal.decoder.direct.AvroValueDirectDecoder
-import com.github.avrokotlin.avro4k.internal.encoder.direct.AvroValueDirectEncoder
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import org.apache.avro.Schema
@@ -70,61 +65,4 @@ internal fun <T> Avro.decodeWithApacheDecoder(
             binaryDecoder
         }
     return decodeWithBinaryDecoder(writerSchema, deserializer, ApacheDecoderAdapter(apacheDecoder))
-}
-
-/**
- * Encodes [value] with one of avro4k's own codecs, validated against [writerSchema] when
- * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled. The validation runs on Apache's
- * validating encoder, so it converts [writerSchema] to Apache's model, through the cached converter.
- */
-internal fun <T> Avro.encodeWithValidation(
-    writerSchema: AvroSchema,
-    serializer: SerializationStrategy<T>,
-    value: T,
-    binaryEncoder: AvroBinaryEncoder,
-) {
-    val encoder =
-        if (configuration.validateSerialization) {
-            binaryEncoder.validating(avro4kToApache(writerSchema))
-        } else {
-            binaryEncoder
-        }
-    encodeWithBinaryEncoder(writerSchema, serializer, value, encoder)
-}
-
-/**
- * Decodes a value with one of avro4k's own codecs, validated against [writerSchema] when
- * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled, as [encodeWithValidation] does.
- */
-internal fun <T> Avro.decodeWithValidation(
-    writerSchema: AvroSchema,
-    deserializer: DeserializationStrategy<T>,
-    binaryDecoder: AvroBinaryDecoder,
-): T {
-    val decoder =
-        if (configuration.validateSerialization) {
-            binaryDecoder.validating(avro4kToApache(writerSchema))
-        } else {
-            binaryDecoder
-        }
-    return decodeWithBinaryDecoder(writerSchema, deserializer, decoder)
-}
-
-private fun <T> Avro.encodeWithBinaryEncoder(
-    writerSchema: AvroSchema,
-    serializer: SerializationStrategy<T>,
-    value: T,
-    binaryEncoder: AvroBinaryEncoder,
-) {
-    AvroValueDirectEncoder(writerSchema, this, binaryEncoder)
-        .encodeSerializableValue(serializer, value)
-}
-
-private fun <T> Avro.decodeWithBinaryDecoder(
-    writerSchema: AvroSchema,
-    deserializer: DeserializationStrategy<T>,
-    binaryDecoder: AvroBinaryDecoder,
-): T {
-    return AvroValueDirectDecoder(writerSchema, this, binaryDecoder)
-        .decodeSerializableValue(deserializer)
 }

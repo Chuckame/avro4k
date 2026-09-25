@@ -1,17 +1,7 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.internal.defaultLogicalTypes
 import com.github.avrokotlin.avro4k.serializer.AnySerializer
-import com.github.avrokotlin.avro4k.serializer.AvroDurationSerializer
-import com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer
-import com.github.avrokotlin.avro4k.serializer.InstantSerializer
-import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_DATE
-import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIMESTAMP_MICROS
-import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS
-import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIME_MICROS
-import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIME_MILLIS
-import com.github.avrokotlin.avro4k.serializer.LocalDateSerializer
-import com.github.avrokotlin.avro4k.serializer.LocalTimeSerializer
-import com.github.avrokotlin.avro4k.serializer.UUIDSerializer
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 
@@ -46,31 +36,24 @@ public data class AvroConfiguration(
      *
      * By default, to `false`.
      *
-     * @see [org.apache.avro.io.ValidatingEncoder]
-     * @see [org.apache.avro.io.ValidatingDecoder]
+     * **Only on the JVM**, where each encoding and decoding call is checked against the writer schema by Apache Avro's
+     * `org.apache.avro.io.ValidatingEncoder` and `org.apache.avro.io.ValidatingDecoder`. On the other platforms the flag
+     * is ignored for now: values are encoded and decoded without validation.
      */
     @ExperimentalAvro4kApi
     val validateSerialization: Boolean = false,
     /**
      * Resolves a logical type name to its corresponding [kotlinx.serialization.KSerializer] for generic decoding with [AnySerializer].
      *
+     * The defaults differ by platform, see [AvroBuilder.setLogicalTypeSerializer] for the list: the JVM decodes the uuid,
+     * date, time, timestamp and decimal logical types as Java types, the other platforms as Kotlin types where there is one.
+     *
      * To override the defaults, or provide additional logical types, you can configure it through `Avro { setLogicalTypeSerializer("your type", YourSerializer()) }`.
      *
      * @see AvroBuilder.setLogicalTypeSerializer
      */
     @ExperimentalAvro4kApi
-    val logicalTypes: Map<String, KSerializer<out Any>> =
-        mapOf(
-            AvroDurationSerializer.LOGICAL_TYPE_NAME to AvroDurationSerializer,
-            UUIDSerializer.LOGICAL_TYPE_NAME to UUIDSerializer,
-            BigDecimalSerializer.DECIMAL_LOGICAL_TYPE_NAME to BigDecimalSerializer,
-            BigDecimalSerializer.BIG_DECIMAL_LOGICAL_TYPE_NAME to BigDecimalSerializer,
-            LOGICAL_TYPE_NAME_DATE to LocalDateSerializer,
-            LOGICAL_TYPE_NAME_TIME_MILLIS to LocalTimeSerializer,
-            LOGICAL_TYPE_NAME_TIME_MICROS to LocalTimeSerializer,
-            LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS to InstantSerializer,
-            LOGICAL_TYPE_NAME_TIMESTAMP_MICROS to InstantSerializer
-        ),
+    val logicalTypes: Map<String, KSerializer<out Any>> = defaultLogicalTypes(),
 )
 
 /**

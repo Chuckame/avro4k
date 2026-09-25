@@ -8,8 +8,8 @@ import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.SerializationWorkflow
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
-import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import com.github.avrokotlin.avro4k.internal.defaultValueBytes
+import com.github.avrokotlin.avro4k.internal.genericFixedValue
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.resolveDefaultBranch
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
@@ -44,7 +44,6 @@ import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
 import kotlinx.serialization.modules.SerializersModule
-import org.apache.avro.generic.GenericData
 
 /**
  * Decodes the default value of a reader field that is missing from the writer schema, straight from the [JsonElement]
@@ -152,7 +151,7 @@ internal class JsonDefaultDecoder(
         when (currentAvroSchema.type) {
             AvroSchema.Type.BYTES -> primitive.content.defaultValueBytes()
             AvroSchema.Type.FIXED -> primitive.content.defaultValueBytes().copyOf(currentAvroSchema.fixedSize)
-            else -> primitive.content.toByteArray()
+            else -> primitive.content.encodeToByteArray()
         }
 
     override fun decodeBoolean(): Boolean {
@@ -280,8 +279,8 @@ internal class JsonDefaultDecoder(
 
             AvroSchema.Type.BYTES -> bytesValue()
 
-            // the generic value of a fixed carries its Apache schema, as the former path's: converted here, on this deprecated path only
-            AvroSchema.Type.FIXED -> GenericData.Fixed(avro4kToApache(currentAvroSchema), decodeFixed())
+            // the platform's generic value of a fixed, as the former path's (on the JVM, an Apache fixed carrying its schema)
+            AvroSchema.Type.FIXED -> genericFixedValue(currentAvroSchema, decodeFixed())
 
             else -> throw UnsupportedOperationException("A default value of type ${currentAvroSchema.type} cannot be decoded as a generic value")
         }

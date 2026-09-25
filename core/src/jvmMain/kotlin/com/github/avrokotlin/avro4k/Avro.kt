@@ -5,11 +5,8 @@ import com.github.avrokotlin.avro4k.internal.EnumResolver
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.PolymorphicResolver
 import com.github.avrokotlin.avro4k.internal.RecordResolver
+import com.github.avrokotlin.avro4k.internal.defaultSerializersModule
 import com.github.avrokotlin.avro4k.internal.schema.ValueVisitor
-import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
-import com.github.avrokotlin.avro4k.serializer.JavaStdLibSerializersModule
-import com.github.avrokotlin.avro4k.serializer.JavaTimeSerializersModule
-import com.github.avrokotlin.avro4k.serializer.KotlinStdLibSerializersModule
 import kotlinx.io.Buffer
 import kotlinx.io.readByteArray
 import kotlinx.serialization.BinaryFormat
@@ -21,7 +18,6 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.overwriteWith
-import kotlinx.serialization.modules.plus
 import kotlinx.serialization.serializer
 
 /**
@@ -48,12 +44,14 @@ public sealed class Avro(
     internal val polymorphicResolver = PolymorphicResolver(serializersModule) { avroSchema(it).fullName }
     internal val enumResolver = EnumResolver()
 
+    /**
+     * The default instance. Its serializers module differs by platform: the serializers of the Kotlin standard library
+     * types and [com.github.avrokotlin.avro4k.serializer.AnySerializer] everywhere, plus, on the JVM only, those of the
+     * java.time types and of `java.util.UUID`, `java.math.BigDecimal`, `java.math.BigInteger` and `java.net.URL`.
+     */
     public companion object Default : Avro(
         AvroConfiguration(),
-        JavaStdLibSerializersModule +
-            JavaTimeSerializersModule +
-            KotlinStdLibSerializersModule +
-            AnyTypeSerializersModule
+        defaultSerializersModule()
     )
 
     /**
@@ -79,7 +77,7 @@ public sealed class Avro(
      * - [AvroAlias] annotation will be used to set one or more aliases for a field or a named type (record, enum, fixed)
      * - Annotate fields with [AvroStringable] to force the field type to be a string in the schema
      * - Annotate a field with [AvroDefault] to set a default value for the field in the schema. The default value must be compatible with the field type.
-     * - Annotate a [java.math.BigDecimal] field with [AvroDecimal] to specify the scale and precision of the decimal avro logical type
+     * - Annotate a `java.math.BigDecimal` field with [AvroDecimal] to specify the scale and precision of the decimal avro logical type (JVM only)
      * - Annotate a field or a type with [AvroProp] to add a custom property to the generate type's schema
      *
      * ## Cache details
@@ -266,14 +264,18 @@ public class AvroBuilder internal constructor(avro: Avro) {
      *
      * By default, [com.github.avrokotlin.avro4k.serializer.AnySerializer] decodes the following logical types:
      * - `duration` as [com.github.avrokotlin.avro4k.serializer.AvroDuration]
-     * - `uuid` as [java.util.UUID]
-     * - `date` as [java.time.LocalDate]
-     * - `time-millis` as [java.time.LocalTime]
-     * - `time-micros` as [java.time.LocalTime]
-     * - `timestamp-millis` as [java.time.Instant]
-     * - `timestamp-micros` as [java.time.Instant]
-     * - `decimal` as [java.math.BigDecimal] with specific scale and precision
-     * - `big-decimal` as [java.math.BigDecimal] which allows any scale or precision
+     * - on the other platforms than the JVM:
+     *   - `uuid` as [kotlin.uuid.Uuid]
+     *   - `timestamp-millis` and `timestamp-micros` as [kotlin.time.Instant]
+     * - on the JVM:
+     *   - `uuid` as `java.util.UUID`
+     *   - `date` as `java.time.LocalDate`
+     *   - `time-millis` as `java.time.LocalTime`
+     *   - `time-micros` as `java.time.LocalTime`
+     *   - `timestamp-millis` as `java.time.Instant`
+     *   - `timestamp-micros` as `java.time.Instant`
+     *   - `decimal` as `java.math.BigDecimal` with specific scale and precision
+     *   - `big-decimal` as `java.math.BigDecimal` which allows any scale or precision
      *
      * @param logicalTypeName the name of the logical type to register the serializer for.
      * @param serializer the serializer to use for the logical type.
