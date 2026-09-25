@@ -465,6 +465,170 @@ three interleaved EA-off invocations per side, plus one EA-on invocation per sid
   conclusive. Together with M3-02's `complex` read @1 they form the **JVM watch list** for the M3-11+12 A/B and M3-17: if the
   EA-on polymorphic rows stay below baseline across ≥3 invocations there, investigate with a per-fork breakdown and JIT logs.
 
+### M3-11+12: runtime and public API on AvroSchema (211e304 before, 8045030 after)
+
+2026-09-25, same machine (Apple M2 Pro), JBR 21.0.11, JMH 1.37. "After" is `8045030`: the runtime and the public API on
+`AvroSchema`, including the fresh-equal-schema cache fix `1e0b313`. The `@Benchmark` bodies are identical on both sides:
+`git diff 211e304 8045030 -- benchmark/src` touches only `internal/CoreBridge.kt` (the `CoreSchema` alias and its two
+conversions) and the declared return type of `SchemaInferenceMicroBenchmark`'s two methods (`Schema` → `CoreSchema`).
+
+**How it was run.** Every row, end-to-end included, through `benchmarkAlloc` (so `-prof gc` is on for every number, on
+both sides), 3 forks × 5 warmup × 5 measurement iterations of 1 s, one Gradle invocation per side and mode covering every
+row below:
+
+```bash
+./gradlew :benchmark:benchmarkAlloc \
+  -Pbench='(Avro4k|micro\.(PolymorphicMicroBenchmark|NestedRecordMicroBenchmark|SchemaInferenceMicroBenchmark|FieldOrderMicroBenchmark|StringFieldMicroBenchmark|FreshWriterSchemaMicroBenchmark|CollectionMicroBenchmark\.(readLongs|writeLongs)))' \
+  -Pparams='shapeCount=10,1000;depth=8;size=100000' \
+  -PallocForks=3 -PallocWarmups=5 -PallocIterations=5 -PallocTime=1s -PallocJmhArgs='-rf json -rff <file>'
+# EA-off: shapeCount=1000 only, and -PallocJmhArgs='-jvmArgsAppend -XX:-DoEscapeAnalysis -rf json -rff <file>'
+```
+
+The end-to-end rows use 3 forks of 1 s iterations rather than the plugin's `avro4k` task (1 fork, 3 s iterations), so
+that each invocation has forks to compare. Order, all under `caffeinate -i`, nothing else running: base EA-on, head EA-on,
+base EA-off, head EA-off, base EA-on, head EA-on, base EA-on, head EA-on — **3 EA-on invocations per side** (9 forks),
+**1 EA-off invocation per side** (3 forks). `simple` @1 and @25 got **2 more EA-off invocations per side** afterwards,
+alternated, to settle the `simple` rows below. "sep" = every "after" invocation above (or below) every "before" one.
+Total ≈ 3 h 30 min of benchmarking.
+
+#### End-to-end (`:benchmark:avro4k` rows)
+
+| | EA-on ops/s, before → after (3 inv.) | Δ | sep | EA-off ops/s Δ | B/op EA-off, before → after |
+|---|---|---:|:-:|---:|---|
+| `complex` read @1 | 324,202 → 344,889 | +6.4% | n | +2.1% | 6,008 → 5,968 |
+| `complex` read @15 | 25,477 → 25,547 | +0.3% | n | +2.5% | 130,696 → 130,256 |
+| `complex` read @200 | 1,884 → 1,918 | +1.8% | Y | +0.1% | 1,751,340 → 1,745,260 |
+| `complex` write @1 | 694,484 → 687,570 | −1.0% | n | −3.3% | 1,936 → **1,816 (−6%)** |
+| `complex` write @15 | 40,434 → 41,451 | +2.5% | Y | −1.1% | 28,888 → **26,552 (−8%)** |
+| `complex` write @200 | 2,768 → **2,960** | **+6.9%** | Y | +6.2% | 387,691 → **356,570 (−8%)** |
+| `simple` read @1 | 4,184,741 → 3,993,155 | −4.6% | Y | −2.1% (3 inv., n) | 704 → 704 |
+| `simple` read @25 | 229,792 → 220,549 | −4.0% | n | −5.3% (3 inv., n) | 8,640 → 8,640 |
+| `simple` read @500 | 11,747 → 11,695 | −0.4% | n | +6.5% | 166,353 → 166,353 |
+| `simple` write @1 | 5,093,625 → 5,258,070 | +3.2% | n | +2.1% (3 inv., n) | 304 → **224 (−26%)** |
+| **`simple` write @25** | 326,855 → **277,923** | **−15.0%** | **Y** | **−16.6% (3 inv., n)** | 3,184 → **2,144 (−33%)** |
+| `simple` write @500 | 15,969 → 15,932 | −0.2% | n | +3.2% | 60,184 → **40,144 (−33%)** |
+| `lists` read @100 / @10000 | 7,506 → 7,666 / 75.9 → 76.4 | +2.1% / +1.0% | n / n | +1.6% / +0.6% | unchanged |
+| `lists` write @100 | 8,521 → 8,238 | −3.3% | n | −3.9% | 13,921 → **9,841 (−29%)** |
+| `lists` write @10000 | 76.3 → 74.2 | −2.7% | n | −3.7% | 1,360,404 → **960,327 (−29%)** |
+
+EA-on B/op is unchanged on every end-to-end row except `complex` write @200 (366,170 → 338,437 / 356,570 / 356,570).
+
+**The allocation win: −40 B per record structure encoded, with escape analysis off.** The shape is exact, and it is
+confined to the write paths:
+
+- one record written: `FieldOrder` write (every order), `FreshWriterSchema.writeReused`, `writeLongs`: **−40 B**;
+- `NestedRecord` write @depth 8: 624 → 304, **−320 B = 8 × 40**;
+- `simple` write @1 / @25 / @500: −80 / −1,040 / −20,040 B = **(n + 1) × 40** (the records plus their container);
+- `lists` write @100 / @10000: −4,080 / −400,077 B; `Polymorphic.writeConcrete` / `writePolymorphic` @1000: −40,040 B
+  each (1000 elements + the container). Reads are unchanged, except `complex` (−40 / −440 / −6,080 B at 1 / 15 / 200
+  clients).
+
+It is consistent with the runtime's record encoders now holding the model's record schema instead of going through
+Apache `Schema` accessors per record (not confirmed with a profiler). With escape analysis on, the JIT already removed that object on most rows, so EA-on B/op
+barely moves; JS and native will see the −40 B.
+
+#### Micro-benchmarks
+
+| | EA-on ops/s, before → after (3 inv.) | Δ | sep | EA-off ops/s Δ | B/op EA-off, before → after |
+|---|---|---:|:-:|---:|---|
+| `Polymorphic.readPolymorphic` @10 / @1000 | 1.530M → 1.531M / 13,616 → 13,706 | +0.1% / +0.7% | n / n | — / +2.8% | — / 180,352 → 180,352 |
+| `Polymorphic.writePolymorphic` @10 / @1000 | 1.792M → 1.757M / 22,802 → 22,249 | −1.9% / −2.4% | Y / Y | — / +0.8% | — / 128,184 → **88,144 (−31%)** |
+| `Polymorphic.readConcrete` @10 / @1000 | 2.825M → **3.262M** / 34,825 → 33,990 | **+15.5%** / −2.4% | Y / n | — / +5.5% | — / 76,352 → 76,352 |
+| **`Polymorphic.writeConcrete`** @10 / @1000 | 4.834M → 4.706M / 54,465 → **47,203** | −2.6% / **−13.3%** | n / n | — / **+23.7%** | — / 72,184 → **32,144 (−55%)** |
+| `NestedRecord.read` @depth 8 | 7.855M → 7.873M | +0.2% | n | 0.0% | 640 → 640 |
+| `NestedRecord.write` @depth 8 | 8.550M → 8.933M | +4.5% | Y | +6.0% | 624 → **304 (−51%)** |
+| `SchemaInference.warmCacheHit` | 304.5M → 316.1M | +3.8% | Y | +2.9% | 0 → 0 |
+| **`SchemaInference.coldInference`** | 9,576 → **483,360** | **×50** | Y | ×49 | 1,851,980 → **15,304 (−99%)** |
+| `SchemaInference.newAvroInstance` | 2.517M → 2.517M | 0.0% | n | −1.7% | 3,048 → 3,232 (+184 B) |
+| `FieldOrder.read` matching / swapped / reversed | 8.42M → 8.48M / 8.16M → 8.14M / 9.58M → 9.66M | +0.7% / −0.2% / +0.9% | n | within ±1.6% | 248 → 248 |
+| `FieldOrder.write` matching / swapped / reversed | 11.12M → 11.14M / 6.27M → 6.26M / 6.25M → 6.24M | within ±0.2% | n | within +0.8% | 120 → 80 / 664 → 624 / 664 → 624 |
+| `StringField.readNonNull` / `readNullable` | 2.803M → 2.741M / 2.058M → 2.064M | −2.2% / +0.3% | Y / n | −2.6% / +2.1% | 1,480 → 1,480 |
+| `StringField.writeNonNull` / `writeNullable` | 3.711M → 3.736M / 2.745M → 2.861M | +0.7% / +4.2% | n / Y | −5.3% / +5.9% | 504 → 464 |
+| `Collection.readLongs` / `writeLongs` @100k | 524 → 525 / 701 → 707 | +0.3% / +0.8% | n / n | +1.0% / +0.4% | 2,800,365 → same / 194 → 154 |
+
+- **Cold schema inference is 50× faster and allocates 99% less** (1.85 MB → 15 kB per inference): it builds the
+  `AvroSchema` directly instead of producing an Apache schema through its json. Expected, and the largest delta here.
+- **`Polymorphic.writeConcrete` @1000 is a JVM-only regression candidate.** EA-on its forks are bimodal on both sides:
+  before, 4 of 9 forks at ~62k and 5 at ~48k ops/s; after, 7 of 9 at ~45k and 2 at ~53k — each mode sits below its
+  "before" counterpart. The fast "before" forks are the ones where escape analysis removes the per-element object: the
+  one "before" invocation without a fast fork measured 32,144 B/op EA-on, the other two 10,811. "After", no fork gets
+  there (32,144 B/op in all three). The "after" code allocates 40 B less per element (EA-off 72,184 → 32,144 B, and EA-off
+  throughput **+23.7%**), but on the JVM it loses the scalar replacement the "before" code sometimes got. Not separated
+  across invocations, so not established; platform-neutral it is a clear win.
+- `readConcrete` @10 +15.5% is separated and above 10%, but its per-invocation errors are 2–13%; it is a real but noisy
+  row, not a claimed speedup.
+
+#### JVM watch list
+
+- **`complex` read @1 (M3-02's −14%): does not reproduce against this base.** Its forks are still bimodal — ~290–296k or
+  ~330–366k ops/s — but "after" lands in the fast mode more often: **8 of 9 forks** vs 6 of 9 before, and its fast mode is
+  as high or higher (330–366k vs 332–347k). EA-on +6.4% (not separated), EA-off +2.1%, B/op unchanged. It stays bimodal
+  and stays on the list for M3-17.
+- **Polymorphic EA-on rows: no M3-11+12 regression beyond `writeConcrete` @1000 above.** `readPolymorphic` is +0.1% /
+  +0.7% (n), `writePolymorphic` −1.9% / −2.4% — separated across 3 invocations, so a real but small JVM cost, with
+  EA-off +0.8% and −40 B per value. `readPolymorphic` @1000 EA-on sits at 13.6–13.7k on both sides, the same level M3-06's
+  "after" measured (13,878), i.e. M3-06's EA-on −9.5% has neither been recovered nor worsened here.
+- **New: `simple` write @25, −15.0% EA-on (separated) and −16.6% EA-off (3 invocations each; lower on average,
+  not separated). This is a regression in expected throughput, JVM-only in cause, and not an escape-analysis effect.** Per fork, both sides are bimodal in both
+  modes, and "after" rarely hits the fast mode:
+
+  | `simple` write @25 | fast forks (~330–360k) | slow forks (~216–242k) | fast mode | slow mode |
+  |---|---|---|---|---|
+  | EA-on, before / after (9 forks each) | 8 / **3** | 1 / 6 | 332–346k / 356–360k | 223k / 237–240k |
+  | EA-off, before / after (9 forks each) | 6 / **1** | 3 / 8 | 328–346k / 357k | 224–228k / 216–242k |
+
+  Within each mode "after" is as fast or faster, and it allocates 33% less (EA-off 3,184 → 2,144 B): the work per op did
+  not grow; the JIT settles into the slow compilation more often. @1 and @500 do not show it (+3.2% / −0.2% EA-on,
+  +2.1% / +3.2% EA-off). Needs JIT logs (`-XX:+PrintCompilation`, inlining decisions on the record encoder) before M3-17.
+- `simple` read @1 / @25 are −4.6% / −4.0% EA-on and −2.1% / −5.3% EA-off: under 10%, only @1 EA-on separated (by 0.2%),
+  B/op unchanged. Not established; recorded so M3-17 can see whether it persists.
+
+#### Fresh writer schema per call (new `FreshWriterSchemaMicroBenchmark`)
+
+A small record (`SmallRecord`: a long and a boolean) decoded and encoded with a writer schema parsed again from its json on
+every call, vs the same parsed instance reused. The "before" side cannot express the "after" API, so it ran an
+**uncommitted variant** of the class in the base worktree: the same file with the fresh schema passed to core as the
+Apache `Schema` itself (no `toAvro4k()`, which base's core did not need), `parseApache` returning that Apache `Schema`
+(so it measures the parse alone), and without the three `AvroSchema`-json methods (`readFreshAvroSchema`,
+`writeFreshAvroSchema`, `parseAvroSchema`), for which base has no decode/encode entry point.
+
+| | EA-on ops/s, before → after (3 inv.) | Δ | sep | EA-off ops/s Δ | B/op EA-off, before → after |
+|---|---|---:|:-:|---:|---|
+| `readReused` / `writeReused` | 31.94M → 32.48M / 37.79M → 37.06M | +1.7% / −1.9% | n / n | −2.0% / +3.1% | 192 → 192 / 120 → 80 |
+| `parseApache` (after: parse + `toAvro4k()`) | 641,067 → 588,512 | −8.2% | Y | −12.3% | 7,576 → 8,264 |
+| **`readFreshApache`** | 561,132 → 571,279 | +1.8% | n | +0.7% | 8,560 → 8,456 |
+| **`writeFreshApache`** | 565,287 → 578,042 | +2.3% | n | +2.8% | 8,488 → 8,344 |
+| `parseAvroSchema` (after only) | — → 1,092,444 | | | | — → 4,008 |
+| `readFreshAvroSchema` / `writeFreshAvroSchema` (after only) | — → 908,533 / 913,001 | | | | — → 4,672 / 4,560 |
+
+- **The cache fix holds: a fresh-but-equal Apache schema costs the same per call as before the runtime switch** (+1.8% /
+  +2.3%, within noise). Over its own parse it adds exactly what a reused schema costs: EA-off, `readFreshApache` −
+  `parseApache` = **192 B** = `readReused`, and the write **80 B** = `writeReused`. Before, the same difference was 984 B /
+  912 B, so the fresh path now allocates *less* than it did. The conversion itself makes `parseApache` 8–12% slower (one
+  structural hash + equals per call to find the canonical conversion), which the cheaper decode offsets.
+- **No growth of the identity tables:** within every fork the fresh rows' 5 iterations are flat (e.g. `readFreshAvroSchema`
+  901–923k ops/s, `readFreshApache` 547–595k), where seeding every fresh node would slow each iteration down.
+- **Parsing straight to `AvroSchema` is the fast path: 1.6× the Apache path** end to end (909k vs 571k ops/s), since the
+  json parse alone is 1.7× faster than Apache's `Schema.Parser` and allocates 47% less (EA-off). Its equality lookup is not free, though: over its parse it adds
+  664 B / 552 B (EA-off) where a reused schema costs 192 B / 80 B, i.e. **~470 B per call on the `AvroSchema`-equality
+  fallback**, which the Apache path (whose converter answers from its own equality layer before the runtime sees the
+  schema) does not pay. A follow-up for whoever owns the caches, not a regression against anything before.
+
+#### Verdict
+
+- **Real (≥ 3 invocations agree, or ≥ 10%):** −40 B per encoded record structure EA-off (all write rows, up to −55% B/op);
+  cold inference ×50; `complex` write @200 +6.9% (EA-off +6.2%); `NestedRecord.write` +4.5%; `warmCacheHit` +3.8%;
+  `StringField.writeNullable` +4.2%; `readConcrete` @10 +15.5% (noisy). Small real costs: `writePolymorphic` −1.9% /
+  −2.4% EA-on, `StringField.readNonNull` −2.2%, and `parseApache` −8% (the `toAvro4k()` conversion, by design).
+- **Regression, stated plainly: `simple` write @25 is 15% slower EA-on and 17% slower EA-off**, over 3 invocations per
+  side in each mode, from the JIT landing in its slow mode in 6–8 of 9 forks instead of 1–3; per-op work went down.
+  **`Polymorphic.writeConcrete` @1000 is 13% slower EA-on** (not separated, but both of its fork modes are lower), +24%
+  EA-off. Both are JVM-only in cause and go on the watch list for M3-17 with JIT logs; neither is visible off the JVM.
+- **Noise:** every other row, i.e. within ±5% and not separated — `complex` read, `lists`, `FieldOrder`, `Collection`,
+  `NestedRecord.read`, `simple` read.
+- **Watch list:** `complex` read @1 no longer regresses (8/9 fast forks); the polymorphic EA-on rows are flat against this
+  base except `writeConcrete` @1000; `simple` write @25 joins the list.
+
 ## Run the benchmark locally
 
 Just execute the benchmark:
