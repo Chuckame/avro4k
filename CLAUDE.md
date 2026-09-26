@@ -21,6 +21,8 @@ cherry-pick, not a base to merge.
 - **Never write plan step codes (M1, M3-09, B6, C2, A5, …) in source code** — comments, KDoc, test
   names, strings, build scripts. They live only in `docs/plans/`; explain the *why* in plain words instead.
 - Benchmarks are strictly serialized — never run two benchmark tasks concurrently, on any machine.
+- Benchmarks run on **AC power with macOS Low Power Mode off** — `:benchmark:checkBenchmarkPower` enforces it before
+  every JMH task; commits older than the guard must be checked by hand with `pmset -g batt` / `pmset -g`.
 - Nothing is "done" until `PROGRESS.md` is updated **and committed**.
 - Measured numbers go into `benchmark/README.md` in the same commit as the change that produced
   them, so a regression is always bisectable.

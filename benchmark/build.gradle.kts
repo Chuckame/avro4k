@@ -339,3 +339,44 @@ afterEvaluate {
         }
     }
 }
+
+/**
+ * Refuses to benchmark on battery or in macOS Low Power Mode. Both cap the CPU frequency and slow the JIT's compiler
+ * threads, which shifts absolute throughput by tens of percent and changes which compiled shape a fork settles into, so
+ * such numbers are not comparable with any other run. Skipped outside macOS. `-PallowReducedPower` bypasses it for a
+ * smoke run whose numbers will be thrown away.
+ */
+abstract class CheckBenchmarkPower : DefaultTask() {
+    @get:Input
+    abstract val allowReducedPower: Property<Boolean>
+
+    @TaskAction
+    fun check() {
+        if (allowReducedPower.get() || !System.getProperty("os.name").startsWith("Mac")) return
+        val battery = run("pmset", "-g", "batt")
+        val settings = run("pmset", "-g")
+        val onAc = battery.contains("'AC Power'")
+        val lowPowerMode = Regex("""lowpowermode\s+1""").containsMatchIn(settings)
+        if (!onAc || lowPowerMode) {
+            throw GradleException(
+                "Benchmarks need AC power with Low Power Mode off (on AC: $onAc, Low Power Mode: $lowPowerMode). " +
+                    "Plug the machine in and run `sudo pmset -a lowpowermode 0`, or pass -PallowReducedPower for a throwaway run."
+            )
+        }
+    }
+
+    private fun run(vararg command: String): String =
+        ProcessBuilder(*command).redirectErrorStream(true).start().inputStream.bufferedReader().use { it.readText() }
+}
+
+val checkBenchmarkPower =
+    tasks.register<CheckBenchmarkPower>("checkBenchmarkPower") {
+        allowReducedPower.set(providers.gradleProperty("allowReducedPower").map { it != "false" }.orElse(false))
+        outputs.upToDateWhen { false }
+    }
+
+// Every task that runs JMH: the plugin's per-configuration `main…Benchmark` tasks and `benchmarkAlloc`
+tasks.matching {
+    it.name == "benchmarkAlloc" ||
+        (it.name.startsWith("main") && it.name.endsWith("Benchmark") && it.name != "mainBenchmarkGenerate")
+}.configureEach { dependsOn(checkBenchmarkPower) }
