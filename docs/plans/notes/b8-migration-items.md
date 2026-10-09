@@ -213,9 +213,19 @@ One line each, with where the details are. Not rewritten here.
   dependency. Fixed on the way: a plain `java.util.List` (not a `GenericArray`) in a nullable position now decodes
   when its element serializer reads the writer schema (a decimal, a nested plain list), instead of failing with
   `Not an array` (see [`m3-19.md`](m3-19.md)).
-- **#429:** `AnySerializer` (and so Confluent's generic decoding) decodes `uuid` to `kotlin.uuid.Uuid` on the JVM too,
-  and generated code types `uuid` properties as `kotlin.uuid.Uuid`; how to go back to `java.util.UUID` is in the
-  gradle-plugin README.
+- **#429:** on the JVM, a `uuid` (string or `fixed(16)`) decoded as `Any` is now a `kotlin.uuid.Uuid`, no longer a
+  `java.util.UUID` — the default of `AvroConfiguration.logicalTypes`, so it applies to `AnySerializer`, to
+  `Avro.decodeFromByteArray<Any>`, to `@Contextual Any` fields and to everything decoded generically by the Confluent
+  serdes (`GenericAvro4kKafkaDeserializer`/`ReflectAvro4kKafkaDeserializer`: a `uuid` value at the root or in a
+  `GenericRecord` field). Back to the old type: `Avro { setLogicalTypeSerializer("uuid", UUIDSerializer) }`.
+  Unchanged: a property typed `java.util.UUID` (with `@Contextual` or `UUIDSerializer`) encodes and decodes as before,
+  and encoding through `Any` accepts both a `java.util.UUID` and a `kotlin.uuid.Uuid`, so a decoded generic value
+  re-encodes to the same bytes. Code generation (kotlin-generator and the gradle plugin) types `uuid` properties as
+  `kotlin.uuid.Uuid` with `KotlinUuidSerializer`; back to `java.util.UUID`:
+  `logicalTypes { register("uuid").asType("java.util.UUID", "com.github.avrokotlin.avro4k.serializer.UUIDSerializer") }`
+  (gradle-plugin README). `kotlin.uuid.Uuid` is stable since Kotlin 2.4, so no opt-in is needed with Kotlin 2.4+; a
+  project compiling with an older Kotlin API version must opt in to `kotlin.uuid.ExperimentalUuidApi` to *name* the
+  type (in generated code too), but not to receive one as `Any`.
 
 - **`AvroDecoder.decodeValue()`** (deprecated) is removed (user decision, 2026-10-09; unit M3-23 in `m3-decomposition.md`).
   Custom serializers read `currentWriterSchema` and decode with the matching typed `decode*` method, or use the
@@ -230,9 +240,10 @@ These are **silent**: the same code behaves differently on the JVM and elsewhere
 - **`Avro.Default`'s serializers module**: the Kotlin standard library serializers and `AnySerializer` everywhere; the
   java.time, `UUID`, `BigDecimal`, `BigInteger` and `URL` serializers on the JVM only.
 - **`AvroConfiguration.logicalTypes`' defaults** (what `AnySerializer` decodes a logical type to): `duration` as
-  `AvroDuration` everywhere; on the JVM `uuid` as `java.util.UUID`, `date`/`time-*`/`timestamp-*` as java.time types,
-  `decimal`/`big-decimal` as `BigDecimal`; on JS and native `uuid` as `kotlin.uuid.Uuid` and
-  `timestamp-millis`/`-micros` as `kotlin.time.Instant` (the others decode as their underlying Avro type).
+  `AvroDuration` and `uuid` as `kotlin.uuid.Uuid` everywhere (since [`m3-21.md`](m3-21.md), #429, `uuid` is no longer
+  a platform difference); on the JVM `date`/`time-*`/`timestamp-*` as java.time types, `decimal`/`big-decimal` as
+  `BigDecimal`; on JS and native `timestamp-millis`/`-micros` as `kotlin.time.Instant` (the others decode as their
+  underlying Avro type).
 - **Error messages** name classes by their qualified name on the JVM and native, by their simple name on JS.
 - `AnySerializer`'s encoding hook for non-serializable types takes a `Class` on the JVM (unchanged) and a `KClass` on
   the other platforms (internal API).
