@@ -193,10 +193,17 @@ One line each, with where the details are. Not rewritten here.
 
 ## Removed or changed by the GitHub "V3" issues (user decisions, 2026-10-09)
 
-- **#318:** the deprecated okio overloads (`encodeToSink`/`decodeFromSource` on `okio.BufferedSink`/`BufferedSource`)
-  are removed; core no longer depends on okio. Use the kotlinx-io overloads (`kotlinx-io-okio` bridges an okio stream).
-- **#319:** the deprecated `Avro.encodeToStream`/`decodeFromStream` and `AvroSingleObject.encodeToStream`/`decodeFromStream`
-  are removed. Use the kotlinx-io overloads (`asSink()`/`asSource()` wrap a Java stream).
+- **#318:** the deprecated okio overloads (`Avro.encodeToSink`/`decodeFromSource` on `okio.BufferedSink`/`BufferedSource`,
+  all three shapes of each) are removed; core no longer depends on okio, so it no longer comes transitively. Use the
+  kotlinx-io overloads: `kotlinx-io-okio` bridges an okio stream (`source.asKotlinxIoRawSource().buffered()`,
+  `sink.asKotlinxIoRawSink().buffered()`, then flush the sink). Behaviour change: the removed okio decoding overload
+  consumed exactly the decoded bytes from the okio source; a buffered kotlinx-io source reads ahead, so decode consecutive
+  values from the same kotlinx-io `Source` rather than re-wrapping the okio source each time.
+- **#319:** the deprecated `Avro.encodeToStream`/`decodeFromStream` (all three shapes of each) and
+  `AvroSingleObject.encodeToStream`/`decodeFromStream` are removed. Use the kotlinx-io overloads
+  (`outputStream.asSink().buffered()` / `inputStream.asSource().buffered()` wrap a Java stream; flush or close the sink).
+  Not removed (never deprecated): `Avro.decodeFromByteBuffer` and `AvroObjectContainer`'s `OutputStream`/`InputStream`
+  entry points (`openWriter`, `decodeFromStream`).
 - **#320:** `Record` and `ListRecord` are removed; `encodeToGenericData` returns an Apache `GenericData.Record`.
 - **#429:** `AnySerializer` (and so Confluent's generic decoding) decodes `uuid` to `kotlin.uuid.Uuid` on the JVM too,
   and generated code types `uuid` properties as `kotlin.uuid.Uuid`; how to go back to `java.util.UUID` is in the
