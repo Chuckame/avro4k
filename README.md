@@ -1,7 +1,7 @@
 ![build-main](https://github.com/avro-kotlin/avro4k/workflows/build-main/badge.svg)
 [![Download](https://img.shields.io/maven-central/v/com.github.avro-kotlin.avro4k/avro4k-core)](https://search.maven.org/artifact/com.github.avro-kotlin.avro4k/avro4k-core)
-[![Kotlin](https://img.shields.io/badge/kotlin-2.3-blue.svg?logo=kotlin)](http://kotlinlang.org)
-[![Avro spec](https://img.shields.io/badge/avro%20spec-1.12.1-blue.svg?logo=apache)](https://avro.apache.org/docs/1.12.1/specification/)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.4-blue.svg?logo=kotlin)](http://kotlinlang.org)
+[![Avro spec](https://img.shields.io/badge/avro%20spec-1.12.2-blue.svg?logo=apache)](https://avro.apache.org/docs/++version++/specification/)
 
 # Introduction
 
@@ -224,7 +224,7 @@ fun main() {
 
 </details>
 
-> For more details, check in the avro spec the [single object encoding](https://avro.apache.org/docs/1.12.1/specification/#single-object-encoding).
+> For more details, check in the avro spec the [single object encoding](https://avro.apache.org/docs/++version++/specification/#single-object-encoding).
 
 ## Object container
 
@@ -271,7 +271,17 @@ fun main() {
 
 </details>
 
-> For more details, see the Avro spec on [object container files](https://avro.apache.org/docs/1.12.1/specification/#object-container-files).
+The writer builder also allows customizing the file `codec`, `syncInterval`, `metadata`, and the block `syncMarker`.
+By default a random 16-byte sync marker is generated per file, so encoding the same data twice produces different bytes.
+Pass a fixed `syncMarker` to get byte-for-byte deterministic output (useful for tests or content-addressed storage):
+
+```kotlin
+AvroObjectContainer.openWriter(fileStream) {
+    syncMarker(ByteArray(16) { 0 })
+}.use { writer -> /* ... */ }
+```
+
+> For more details, see the Avro spec on [object container files](https://avro.apache.org/docs/++version++/specification/#object-container-files).
 
 # Important notes
 
@@ -393,7 +403,7 @@ Writing schemas manually or using the Java based `SchemaBuilder` can be tedious.
 Also, it provides native compatibility with data classes (including open and sealed classes), inline classes, any collection, array, enums, and primitive values.
 
 > [!NOTE]
-> For more information about the avro schema, please refer to the [avro specification](https://avro.apache.org/docs/1.12.1/specification/)
+> For more information about the avro schema, please refer to the [avro specification](https://avro.apache.org/docs/++version++/specification/)
 
 To allow generating a schema for a specific class, you need to annotate it with `@Serializable`:
 
@@ -833,7 +843,7 @@ To be able of reading from different written schemas, or able of writing to diff
 with `@AvroAlias`. The given aliases may contain the full name of the alias type or only the name. A FIXED type gets aliases through its value class, see
 [Change type name (FIXED)](#change-type-name-fixed).
 
-> [Avro spec link](https://avro.apache.org/docs/1.12.1/specification/#aliases)
+> [Avro spec link](https://avro.apache.org/docs/++version++/specification/#aliases)
 
 > [!NOTE]
 > Aliases are not impacted by [naming strategy](#field-naming-strategy-overall-change), so you need to provide aliases directly applying the corresponding naming strategy if you
@@ -880,7 +890,7 @@ println(Avro.schema<BigQueryJson>().toJsonElement()) // {"type":"string","sqlTyp
 ```
 
 > [!NOTE]
-> This impacts only the schema generation. For more details, check the [avro specification](https://avro.apache.org/docs/1.12.1/specification/#schema_props).
+> This impacts only the schema generation. For more details, check the [avro specification](https://avro.apache.org/docs/++version++/specification/#schema_props).
 
 > [!WARNING]
 > Do not use `@org.apache.avro.reflect.AvroMeta` as this annotation is not visible by Avro4k.

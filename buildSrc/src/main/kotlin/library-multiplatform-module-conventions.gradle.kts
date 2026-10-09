@@ -18,10 +18,7 @@ kotlin {
             "com.github.avrokotlin.avro4k.InternalAvro4kApi",
             "com.github.avrokotlin.avro4k.ExperimentalAvro4kApi",
         )
-        freeCompilerArgs.addAll(
-            "-Xcontext-parameters",
-            "-Xexpect-actual-classes",
-        )
+        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
     jvmToolchain(11)

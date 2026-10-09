@@ -7,11 +7,11 @@ plugins {
 
 description = "Avro4k's compatible code generator"
 
-val commonExpectedGeneratedSources by sourceSets.creating {
+val commonExpectedGeneratedSources = sourceSets.create("commonExpectedGeneratedSources") {
     kotlin.srcDir(file("src/test/expected-sources-common"))
 }
 idea.module.testSources += commonExpectedGeneratedSources.kotlin
-val commonExpectedGeneratedSourcesImplementation by configurations.getting
+val commonExpectedGeneratedSourcesImplementation = configurations["commonExpectedGeneratedSourcesImplementation"]
 
 val allExpectedSourceSets =
     file("src/test/expected-sources").list().map { testCase ->
@@ -33,7 +33,7 @@ val allExpectedSourceSets =
         idea.module.testSources += sourceSet.kotlin
         sourceSet
     }
-val testExpectedSourcesClasses by tasks.registering {
+val testExpectedSourcesClasses = tasks.register("testExpectedSourcesClasses") {
     group = "build"
     description = "Compile all expected-sources source sets at once"
 
@@ -66,6 +66,14 @@ val fixedTypesRoundTripTest by tasks.registering(Test::class) {
 }
 tasks.test {
     dependsOn(fixedTypesRoundTripTest)
+}
+// Like the test source set, compiled on a Java 17+ toolchain as JUnit 6 requires it
+val fixedTypesRoundTripToolchain = Action<JavaToolchainSpec> { languageVersion = JavaLanguageVersion.of(21) }
+tasks.named<JavaCompile>(fixedTypesRoundTrip.compileJavaTaskName) {
+    javaCompiler = javaToolchains.compilerFor(fixedTypesRoundTripToolchain)
+}
+tasks.named<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>(fixedTypesRoundTrip.getCompileTaskName("kotlin")) {
+    kotlinJavaToolchain.toolchain.use(javaToolchains.launcherFor(fixedTypesRoundTripToolchain))
 }
 
 dependencies {

@@ -9,6 +9,7 @@ import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer
 import org.apache.avro.Schema
 import org.apache.avro.file.CodecFactory
+import org.apache.avro.file.DataFileConstants
 import org.apache.avro.file.DataFileStream
 import org.apache.avro.file.DataFileWriter
 import org.apache.avro.io.DatumReader
@@ -42,9 +43,16 @@ public sealed class AvroObjectContainer(
     ): AvroObjectContainerWriter<T> {
         val datumWriter: DatumWriter<T> = KotlinxSerializationDatumWriter(serializer, avro)
         val dataFileWriter = DataFileWriter(datumWriter)
-        builder(AvroObjectContainerBuilder(dataFileWriter))
+        val containerBuilder = AvroObjectContainerBuilder(dataFileWriter)
+        builder(containerBuilder)
         // Apache's file writer needs its own model, for the header: converted once per file, through the cached converter
-        dataFileWriter.create(avro4kToApache(schema), outputStream)
+        val apacheSchema = avro4kToApache(schema)
+        val syncMarker = containerBuilder.syncMarker
+        if (syncMarker != null) {
+            dataFileWriter.create(apacheSchema, outputStream, syncMarker)
+        } else {
+            dataFileWriter.create(apacheSchema, outputStream)
+        }
         return AvroObjectContainerWriter(dataFileWriter)
     }
 
@@ -105,6 +113,22 @@ public inline fun <reified T> AvroObjectContainer.decodeFromStream(
 
 @ExperimentalAvro4kApi
 public class AvroObjectContainerBuilder internal constructor(private val fileWriter: DataFileWriter<*>) {
+    internal var syncMarker: ByteArray? = null
+        private set
+
+    /**
+     * By default a random 16-byte [sync marker](https://avro.apache.org/docs/1.12.0/specification/#object-container-files)
+     * is generated per file, so encoding the same data twice produces different bytes.
+     * Setting a [syncMarker] replaces the use of random sync markers by the given static [ByteArray] to get byte-for-byte deterministic output (useful for tests or
+     * content-addressed storage).
+     */
+    public fun syncMarker(value: ByteArray) {
+        require(value.size == DataFileConstants.SYNC_SIZE) {
+            "sync marker must be exactly ${DataFileConstants.SYNC_SIZE} bytes, got ${value.size}"
+        }
+        syncMarker = value.copyOf()
+    }
+
     public fun metadata(
         key: String,
         value: ByteArray,
