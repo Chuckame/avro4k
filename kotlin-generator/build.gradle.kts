@@ -29,6 +29,13 @@ val allExpectedSourceSets =
         tasks.named(sourceSet.classesTaskName) {
             dependsOn(tasks.named(commonExpectedGeneratedSources.classesTaskName))
         }
+        // The generated code must also compile for projects on an older Kotlin API version, where some types it may name
+        // are still experimental (kotlin.uuid.Uuid is stable since Kotlin 2.4 only): the generated files have to opt in
+        kotlin.target.compilations.named(sourceSet.name) {
+            compileTaskProvider.configure {
+                compilerOptions.apiVersion = org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_3
+            }
+        }
         // make them green in IntelliJ !
         idea.module.testSources += sourceSet.kotlin
         sourceSet

@@ -1,6 +1,7 @@
 @file:OptIn(
-    InternalAvro4kApi::class,
     ExperimentalAvro4kApi::class,
+    ExperimentalUuidApi::class,
+    InternalAvro4kApi::class,
 )
 
 import com.github.avrokotlin.avro4k.AvroProp
@@ -10,6 +11,7 @@ import com.github.avrokotlin.avro4k.`internal`.AvroGenerated
 import com.github.avrokotlin.avro4k.serializer.KotlinUuidSerializer
 import kotlin.OptIn
 import kotlin.jvm.JvmInline
+import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 

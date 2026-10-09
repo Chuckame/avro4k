@@ -1,0 +1,27 @@
+{
+    "type": "record",
+    "name": "NestedRecordWithFileAnnotations",
+    "doc": "Generated with extra opt-ins and annotations on every file",
+    "fields": [
+        {
+            "name": "uuid",
+            "type": {
+                "type": "string",
+                "logicalType": "uuid"
+            }
+        },
+        {
+            "name": "nested",
+            "type": {
+                "type": "record",
+                "name": "NestedRecord",
+                "fields": [
+                    {
+                        "name": "plain",
+                        "type": "string"
+                    }
+                ]
+            }
+        }
+    ]
+}

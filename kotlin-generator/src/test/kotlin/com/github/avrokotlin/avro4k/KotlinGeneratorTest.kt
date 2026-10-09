@@ -1,8 +1,12 @@
 package com.github.avrokotlin.avro4k
 
+import com.squareup.kotlinpoet.AnnotationSpec
+import com.squareup.kotlinpoet.ClassName
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.file.shouldHaveSameStructureAndContentAs
+import io.kotest.matchers.string.shouldContain
 import org.apache.avro.Schema
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.junit.jupiter.params.ParameterizedTest
@@ -49,6 +53,17 @@ class KotlinGeneratorTest {
         }
     }
 
+    @Test
+    fun `an OptIn file annotation is rejected as its markers belong to the single file opt-in`() {
+        val exception =
+            shouldThrow<IllegalArgumentException> {
+                KotlinGenerator(
+                    fileAnnotations = listOf(AnnotationSpec.builder(ClassName("kotlin", "OptIn")).addMember("%T::class", ClassName("com.example", "MyApi")).build())
+                )
+            }
+        exception.message shouldContain "fileOptIns"
+    }
+
     companion object {
         @OptIn(ExperimentalPathApi::class)
         @JvmStatic
@@ -81,8 +96,16 @@ class KotlinGeneratorTest {
                             logicalTypeName = "customLogicalTypeWithKSerializer",
                             kotlinClassName = "com.example.CustomLogicalType",
                             kSerializerClassName = "com.example.CustomLogicalType.TheNestedSerializer"
+                        ),
+                        KotlinGenerator.LogicalTypeDescriptor(
+                            logicalTypeName = "optInRequiringLogicalType",
+                            kotlinClassName = "com.example.OptInRequiringType",
+                            kSerializerClassName = "com.example.OptInRequiringTypeSerializer",
+                            requiredOptIns = listOf("com.example.ExperimentalCustomApi")
                         )
-                    ) + resolveTestCaseLogicalTypes(testName)
+                    ) + resolveTestCaseLogicalTypes(testName),
+                fileOptIns = resolveTestCaseFileOptIns(testName),
+                fileAnnotations = resolveTestCaseFileAnnotations(testName)
             )
         if (schemaFile.isDirectory) {
             generator.generateKotlinClassesFromFiles(schemaFile.listFiles()!!.toList()).flatMap { it.second }
@@ -111,6 +134,23 @@ class KotlinGeneratorTest {
                         kSerializerClassName = "com.github.avrokotlin.avro4k.serializer.UUIDSerializer"
                     )
                 )
+
+            else -> emptyList()
+        }
+
+    /** A user's own marker, and one the generator already opts in to, which must not be repeated. */
+    private fun resolveTestCaseFileOptIns(testName: String): List<String> =
+        when {
+            testName.endsWith("-with-file-annotations") ->
+                listOf("com.example.ExperimentalGlobalApi", "com.github.avrokotlin.avro4k.InternalAvro4kApi")
+
+            else -> emptyList()
+        }
+
+    private fun resolveTestCaseFileAnnotations(testName: String): List<AnnotationSpec> =
+        when {
+            testName.endsWith("-with-file-annotations") ->
+                listOf(AnnotationSpec.builder(Suppress::class).addMember("%S", "RedundantVisibilityModifier").build())
 
             else -> emptyList()
         }

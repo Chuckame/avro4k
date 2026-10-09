@@ -1,0 +1,77 @@
+{
+    "type": "record",
+    "name": "NestedLogicalTypeRequiringOptIn",
+    "doc": "Generated with a logical type whose Kotlin class requires an opt-in",
+    "fields": [
+        {
+            "name": "custom",
+            "type": {
+                "type": "string",
+                "logicalType": "optInRequiringLogicalType"
+            }
+        },
+        {
+            "name": "nullableCustoms",
+            "type": [
+                "null",
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "logicalType": "optInRequiringLogicalType"
+                    }
+                }
+            ],
+            "default": null
+        },
+        {
+            "name": "union",
+            "type": [
+                "int",
+                {
+                    "type": "string",
+                    "logicalType": "optInRequiringLogicalType"
+                }
+            ]
+        },
+        {
+            "name": "uuid",
+            "type": {
+                "type": "string",
+                "logicalType": "uuid"
+            }
+        },
+        {
+            "name": "nested",
+            "type": {
+                "type": "record",
+                "name": "NestedWithoutOptIn",
+                "fields": [
+                    {
+                        "name": "plain",
+                        "type": "string"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "nestedUsingTheType",
+            "type": {
+                "type": "record",
+                "name": "NestedUsingTheType",
+                "fields": [
+                    {
+                        "name": "customs",
+                        "type": {
+                            "type": "map",
+                            "values": {
+                                "type": "string",
+                                "logicalType": "optInRequiringLogicalType"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -9,11 +9,13 @@ import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.MemberName
 import com.squareup.kotlinpoet.ParameterSpec
+import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.joinToCode
+import com.squareup.kotlinpoet.tag
 
 /**
  * Adds the properties to the class and sets the primary constructor with one parameter per property, in the same order.
@@ -159,3 +161,38 @@ internal fun TypeName.nullableIf(toBeNullable: Boolean): TypeName {
     if (toBeNullable == isNullable) return this
     return copy(nullable = toBeNullable)
 }
+
+/**
+ * The opt-in markers (their full class names) that a file naming the tagged type must opt in to. A tag is side-channel data:
+ * it is kept by [TypeName.copy] (nullability, annotations) and by the type arguments of a parameterized type, and it is
+ * ignored by [TypeName.equals].
+ */
+private class RequiredOptIns(val markerClassNames: Set<String>)
+
+internal fun TypeName.withRequiredOptIns(markerClassNames: Collection<String>): TypeName {
+    if (markerClassNames.isEmpty()) return this
+    val allMarkers = requiredOptIns() + markerClassNames
+    return copy(tags = tags + (RequiredOptIns::class to RequiredOptIns(allMarkers)))
+}
+
+private fun TypeName.requiredOptIns(): Set<String> {
+    val own = tag<RequiredOptIns>()?.markerClassNames.orEmpty()
+    // The generator only builds class names and parameterized types (lists and maps)
+    return when (this) {
+        is ParameterizedTypeName -> own + rawType.requiredOptIns() + typeArguments.flatMap { it.requiredOptIns() }
+        else -> own
+    }
+}
+
+/** The opt-in markers required by the types this type, its members and its nested types name. */
+internal fun TypeSpec.requiredOptIns(): Set<String> =
+    buildSet {
+        propertySpecs.forEach { addAll(it.type.requiredOptIns()) }
+        (funSpecs + listOfNotNull(primaryConstructor)).forEach { function ->
+            function.parameters.forEach { addAll(it.type.requiredOptIns()) }
+            addAll(function.returnType.requiredOptIns())
+        }
+        addAll(superclass.requiredOptIns())
+        superinterfaces.keys.forEach { addAll(it.requiredOptIns()) }
+        typeSpecs.forEach { addAll(it.requiredOptIns()) }
+    }

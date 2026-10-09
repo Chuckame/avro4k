@@ -70,6 +70,11 @@ public fun KotlinGenerator.generateKotlinClassesFromFiles(files: List<File>): Li
  *                           The default implementation appends "Union" to the provided base name.
  * @param additionalLogicalTypes Provides a way to specify additional logical types that should be materialized with specific Kotlin classes and serializers.
  *                               All the logical types registered in the built-in [AvroConfiguration] will be present if not overridden by this parameter.
+ * @param fileOptIns The fully qualified names of opt-in marker classes (annotation classes annotated with `@RequiresOptIn`) that every
+ *                   generated file opts in to. They are merged into the single `@file:OptIn(...)` of each file, with the markers the
+ *                   generator needs itself and those required by the logical types the file uses (see [LogicalTypeDescriptor.requiredOptIns]).
+ * @param fileAnnotations Annotations added to every generated file, with the `file` use-site target (e.g. `@file:Suppress("...")`).
+ *                        `kotlin.OptIn` is not accepted here, as a file can only have one: use [fileOptIns] instead.
  */
 @InternalAvro4kApi
 public class KotlinGenerator(
@@ -81,15 +86,39 @@ public class KotlinGenerator(
     private val unionSubTypeNameFormatter: (String) -> String = { "For$it" },
     private val fieldNamingStrategy: FieldNamingStrategy = FieldNamingStrategy.Identity,
     additionalLogicalTypes: List<LogicalTypeDescriptor> = emptyList(),
+    fileOptIns: List<String> = emptyList(),
+    fileAnnotations: List<AnnotationSpec> = emptyList(),
 ) {
+    /**
+     * Maps a logical type to a Kotlin class.
+     *
+     * @param kSerializerClassName The fully qualified name of the serializer of [kotlinClassName], or `null` to annotate the
+     *                             generated properties with `@Contextual`, the serializer then being given at runtime.
+     * @param requiredOptIns The fully qualified names of the opt-in marker classes that [kotlinClassName] or its serializer
+     *                       require. Only the generated files using this logical type opt in to them, in their `@file:OptIn(...)`.
+     *                       `kotlin.uuid.Uuid` does not need it: the generator knows it requires `kotlin.uuid.ExperimentalUuidApi`.
+     */
     @InternalAvro4kApi
     public data class LogicalTypeDescriptor(
         val logicalTypeName: String,
         val kotlinClassName: String,
         val kSerializerClassName: String? = null,
+        val requiredOptIns: List<String> = emptyList(),
     )
 
     private val logicalTypes: Map<String, TypeName> = buildLogicalTypesMap(additionalLogicalTypes)
+
+    /** The markers every generated file opts in to: the generated code uses avro4k's internal and experimental API. */
+    private val fileOptIns: Set<String> =
+        setOf(InternalAvro4kApi::class.qualifiedName!!, ExperimentalAvro4kApi::class.qualifiedName!!) + fileOptIns
+
+    private val fileAnnotations: List<AnnotationSpec> =
+        fileAnnotations.map { annotation ->
+            require(annotation.typeName != OPT_IN_CLASS_NAME) {
+                "A generated file can only have one @file:OptIn annotation: give its markers in fileOptIns instead of adding $annotation to fileAnnotations"
+            }
+            annotation.toBuilder().useSiteTarget(AnnotationSpec.UseSiteTarget.FILE).build()
+        }
 
     /**
      * Generates Kotlin classes from the provided Avro schema.
@@ -105,15 +134,16 @@ public class KotlinGenerator(
     }
 
     private fun TypeSpec.toFileSpec(namespace: String? = null): FileSpec {
+        // One @file:OptIn(...) for all the markers of the file, sorted as they are written (by simple name) to keep the generated code stable
+        val optIns = (fileOptIns + requiredOptIns()).map { ClassName.fromFullName(it) }.sortedWith(compareBy({ it.simpleName }, { it.canonicalName }))
         return FileSpec.builder(namespace?.takeIf { it.isNotEmpty() } ?: "", name!!)
-            // @file:OptIn(InternalAvro4kApi::class, ExperimentalAvro4kApi::class)
             .addAnnotation(
-                AnnotationSpec.builder(ClassName("kotlin", "OptIn"))
+                AnnotationSpec.builder(OPT_IN_CLASS_NAME)
                     .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
-                    .addMember("%T::class", InternalAvro4kApi::class)
-                    .addMember("%T::class", ExperimentalAvro4kApi::class)
+                    .apply { optIns.forEach { addMember("%T::class", it) } }
                     .build()
             )
+            .addAnnotations(fileAnnotations)
             .addTypes(listOf(this))
             .build()
     }
@@ -729,8 +759,20 @@ private fun parseJavaClassName(className: String, kSerializerType: ClassName? = 
         type.withAnnotation(buildSerializableAnnotation(kSerializerType))
     } else {
         type
-    }
+    }.withRequiredOptIns(optInsRequiredByKnownClasses[className].orEmpty())
 }
+
+/**
+ * The opt-in markers that classes of the Kotlin standard library require on some Kotlin API versions, whatever maps to them
+ * (a built-in or registered logical type, a `java-class` property). `kotlin.uuid.Uuid` is stable since Kotlin 2.4 but
+ * experimental before: the generated files naming it opt in to `ExperimentalUuidApi`, so that they also compile with an
+ * older Kotlin API version. Kotlin 2.4 keeps this marker (still required by the experimental parts of the uuid API), so
+ * opting in to it compiles without warning there too.
+ */
+private val optInsRequiredByKnownClasses: Map<String, List<String>> =
+    mapOf("kotlin.uuid.Uuid" to listOf("kotlin.uuid.ExperimentalUuidApi"))
+
+private val OPT_IN_CLASS_NAME = ClassName("kotlin", "OptIn")
 
 private fun TypeName.withAnnotation(annotation: AnnotationSpec): TypeName =
     copy(annotations = annotations + annotation)
@@ -738,7 +780,8 @@ private fun TypeName.withAnnotation(annotation: AnnotationSpec): TypeName =
 private fun buildLogicalTypesMap(logicalTypes: List<KotlinGenerator.LogicalTypeDescriptor>): Map<String, TypeName> =
     (getBuiltinLogicalTypes() + logicalTypes).associate { logicalType ->
         val kSerializerType = logicalType.kSerializerClassName?.let { ClassName.fromFullName(it) }
-        logicalType.logicalTypeName to parseJavaClassName(logicalType.kotlinClassName, kSerializerType)
+        logicalType.logicalTypeName to
+            parseJavaClassName(logicalType.kotlinClassName, kSerializerType).withRequiredOptIns(logicalType.requiredOptIns)
     }
 
 private fun getBuiltinLogicalTypes() =

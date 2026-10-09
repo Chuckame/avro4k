@@ -1,6 +1,6 @@
 @file:OptIn(
-    InternalAvro4kApi::class,
     ExperimentalAvro4kApi::class,
+    InternalAvro4kApi::class,
 )
 
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi

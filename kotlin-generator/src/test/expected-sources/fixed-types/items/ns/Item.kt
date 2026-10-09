@@ -1,6 +1,6 @@
 @file:OptIn(
-    InternalAvro4kApi::class,
     ExperimentalAvro4kApi::class,
+    InternalAvro4kApi::class,
 )
 
 package items.ns
