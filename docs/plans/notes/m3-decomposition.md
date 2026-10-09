@@ -237,6 +237,8 @@ still per instance). Remove `api(libs.apache.avro)` from core `jvmMain`. Deps: M
 `grep -r "org.apache.avro\|com.fasterxml" core/src/*Main` to be empty. Perf-neutral (files move). **Risk:** `:gradle-plugin:test`
 publication, and the BOM.
 
+**Amended after M3-19 (2026-10-09):** `jvmMain/internal/AvroInternalExtensions.kt` now also holds four `@InternalAvro4kApi` forwarders that `apache-interop`'s generic trees call (`resolveRecordFields`, `enumDefaultIndex`, `interceptedDeserializer`, `defaultValueDecoder`). They use no Apache type: when the Apache entry points of that file move out, **these stay in core** (move them to a core file of their own, `commonMain` if nothing JVM-only remains), or `apache-interop` loses them.
+
 **M3-15 · Relocation to `commonMain` + B4's `expect`/`actual`** (**api** if facades move; alone). `git mv` every platform-free
 file to `C/…` (what stays in `jvmMain`: §6). `expect`/`actual` for `Avro.Default`'s module and for the default `logicalTypes`.
 `RecordResolver`'s `@Volatile` → `kotlin.concurrent.Volatile`; the note must give the native publication argument for the C2
@@ -311,7 +313,7 @@ hierarchy (names, constructors, which throw sites map to which class, what stays
 `IllegalArgumentException` for a bad configuration) into `notes/m3-22.md` and stop for the user's approval.** Step 2:
 implement, inventory every `throw` in core main code (`internal/exceptions.kt` is the factory to extend), one test per
 family. Deps: M3-14 (Apache's exceptions gone from core, files settled). Before M3-16 and the B8 `apiDump`. `ACC+KMP`.
-Migration-guide item. Perf: none (throw paths only; message building stays lazy).
+Migration-guide item. Perf: none (throw paths only; message building stays lazy). Since M3-19, `apache-interop` has its own copies of the decoding-error factories (`internal/GenericDataHelpers.kt`): the generic trees' errors join the hierarchy too, through the public base class.
 
 ## 4. B2 decisions
 
