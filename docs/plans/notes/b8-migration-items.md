@@ -227,9 +227,21 @@ One line each, with where the details are. Not rewritten here.
   project compiling with an older Kotlin API version must opt in to `kotlin.uuid.ExperimentalUuidApi` to *name* the
   type (in generated code too), but not to receive one as `Any`.
 
-- **`AvroDecoder.decodeValue()`** (deprecated) is removed (user decision, 2026-10-09; unit M3-23 in `m3-decomposition.md`).
-  Custom serializers read `currentWriterSchema` and decode with the matching typed `decode*` method, or use the
-  `decodeResolving*` helpers, as its deprecation message already said.
+- **`AvroDecoder.decodeValue()`** (deprecated, `@ExperimentalAvro4kApi`) is removed from the public `AvroDecoder`
+  interface (user decision, 2026-10-09; [`m3-23.md`](m3-23.md)). What it did depended on the decoder: the binary
+  decoder (`decodeFromByteArray`, `decodeFromSource`, Confluent) **always threw** `UnsupportedOperationException`;
+  a missing field's default returned a boxed primitive, a `String` (string or enum), a `ByteArray` (bytes) or a fixed
+  (Apache `GenericData.Fixed` on the JVM, `ByteArray` elsewhere), and threw for a structure; the deprecated
+  `decodeFromGenericData` returned the raw generic value. Replacement, in a custom serializer:
+  - a value whose type the serializer expects: read `currentWriterSchema` if needed, then call the matching typed
+    method (`decodeInt()`, `decodeString()`, `decodeBytes()`, `decodeFixed()`, …);
+  - a value of any type (what `decodeValue()` was meant for): `decoder.decodeSerializableValue(AnySerializer())`. It
+    returns the Kotlin values `AnySerializer` decodes (`AvroConfiguration.logicalTypes` applied; a fixed as `ByteArray`,
+    an enum as `String`, a record or a map as `Map<String, Any?>`, an array as `List<Any?>`), never an Apache
+    `GenericData` value. **Open, for the user (`m3-23.md`):** `AnySerializer` is itself `@InternalAvro4kApi`, and today
+    it works only on the binary decoder — on a missing field's default and through `decodeFromGenericData` it throws a
+    `ClassCastException` (it casts the decoder to the binary one).
+  Nothing else in avro4k (Confluent, kotlin-generator, gradle-plugin, benchmark) called it.
 
 ## Platform differences (from [`m3-13.md`](m3-13.md), core moving to `commonMain`) — document prominently
 
@@ -252,6 +264,6 @@ These are **silent**: the same code behaves differently on the JVM and elsewhere
   a `Map` (e.g. `Pair`, `Triple`, a user's `Box<T>`) is **not inferred** when encoded as `Any` — it fails with "Cannot
   find serializer". The JVM infers it with nullable-`Any` type arguments, as before. Workaround: a contextual
   serializer, or overriding the `KClass` hook.
-- The deprecated `AvroDecoder.decodeValue()` of a fixed field default returns an Apache `GenericData.Fixed` on the JVM,
-  a `ByteArray` elsewhere.
+- ~~The deprecated `AvroDecoder.decodeValue()` of a fixed field default returns an Apache `GenericData.Fixed` on the
+  JVM, a `ByteArray` elsewhere.~~ — no longer a platform difference: `decodeValue()` is removed ([`m3-23.md`](m3-23.md)).
 - IDE JSON highlighting of `@AvroProp`/`@AvroDefault` values is gone (the JVM-only `@Language` annotation was dropped).
