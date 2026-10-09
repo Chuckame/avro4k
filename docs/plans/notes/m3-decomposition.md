@@ -339,6 +339,29 @@ Deps: M3-23. Before M3-14 and M3-22. `ACC+KMP`; `core.api`: only removals (step 
 union resolution (only previously-wrong multi-branch cases change); generic data API no longer deprecated. Perf: one
 allocation fewer per decoded logical-type value off the JVM (measured in M5, no A/B here).
 
+**M3-25 · `val avro: Avro` on `AvroDecoder` and `AvroEncoder`** (user decision 2026-10-10; **api**, alone). Add a public
+`val avro: Avro` to the `AvroDecoder` and `AvroEncoder` interfaces (KDoc: the format instance, for its `configuration` and
+`serializersModule`, like kotlinx-serialization's `JsonDecoder.json`), implement it on every core and `apache-interop`
+decoder/encoder (direct, `JsonDefaultDecoder`, generic trees, polymorphic/reordering encoders…), and delete M3-24's
+`@InternalAvro4kApi AvroFormatDecoder`: `AbstractAnySerializer` reads `decoder.avro` (no cast; a non-avro4k `Decoder` still
+fails as before — check its message). Check whether existing internal `avro` properties (e.g. `AbstractAvroGenericDecoder.avro`)
+clash or simply become the override. Not a rename: a new member. Breaking only for third-party implementations of the two
+interfaces; migration-guide item. Deps: M3-24. Before M3-14. `ACC+KMP`; `.api`: additions on both interfaces only.
+
+**M3-26 · Opt-ins and annotations on generated files** (user decision 2026-10-10; **api** on kotlin-generator and
+gradle-plugin; core untouched). Generated files that use `kotlin.uuid.Uuid` carry `@file:OptIn(kotlin.uuid.ExperimentalUuidApi::class)`
+so they compile with a Kotlin API version below 2.4 — **through a generic mechanism, not a special case**: (a) a logical
+type mapping can declare the opt-in markers its Kotlin type needs (the built-in `uuid` → `Uuid` mapping declares
+`ExperimentalUuidApi`; a user's `register(...).asType(...)` can declare its own), added as `@file:OptIn(...)` only to files
+that use the type; (b) a generator-wide setting for extra file-level annotations / opt-ins on every generated file (e.g. a
+user's own `@file:OptIn(MyApi::class)` or `@file:Suppress(...)`), exposed in the gradle-plugin DSL. Opt-ins of one file are
+merged into a single `@file:OptIn(a::class, b::class)` (sorted, deduplicated) with any the generator already emits. Shape to
+propose in the note (names in the style of the existing `logicalTypes { register(..).asType(..) }` DSL; never rename existing
+API); the orchestrator reviews it before merging. Tests: goldens for the built-in `Uuid` opt-in (regenerate deliberately,
+then `--rerun` under `CI=true`), a user-declared opt-in on a custom mapping, global extra annotations, the merge with existing
+`@file:OptIn`; plugin integration test with the DSL; README example. Deps: M3-21. Independent of core; before B7/B8.
+`ACC` (with the generator's `--rerun`); `.api`: additions only.
+
 **M3-22 · `AvroSerializationException` hierarchy** (GitHub #267 and #269, user remark 2026-10-09; **api**, alone). Every
 exception avro4k throws for a schema, encoding or decoding failure becomes an `AvroSerializationException` (public, `open`,
 common, extends `kotlinx.serialization.SerializationException` so existing `catch` blocks keep working), with a small set
