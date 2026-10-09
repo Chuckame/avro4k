@@ -155,8 +155,8 @@ convert with the `apache-interop` module: `apacheSchema.toAvro4k()`, `avroSchema
 Behaviour to call out: `AvroSchema.toString()` is not json (`toJsonElement()`); `toApacheSchema()` keeps `char` and custom
 logical types; an Apache schema equal to one already converted maps to the first one's conversion (docs/aliases of the
 first win, as the v2 caches did); `MissingFieldsEncodingException` prints the model's json; built-in serializers ignore
-unknown or invalid logical types on every schema; still Apache-typed: `encodeToGenericData` / `decodeFromGenericData`,
-`ListRecord`, `Record`, `AvroObjectContainerBuilder.codec`.
+unknown or invalid logical types on every schema; still Apache-typed: `encodeToGenericData` / `decodeFromGenericData`
+(moved to `apache-interop` by M3-19), `AvroObjectContainerBuilder.codec`. (`ListRecord` and `Record` were removed by M3-19.)
 
 ## Collected so far
 
@@ -204,7 +204,15 @@ One line each, with where the details are. Not rewritten here.
   (`outputStream.asSink().buffered()` / `inputStream.asSource().buffered()` wrap a Java stream; flush or close the sink).
   Not removed (never deprecated): `Avro.decodeFromByteBuffer` and `AvroObjectContainer`'s `OutputStream`/`InputStream`
   entry points (`openWriter`, `decodeFromStream`).
-- **#320:** `Record` and `ListRecord` are removed; `encodeToGenericData` returns an Apache `GenericData.Record`.
+- **#320:** `Record` and `ListRecord` are removed; `encodeToGenericData` returns an Apache `GenericData.Record`
+  (mutable, unlike `ListRecord`; it equals another `GenericData.Record` with the same schema and values, where
+  `ListRecord`'s data-class `equals` only matched another `ListRecord`).
+- The deprecated `GenericData` API (`Avro.encodeToGenericData` / `decodeFromGenericData`, all six overloads) now comes
+  from the `avro4k-apache-interop` artifact (`com.github.avro-kotlin.avro4k:avro4k-apache-interop`): same package,
+  names, signatures and facade class (`AvroGenericDataExtensionsKt`), so source and Java callers only add the
+  dependency. Fixed on the way: a plain `java.util.List` (not a `GenericArray`) in a nullable position now decodes
+  when its element serializer reads the writer schema (a decimal, a nested plain list), instead of failing with
+  `Not an array` (see [`m3-19.md`](m3-19.md)).
 - **#429:** `AnySerializer` (and so Confluent's generic decoding) decodes `uuid` to `kotlin.uuid.Uuid` on the JVM too,
   and generated code types `uuid` properties as `kotlin.uuid.Uuid`; how to go back to `java.util.UUID` is in the
   gradle-plugin README.

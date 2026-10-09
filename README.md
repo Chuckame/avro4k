@@ -24,7 +24,7 @@ Here are the main features:
 > **Platforms**: the core runs on the JVM, JS (browser and Node.js) and Kotlin/Native (Apple, Linux, Windows and Android native targets): schema
 > generation, and binary encoding and decoding of your classes and the Kotlin types (`Uuid`, `Instant`, `Duration`…) through the `Avro` API.
 > <br/>These stay **JVM-only** for now: `AvroObjectContainer` and `AvroSingleObject`, the Java types (`UUID`, `BigDecimal`, `BigInteger`, `java.time`…), the Apache Avro
-> interop (`GenericData`, Apache `Schema`). wasm is not supported yet.
+> interop (`GenericData`, Apache `Schema`, from the `apache-interop` module). wasm is not supported yet.
 
 # Quick start
 
@@ -381,6 +381,11 @@ Add the avro4k dependency:
 ```
 
 </details>
+
+> [!NOTE]
+> The Apache Avro interop is a separate artifact, JVM only: `com.github.avro-kotlin.avro4k:avro4k-apache-interop`. It converts
+> between avro4k's `AvroSchema` and Apache's `Schema` (`toAvro4k()`, `toApacheSchema()`), and holds the deprecated
+> `GenericData` encoding and decoding (`Avro.encodeToGenericData`, `Avro.decodeFromGenericData`).
 
 ## Versions matrix
 

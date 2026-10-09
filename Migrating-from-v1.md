@@ -97,6 +97,9 @@ val genericData: Any? = Avro.encodeToGenericData(TheDataClass(...))
 Avro.decodeFromGenericData<TheDataClass>(genericData)
 ```
 
+Since v3, these deprecated functions come from the `avro4k-apache-interop` artifact, and a record is encoded into Apache's
+`GenericData.Record` (avro4k's own `Record` and `ListRecord` are removed).
+
 ## Configure the `Avro` instance
 
 ```kotlin
