@@ -226,7 +226,16 @@ One line each, with where the details are. Not rewritten here.
   `logicalTypes { register("uuid").asType("java.util.UUID", "com.github.avrokotlin.avro4k.serializer.UUIDSerializer") }`
   (gradle-plugin README). `kotlin.uuid.Uuid` is stable since Kotlin 2.4, so no opt-in is needed with Kotlin 2.4+; a
   project compiling with an older Kotlin API version must opt in to `kotlin.uuid.ExperimentalUuidApi` to *name* the
-  type (in generated code too), but not to receive one as `Any`.
+  type in its own code, but not to receive one as `Any`. Generated code opts in by itself (next item).
+
+- **Opt-ins and annotations on generated files** ([`m3-26.md`](m3-26.md)). Each generated file has one
+  `@file:OptIn(...)` whose markers are now **sorted by simple name** (`ExperimentalAvro4kApi`, then `InternalAvro4kApi`:
+  the two lines swap in every generated file, nothing else) and also hold the markers of the types the file uses: a
+  file naming `kotlin.uuid.Uuid` opts in to `kotlin.uuid.ExperimentalUuidApi`, so generated code compiles with a Kotlin
+  API version below 2.4 (no warning on 2.4+, where the marker still exists). New in the gradle plugin, additions only:
+  `logicalTypes { register("x").requiresOptIn("your.Marker").asType(…) }` (only the files using `x` opt in), and
+  `sourcesGeneration { fileAnnotations { optIn("your.Marker"); annotation("kotlin.Suppress", "\"Name\"") } }` for every
+  generated file. A user who committed generated sources sees the two-line reordering on the next generation.
 
 - **`AvroDecoder.decodeValue()`** (deprecated, `@ExperimentalAvro4kApi`) is removed from the public `AvroDecoder`
   interface (user decision, 2026-10-09; [`m3-23.md`](m3-23.md)). What it did depended on the decoder: the binary
