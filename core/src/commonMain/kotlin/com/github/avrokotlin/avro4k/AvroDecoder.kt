@@ -44,6 +44,13 @@ import kotlinx.serialization.encoding.Decoder
  */
 public interface AvroDecoder : Decoder {
     /**
+     * The [Avro] instance this decoder decodes with: a custom serializer reads its [Avro.configuration] (e.g. the
+     * [AvroConfiguration.logicalTypes]) and its [Avro.serializersModule] from it, as with kotlinx-serialization's
+     * `JsonDecoder.json`.
+     */
+    public val avro: Avro
+
+    /**
      * Provides the schema used to encode the current value.
      *
      * Never a union: when the value was written with a union, it is the union's branch holding the value (the branch of

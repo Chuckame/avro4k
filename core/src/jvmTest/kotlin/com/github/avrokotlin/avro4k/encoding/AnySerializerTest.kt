@@ -1,6 +1,7 @@
 package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.CoreSchema
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
@@ -20,6 +21,7 @@ import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.should
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.beInstanceOf
 import io.mockk.every
 import io.mockk.mockk
@@ -29,6 +31,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
@@ -90,6 +93,22 @@ class AnySerializerTest : StringSpec() {
             decoder.stubWriterSchemas(Schema.create(Schema.Type.NULL))
 
             assertThrows<UnsupportedOperationException> { AnySerializer().deserialize(decoder) }
+        }
+        "a decoder that is not an AvroDecoder fails with a ClassCastException naming AvroDecoder" {
+            val decoder = mockk<Decoder>()
+
+            assertThrows<ClassCastException> { AnySerializer().deserialize(decoder) }.message shouldContain AvroDecoder::class.java.name
+        }
+        "any AvroDecoder, not only avro4k's own ones, decodes with the logical types of its Avro instance" {
+            val customizedAvro = Avro { setLogicalTypeSerializer("my-awesome-logical-type", String.serializer()) }
+            val decoder = mockk<AvroDecoder>()
+            every { decoder.serializersModule } returns EmptySerializersModule()
+            every { decoder.avro } returns customizedAvro
+            every { decoder.currentWriterSchema } returns
+                Schema.create(Schema.Type.STRING).copy(logicalTypeName = "my-awesome-logical-type").toAvro4k() as ResolvedSchema
+            every { decoder.decodeSerializableValue(String.serializer()) } returns "decoded by the logical type"
+
+            AnySerializer().deserialize(decoder) shouldBe "decoded by the logical type"
         }
         "an unknown non-serializable type can be serialized if providing a custom serialization strategy fallback" {
             val encoder = mockk<Encoder>(relaxed = true)

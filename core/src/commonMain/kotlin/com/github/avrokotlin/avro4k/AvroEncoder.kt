@@ -34,6 +34,12 @@ import kotlinx.serialization.encoding.Encoder
  */
 public interface AvroEncoder : Encoder {
     /**
+     * The [Avro] instance this encoder encodes with: a custom serializer reads its [Avro.configuration] and its
+     * [Avro.serializersModule] from it, as with kotlinx-serialization's `JsonEncoder.json`.
+     */
+    public val avro: Avro
+
+    /**
      * Provides the schema used to encode the current value.
      */
     @ExperimentalAvro4kApi

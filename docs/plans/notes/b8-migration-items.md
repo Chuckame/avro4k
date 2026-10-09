@@ -286,6 +286,14 @@ One line each, with where the details are. Not rewritten here.
   already-compiled callers must be recompiled (the JVM return type changed). The binary decoder now resolves a union
   still unresolved when the schema is read (e.g. on the decoder `decodeInlineElement` returns, before any decode) by
   reading its index, where it used to return the union.
+- **`AvroDecoder.avro` and `AvroEncoder.avro`** (user decision, 2026-10-10; [`m3-25.md`](m3-25.md)): both interfaces
+  gain a public `val avro: Avro`, the format instance the decoder or encoder runs with, as kotlinx-serialization's
+  `JsonDecoder.json` / `JsonEncoder.json`. A custom serializer reads `decoder.avro.configuration` (e.g. its
+  `logicalTypes`) or `encoder.avro.serializersModule` without being handed the `Avro` instance. **Breaking only for a
+  third-party class implementing `AvroDecoder` or `AvroEncoder`** (a test fake, a wrapping decoder): it must now
+  implement `override val avro: Avro` (return the instance it decodes/encodes for, or the one it wraps). Callers and
+  serializers compile unchanged. `AnySerializer` now works on such a third-party `AvroDecoder` too, with the logical
+  types of its `avro`; a decoder that is not an `AvroDecoder` still fails with a `ClassCastException`.
 - **The `GenericData` API is no longer deprecated** (user decision, 2026-10-10): `encodeToGenericData` /
   `decodeFromGenericData` (all six overloads) lose `@Deprecated` now that they live in their own artifact,
   `avro4k-apache-interop`. They stay `@ExperimentalAvro4kApi`. Callers can drop their `@Suppress("DEPRECATION")`.

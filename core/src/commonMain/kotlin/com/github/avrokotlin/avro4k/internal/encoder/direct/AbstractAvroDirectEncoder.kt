@@ -20,7 +20,7 @@ internal class AvroValueDirectEncoder(
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder)
 
 internal sealed class AbstractAvroDirectEncoder(
-    protected val avro: Avro,
+    override val avro: Avro,
     protected val binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroEncoder() {
     override val serializersModule: SerializersModule

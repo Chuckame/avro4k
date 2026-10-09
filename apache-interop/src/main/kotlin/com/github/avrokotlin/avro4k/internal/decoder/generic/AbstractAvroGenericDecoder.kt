@@ -1,10 +1,10 @@
 package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
-import com.github.avrokotlin.avro4k.internal.decoder.AvroFormatDecoder
 import com.github.avrokotlin.avro4k.internal.enumDefaultIndex
 import com.github.avrokotlin.avro4k.internal.interceptedDeserializer
 import com.github.avrokotlin.avro4k.internal.toByteExact
@@ -42,7 +42,7 @@ import java.nio.ByteBuffer
  * written index: [currentWriterSchema] is the value's own branch, never the union.
  */
 @OptIn(ExperimentalSerializationApi::class)
-internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroFormatDecoder {
+internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDecoder {
     abstract override val avro: Avro
 
     /** The writer schema of the value being decoded, as the parent structure gives it: possibly a union. */

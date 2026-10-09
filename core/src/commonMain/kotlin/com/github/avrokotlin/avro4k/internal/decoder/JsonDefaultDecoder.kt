@@ -63,7 +63,7 @@ internal class JsonDefaultDecoder(
     override val avro: Avro,
     private val value: JsonElement,
     schema: AvroSchema,
-) : AbstractDecoder(), AvroFormatDecoder {
+) : AbstractDecoder(), AvroDecoder {
     /**
      * The given schema, unless it is a union: then the branch matching the kind of [value].
      */

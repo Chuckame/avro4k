@@ -11,7 +11,7 @@ import org.apache.avro.util.Utf8
 import java.nio.ByteBuffer
 
 internal abstract class AbstractAvroGenericEncoder : AbstractAvroEncoder() {
-    abstract val avro: Avro
+    abstract override val avro: Avro
 
     abstract override fun encodeValue(value: Any)
 

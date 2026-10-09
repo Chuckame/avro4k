@@ -5,11 +5,9 @@ import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
-import com.github.avrokotlin.avro4k.internal.decoder.AvroFormatDecoder
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ByteArraySerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
@@ -71,6 +69,8 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
     /**
      * Works on any avro4k decoder: the binary ones, the decoder of a missing field's default, and the generic data
      * decoders of `avro4k-apache-interop`. Each of them reports the value's own branch as the writer schema, never a union.
+     * The logical types are those of the decoder's [AvroDecoder.avro] configuration. A decoder that is not an
+     * [AvroDecoder] fails with a [ClassCastException].
      */
     override fun deserialize(decoder: Decoder): Any {
         decoder as AvroDecoder
@@ -78,15 +78,10 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
         // getOrPut is inline: no capturing lambda is allocated per call.
         val serializer =
             decodingCache.getOrPut(writerSchema) {
-                decoder.serializersModule.resolveDeserializationStrategy(writerSchema, decoder.avroConfiguration())
+                decoder.serializersModule.resolveDeserializationStrategy(writerSchema, decoder.avro.configuration)
             }
         return decoder.decodeSerializableValue(serializer)
     }
-
-    /** Only read on a miss of [decodingCache]. */
-    private fun AvroDecoder.avroConfiguration(): AvroConfiguration =
-        (this as? AvroFormatDecoder)?.avro?.configuration
-            ?: throw SerializationException("${this@AbstractAnySerializer::class} only decodes with avro4k's own decoders, not with ${this::class}")
 
     /**
      * Only runs on a miss of [decodingCache].
