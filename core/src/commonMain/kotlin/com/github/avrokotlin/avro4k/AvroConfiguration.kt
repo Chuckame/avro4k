@@ -47,8 +47,9 @@ public data class AvroConfiguration(
     /**
      * Resolves a logical type name to its corresponding [kotlinx.serialization.KSerializer] for generic decoding with [AnySerializer].
      *
-     * The defaults differ by platform, see [AvroBuilder.setLogicalTypeSerializer] for the list: the JVM decodes the uuid,
-     * date, time, timestamp and decimal logical types as Java types, the other platforms as Kotlin types where there is one.
+     * The defaults differ by platform, see [AvroBuilder.setLogicalTypeSerializer] for the list: `duration` and `uuid`
+     * decode to the same types everywhere (`uuid` as `kotlin.uuid.Uuid`); the JVM decodes the date, time, timestamp and
+     * decimal logical types as Java types, the other platforms as Kotlin types where there is one.
      *
      * To override the defaults, or provide additional logical types, you can configure it through `Avro { setLogicalTypeSerializer("your type", YourSerializer()) }`.
      *

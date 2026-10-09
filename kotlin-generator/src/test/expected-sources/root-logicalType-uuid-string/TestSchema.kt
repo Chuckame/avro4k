@@ -7,10 +7,10 @@ import com.github.avrokotlin.avro4k.AvroProp
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.`internal`.AvroGenerated
-import com.github.avrokotlin.avro4k.serializer.UUIDSerializer
-import java.util.UUID
+import com.github.avrokotlin.avro4k.serializer.KotlinUuidSerializer
 import kotlin.OptIn
 import kotlin.jvm.JvmInline
+import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
 
 @JvmInline
@@ -18,5 +18,5 @@ import kotlinx.serialization.Serializable
 @AvroGenerated("""{"type":"string","logicalType":"uuid"}""")
 public value class TestSchema(
     @AvroProp("logicalType", "uuid")
-    public val `value`: @Serializable(with = UUIDSerializer::class) UUID,
+    public val `value`: @Serializable(with = KotlinUuidSerializer::class) Uuid,
 )

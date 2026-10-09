@@ -1,0 +1,44 @@
+{
+    "type": "record",
+    "name": "NestedLogicalTypeUuidAsJavaUuid",
+    "doc": "Generated with the uuid logical type mapped back to java.util.UUID",
+    "fields": [
+        {
+            "name": "stringUuid",
+            "type": {
+                "type": "string",
+                "logicalType": "uuid"
+            }
+        },
+        {
+            "name": "fixedUuid",
+            "type": {
+                "type": "fixed",
+                "name": "FixedUuid",
+                "size": 16,
+                "logicalType": "uuid"
+            }
+        },
+        {
+            "name": "nullableUuid",
+            "type": [
+                "null",
+                {
+                    "type": "string",
+                    "logicalType": "uuid"
+                }
+            ],
+            "default": null
+        },
+        {
+            "name": "uuids",
+            "type": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "logicalType": "uuid"
+                }
+            }
+        }
+    ]
+}

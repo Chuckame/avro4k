@@ -264,11 +264,11 @@ public class AvroBuilder internal constructor(avro: Avro) {
      *
      * By default, [com.github.avrokotlin.avro4k.serializer.AnySerializer] decodes the following logical types:
      * - `duration` as [com.github.avrokotlin.avro4k.serializer.AvroDuration]
+     * - `uuid` as [kotlin.uuid.Uuid], on the JVM too; to get a `java.util.UUID` instead, call
+     *   `setLogicalTypeSerializer("uuid", UUIDSerializer)` (`com.github.avrokotlin.avro4k.serializer.UUIDSerializer`, JVM only)
      * - on the other platforms than the JVM:
-     *   - `uuid` as [kotlin.uuid.Uuid]
      *   - `timestamp-millis` and `timestamp-micros` as [kotlin.time.Instant]
      * - on the JVM:
-     *   - `uuid` as `java.util.UUID`
      *   - `date` as `java.time.LocalDate`
      *   - `time-millis` as `java.time.LocalTime`
      *   - `time-micros` as `java.time.LocalTime`

@@ -58,7 +58,7 @@ public interface Avro4kPluginSourcesGenerationExtension {
      * avro4k {
      *   sourcesGeneration {
      *     logicalTypes {
-     *       register("uuid").asType("kotlin.uuid.Uuid", "your.own.UuidSerializer")
+     *       register("uuid").asType("java.util.UUID", "com.github.avrokotlin.avro4k.serializer.UUIDSerializer")
      *       register("custom-type").asContextualType("your.FieldType")
      *     }
      *   }
@@ -91,8 +91,8 @@ public interface Avro4kPluginSourcesGenerationExtension {
      * ```
      * @Serializable
      * data class MyRecord(
-     *   @Serializable(with = UuidSerializer::class)
-     *   val uuidField: Uuid,
+     *   @Serializable(with = UUIDSerializer::class)
+     *   val uuidField: UUID,
      *   @Contextual
      *   val customField: FieldType
      * )

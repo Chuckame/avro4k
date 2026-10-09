@@ -634,6 +634,30 @@ Avro.decodeFromByteArray<Map<String, Any>>(writerSchema, bytes)
 Avro.decodeFromByteArray<YourType<Any>>(writerSchema, bytes)
 ```
 
+### Logical types in generic decoding
+
+A value whose writer schema has a logical type is decoded with the serializer registered for it in the `logicalTypes` configuration, else as its
+underlying Avro type. By default:
+
+| Logical type                           | Decoded `Any` type on the JVM | Decoded `Any` type on JS and native |
+|----------------------------------------|-------------------------------|-------------------------------------|
+| `duration`                             | `AvroDuration`                | `AvroDuration`                      |
+| `uuid`                                 | `kotlin.uuid.Uuid`            | `kotlin.uuid.Uuid`                  |
+| `timestamp-millis`, `timestamp-micros` | `java.time.Instant`           | `kotlin.time.Instant`               |
+| `date`                                 | `java.time.LocalDate`         | its underlying Avro type            |
+| `time-millis`, `time-micros`           | `java.time.LocalTime`         | its underlying Avro type            |
+| `decimal`, `big-decimal`               | `java.math.BigDecimal`        | its underlying Avro type            |
+
+Encoding as `Any` accepts both `kotlin.uuid.Uuid` and `java.util.UUID` values for a `uuid` schema. To decode a `uuid` to a `java.util.UUID` on
+the JVM, as avro4k did before v3:
+
+```kotlin
+val avro = Avro {
+    setLogicalTypeSerializer("uuid", UUIDSerializer)
+}
+avro.decodeFromByteArray<Any>(writerSchema, bytes) // a java.util.UUID for a uuid writer schema
+```
+
 ## Support additional non-serializable types
 
 When looking at the [types matrix](#types-matrix), you can see some of them natively supported by Avro4k, but some others are not.

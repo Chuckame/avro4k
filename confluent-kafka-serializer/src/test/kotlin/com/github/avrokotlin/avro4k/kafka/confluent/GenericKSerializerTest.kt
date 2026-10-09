@@ -3,9 +3,11 @@ package com.github.avrokotlin.avro4k.kafka.confluent
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.encodeToByteArray
+import com.github.avrokotlin.avro4k.internal.copy
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -14,6 +16,9 @@ import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData
 import org.apache.avro.util.Utf8
 import java.nio.ByteBuffer
+import java.util.UUID
+import kotlin.uuid.Uuid
+import kotlin.uuid.toKotlinUuid
 
 class GenericKSerializerTest : StringSpec() {
     init {
@@ -63,6 +68,28 @@ class GenericKSerializerTest : StringSpec() {
             val bytes = Avro.encodeToByteArray(schema, "Hello")
 
             Avro.decodeFromByteArray(schema, GenericKSerializer(), bytes) shouldBe "Hello"
+        }
+        "STRING with the uuid logical type should be deserialized as a kotlin Uuid" {
+            val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid")
+            val value = Uuid.random()
+            val bytes = Avro.encodeToByteArray(schema, value.toString())
+
+            Avro.decodeFromByteArray(schema, GenericKSerializer(), bytes) shouldBe value
+        }
+        "FIXED with the uuid logical type should be deserialized as a kotlin Uuid" {
+            val schema = Schema.createFixed("theUuid", null, null, 16).copy(logicalTypeName = "uuid")
+            val value = Uuid.random()
+            val bytes = Avro.encodeToByteArray(schema, value.toByteArray())
+
+            Avro.decodeFromByteArray(schema, GenericKSerializer(), bytes) shouldBe value
+        }
+        "kotlin Uuid and java UUID should both be serialized as a uuid STRING" {
+            val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid")
+            val value = UUID.randomUUID()
+            val expectedBytes = Avro.encodeToByteArray(schema, value.toString())
+
+            Avro.encodeToByteArray(schema, GenericKSerializer(), value.toKotlinUuid()) shouldBe expectedBytes
+            Avro.encodeToByteArray(schema, GenericKSerializer(), value) shouldBe expectedBytes
         }
         "ByteBuffer should be serialized as BYTES" {
             val schema = Schema.create(Schema.Type.BYTES)
@@ -157,6 +184,26 @@ class GenericKSerializerTest : StringSpec() {
 
             Avro.encodeToByteArray(schema, GenericKSerializer(), value) shouldBe
                 Avro.encodeToByteArray(schema, TheRecord("Hello", 42))
+        }
+        "RECORD with uuid fields should be deserialized with kotlin Uuids and serialized back to the same bytes" {
+            @Serializable
+            data class TheRecord(
+                @Contextual val stringUuid: UUID,
+                @AvroFixed(16) @Contextual val fixedUuid: UUID,
+            )
+
+            val value = TheRecord(UUID.randomUUID(), UUID.randomUUID())
+            val schema = Avro.apacheSchema<TheRecord>()
+            val bytes = Avro.encodeToByteArray(schema, value)
+
+            val decoded = Avro.decodeFromByteArray(schema, GenericKSerializer(), bytes)
+
+            decoded shouldBe
+                GenericData.Record(schema).apply {
+                    put("stringUuid", value.stringUuid.toKotlinUuid())
+                    put("fixedUuid", value.fixedUuid.toKotlinUuid())
+                }
+            Avro.encodeToByteArray(schema, GenericKSerializer(), decoded) shouldBe bytes
         }
         "RECORD should be deserialized as GenericRecord" {
             @Serializable

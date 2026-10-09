@@ -82,7 +82,7 @@ class KotlinGeneratorTest {
                             kotlinClassName = "com.example.CustomLogicalType",
                             kSerializerClassName = "com.example.CustomLogicalType.TheNestedSerializer"
                         )
-                    )
+                    ) + resolveTestCaseLogicalTypes(testName)
             )
         if (schemaFile.isDirectory) {
             generator.generateKotlinClassesFromFiles(schemaFile.listFiles()!!.toList()).flatMap { it.second }
@@ -96,6 +96,24 @@ class KotlinGeneratorTest {
                 .writeTo(outputBaseDir)
         }
     }
+
+    /**
+     * The `uuid` logical type mapped back to `java.util.UUID`, as the gradle plugin's README shows with
+     * `register("uuid").asType("java.util.UUID", "com.github.avrokotlin.avro4k.serializer.UUIDSerializer")`.
+     */
+    private fun resolveTestCaseLogicalTypes(testName: String): List<KotlinGenerator.LogicalTypeDescriptor> =
+        when {
+            testName.endsWith("-uuid-as-java-uuid") ->
+                listOf(
+                    KotlinGenerator.LogicalTypeDescriptor(
+                        logicalTypeName = "uuid",
+                        kotlinClassName = "java.util.UUID",
+                        kSerializerClassName = "com.github.avrokotlin.avro4k.serializer.UUIDSerializer"
+                    )
+                )
+
+            else -> emptyList()
+        }
 
     private fun resolveFieldNamingStrategy(testName: String): FieldNamingStrategy =
         when {

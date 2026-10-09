@@ -2,10 +2,8 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
-import com.github.avrokotlin.avro4k.serializer.AvroDurationSerializer
 import com.github.avrokotlin.avro4k.serializer.KotlinInstantSerializer
 import com.github.avrokotlin.avro4k.serializer.KotlinStdLibSerializersModule
-import com.github.avrokotlin.avro4k.serializer.KotlinUuidSerializer
 import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIMESTAMP_MICROS
 import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS
 import kotlinx.serialization.KSerializer
@@ -20,14 +18,9 @@ import kotlinx.serialization.modules.plus
  */
 internal actual fun defaultSerializersModule(): SerializersModule = KotlinStdLibSerializersModule + AnyTypeSerializersModule
 
-/**
- * The default of [com.github.avrokotlin.avro4k.AvroConfiguration.logicalTypes]: a new map on each call, with the Kotlin
- * types only (`uuid` as `kotlin.uuid.Uuid`, `timestamp-millis` and `timestamp-micros` as `kotlin.time.Instant`).
- */
-internal actual fun defaultLogicalTypes(): Map<String, KSerializer<out Any>> =
+/** The logical types decoded to Kotlin types: `timestamp-millis` and `timestamp-micros` as `kotlin.time.Instant`. */
+internal actual fun platformLogicalTypes(): Map<String, KSerializer<out Any>> =
     mapOf(
-        AvroDurationSerializer.LOGICAL_TYPE_NAME to AvroDurationSerializer,
-        KotlinUuidSerializer.LOGICAL_TYPE_NAME to KotlinUuidSerializer,
         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS to KotlinInstantSerializer,
         LOGICAL_TYPE_NAME_TIMESTAMP_MICROS to KotlinInstantSerializer
     )

@@ -13,9 +13,14 @@ import io.mockk.mockk
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationStrategy
 import org.apache.avro.Schema
+import org.apache.avro.SchemaBuilder
 import org.apache.avro.generic.GenericData
+import org.apache.avro.generic.GenericRecord
 import org.apache.avro.util.Utf8
 import java.nio.ByteBuffer
+import java.util.UUID
+import kotlin.uuid.Uuid
+import kotlin.uuid.toKotlinUuid
 
 class AbstractAvro4kKafkaSerializerTest : StringSpec() {
     // All the reflect/generic tests have been done in the KSerializer's tests
@@ -58,6 +63,8 @@ class AbstractAvro4kKafkaSerializerTest : StringSpec() {
             "string" to Schema.create(Schema.Type.STRING),
             mapOf(15 to "str") to Avro.apacheSchema<Map<String, String>>(),
             'A' to Schema.create(Schema.Type.INT).copy(logicalTypeName = "char"),
+            Uuid.random() to Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid"),
+            UUID.randomUUID() to Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid"),
             42 to Schema.create(Schema.Type.INT),
             42L to Schema.create(Schema.Type.LONG),
             3.14f to Schema.create(Schema.Type.FLOAT),
@@ -77,6 +84,22 @@ class AbstractAvro4kKafkaSerializerTest : StringSpec() {
             "serializing ${value::class.simpleName}($value) registers schema $expectedSchema" {
                 value shouldRegisterSchema expectedSchema
             }
+        }
+        "a generic record decoded with a kotlin Uuid field serializes back to the same bytes" {
+            val schema =
+                SchemaBuilder.record("WithUuid").fields()
+                    .name("id").type(Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid")).noDefault()
+                    .endRecord()
+            val schemaRegistry = MockSchemaRegistryClient()
+            val serializer = GenericAvro4kKafkaSerializer(isKey = false, schemaRegistry = schemaRegistry)
+            val deserializer = GenericAvro4kKafkaDeserializer(isKey = false, schemaRegistry = schemaRegistry)
+            val javaUuid = UUID.randomUUID()
+            val bytes = serializer.serialize("topic", GenericData.Record(schema).apply { put("id", javaUuid) })
+
+            val decoded = deserializer.deserialize("topic", bytes) as GenericRecord
+
+            decoded.get("id") shouldBe javaUuid.toKotlinUuid()
+            serializer.serialize("topic", decoded) shouldBe bytes
         }
     }
 

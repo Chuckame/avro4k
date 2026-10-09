@@ -2,7 +2,6 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
-import com.github.avrokotlin.avro4k.serializer.AvroDurationSerializer
 import com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer
 import com.github.avrokotlin.avro4k.serializer.InstantSerializer
 import com.github.avrokotlin.avro4k.serializer.JavaStdLibSerializersModule
@@ -15,7 +14,6 @@ import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIME_MICROS
 import com.github.avrokotlin.avro4k.serializer.LOGICAL_TYPE_NAME_TIME_MILLIS
 import com.github.avrokotlin.avro4k.serializer.LocalDateSerializer
 import com.github.avrokotlin.avro4k.serializer.LocalTimeSerializer
-import com.github.avrokotlin.avro4k.serializer.UUIDSerializer
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
@@ -34,11 +32,12 @@ internal actual fun defaultSerializersModule(): SerializersModule =
         KotlinStdLibSerializersModule +
         AnyTypeSerializersModule
 
-/** The default of [com.github.avrokotlin.avro4k.AvroConfiguration.logicalTypes]: a new map on each call. */
-internal actual fun defaultLogicalTypes(): Map<String, KSerializer<out Any>> =
+/**
+ * The logical types decoded to Java types: the date, time and timestamp logical types as java.time types, and
+ * `decimal` and `big-decimal` as `BigDecimal`.
+ */
+internal actual fun platformLogicalTypes(): Map<String, KSerializer<out Any>> =
     mapOf(
-        AvroDurationSerializer.LOGICAL_TYPE_NAME to AvroDurationSerializer,
-        UUIDSerializer.LOGICAL_TYPE_NAME to UUIDSerializer,
         BigDecimalSerializer.DECIMAL_LOGICAL_TYPE_NAME to BigDecimalSerializer,
         BigDecimalSerializer.BIG_DECIMAL_LOGICAL_TYPE_NAME to BigDecimalSerializer,
         LOGICAL_TYPE_NAME_DATE to LocalDateSerializer,

@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.plugin.gradle
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
@@ -53,7 +54,8 @@ class Avro4kGradlePluginIntegrationTest {
                 sourcesGeneration {
                     inputSchemas.from(file("schema.avsc"))
                     logicalTypes {
-                        register("uuid").asType("kotlin.uuid.Uuid", "your.own.CustomUuidKSerializer")
+                        // Back to java.util.UUID, the default before kotlin.uuid.Uuid
+                        register("uuid").asType("java.util.UUID", "com.github.avrokotlin.avro4k.serializer.UUIDSerializer")
                         register("custom-logical-type").asContextualType("your.OwnType")
                         
                         // Partial mappings are ignored as incomplete
@@ -79,10 +81,12 @@ class Avro4kGradlePluginIntegrationTest {
         // Check the generated file contains our custom type. For deeper tests, all is done in kotlin-generator module
         val generatedContent = generatedSourceFile.readText()
         println("Generated file:\n$generatedContent")
-        generatedContent shouldContain "kotlin.uuid.Uuid"
+        generatedContent shouldContain "import java.util.UUID"
+        generatedContent shouldContain "import com.github.avrokotlin.avro4k.serializer.UUIDSerializer"
+        generatedContent shouldContain "uuid: @Serializable(with = UUIDSerializer::class) UUID"
+        generatedContent shouldNotContain "kotlin.uuid.Uuid"
         generatedContent shouldContain "your.OwnType"
         generatedContent shouldContain "kotlinx.serialization.Contextual"
-        generatedContent shouldContain "your.own.CustomUuidKSerializer"
         generatedContent shouldContain "ignoredType: String"
     }
 

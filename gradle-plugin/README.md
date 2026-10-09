@@ -79,11 +79,32 @@ avro4k {
 
 ### Logical types
 
-By default, all the native logical types handled by avro4k are handled by this plugin.
+By default, all the native logical types handled by avro4k are handled by this plugin, without any configuration:
 
-As an example the logical type `uuid` will be mapped to the class `java.util.UUID` without any configuration.
+| Logical type                           | Generated Kotlin type  | Serializer               |
+|----------------------------------------|------------------------|--------------------------|
+| `uuid`                                 | `kotlin.uuid.Uuid`     | `KotlinUuidSerializer`   |
+| `duration`                             | `AvroDuration`         | `AvroDurationSerializer` |
+| `decimal`, `big-decimal`               | `java.math.BigDecimal` | `BigDecimalSerializer`   |
+| `date`                                 | `java.time.LocalDate`  | `LocalDateSerializer`    |
+| `time-millis`, `time-micros`           | `java.time.LocalTime`  | `LocalTimeSerializer`    |
+| `timestamp-millis`, `timestamp-micros` | `java.time.Instant`    | `InstantSerializer`      |
+
+`AvroDuration` and the serializers are in the `com.github.avrokotlin.avro4k.serializer` package. Any other logical type is generated as its underlying Avro type,
+unless you register it.
 
 To add new logical types mappings, or override the native ones, you can configure the `logicalTypes` property.
+
+Example: to generate the `uuid` logical type as `java.util.UUID`, as before avro4k v3 (it is now `kotlin.uuid.Uuid` by default):
+```kotlin
+avro4k {
+    sourcesGeneration {
+        logicalTypes {
+            register("uuid").asType("java.util.UUID", "com.github.avrokotlin.avro4k.serializer.UUIDSerializer")
+        }
+    }
+}
+```
 
 Example: to override the native `custom` logical type to use your type `your.own.Type`:
 ```kotlin
@@ -179,7 +200,7 @@ map values and union branches referencing it:
 @AvroAlias("com.example.OldHash")
 value class Hash(
     @AvroFixed(size = 32)
-    val `value`: ByteArray, // or the type of the fixed's logical type (e.g. `BigDecimal` with `@AvroDecimal`, `UUID`), or of its `java-class`
+    val `value`: ByteArray, // or the type of the fixed's logical type (e.g. `BigDecimal` with `@AvroDecimal`, `Uuid`), or of its `java-class`
 )
 ```
 

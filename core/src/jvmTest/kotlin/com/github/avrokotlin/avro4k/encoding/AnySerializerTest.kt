@@ -11,6 +11,7 @@ import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
 import com.github.avrokotlin.avro4k.serializer.AnySerializer
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
+import com.github.avrokotlin.avro4k.serializer.UUIDSerializer
 import com.github.avrokotlin.avro4k.toAvro4k
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.should
@@ -41,6 +42,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlin.uuid.Uuid
+import kotlin.uuid.toJavaUuid
+import kotlin.uuid.toKotlinUuid
 
 class AnySerializerTest : StringSpec() {
     init {
@@ -381,12 +385,51 @@ class AnySerializerTest : StringSpec() {
 
             Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
         }
-        "deserializing a schema with the logicalType 'uuid' should return an UUID" {
+        "deserializing a schema with the logicalType 'uuid' should return a kotlin Uuid" {
+            val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid")
+            val value = Uuid.random()
+            val bytes = Avro.encodeWith(schema, value.toString())
+
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
+        }
+        "deserializing a fixed schema with the logicalType 'uuid' should return a kotlin Uuid" {
+            val schema = Schema.createFixed("the.Uuid", null, null, 16).copy(logicalTypeName = "uuid")
+            val value = Uuid.random()
+            val bytes = Avro.encodeWith(schema, value.toByteArray())
+
+            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
+        }
+        "deserializing a schema with the logicalType 'uuid' should return a java UUID when its serializer is registered for it" {
             val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid")
             val value = UUID.randomUUID()
             val bytes = Avro.encodeWith(schema, value.toString())
 
-            Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe value
+            Avro { setLogicalTypeSerializer("uuid", UUIDSerializer) }
+                .decodeWith(schema, AnySerializer(), bytes) shouldBe value
+        }
+        "serializing a java UUID or a kotlin Uuid as Any should encode the same uuid string" {
+            val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid")
+            val javaUuid = UUID.randomUUID()
+            val expectedBytes = Avro.encodeWith(schema, javaUuid.toString())
+
+            Avro.encodeWith<Any>(schema, AnySerializer(), javaUuid) shouldBe expectedBytes
+            Avro.encodeWith<Any>(schema, AnySerializer(), javaUuid.toKotlinUuid()) shouldBe expectedBytes
+        }
+        "serializing a java UUID or a kotlin Uuid as Any should encode the same uuid fixed" {
+            val schema = Schema.createFixed("the.Uuid", null, null, 16).copy(logicalTypeName = "uuid")
+            val kotlinUuid = Uuid.random()
+            val expectedBytes = Avro.encodeWith(schema, kotlinUuid.toByteArray())
+
+            Avro.encodeWith<Any>(schema, AnySerializer(), kotlinUuid) shouldBe expectedBytes
+            Avro.encodeWith<Any>(schema, AnySerializer(), kotlinUuid.toJavaUuid()) shouldBe expectedBytes
+        }
+        "a uuid decoded as Any should encode back to the same bytes" {
+            val schema = Schema.create(Schema.Type.STRING).copy(logicalTypeName = "uuid")
+            val bytes = Avro.encodeWith(schema, Uuid.random().toString())
+
+            val decoded = Avro.decodeWith(schema, AnySerializer(), bytes)
+
+            Avro.encodeWith<Any>(schema, AnySerializer(), decoded) shouldBe bytes
         }
         "deserializing a schema with the logicalType 'decimal' should return a BigDecimal" {
             val schema = Schema.create(Schema.Type.BYTES).copy(logicalType = LogicalTypes.decimal(4, 2))
