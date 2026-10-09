@@ -629,6 +629,24 @@ public final synthetic class com/github/avrokotlin/avro4k/internal/AvroGenerated
 	public final synthetic fun originalSchema ()Ljava/lang/String;
 }
 
+public abstract class com/github/avrokotlin/avro4k/serializer/AbstractAnySerializer : kotlinx/serialization/KSerializer {
+	public fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun getNullable ()Lkotlinx/serialization/KSerializer;
+	protected fun preResolveDeserializationStrategy (Lkotlinx/serialization/modules/SerializersModule;Lcom/github/avrokotlin/avro4k/AvroSchema;)Lkotlinx/serialization/DeserializationStrategy;
+	protected fun resolveArrayDeserializationStrategy (Lkotlinx/serialization/modules/SerializersModule;Lcom/github/avrokotlin/avro4k/AvroSchema;)Lkotlinx/serialization/DeserializationStrategy;
+	protected fun resolveEnumDeserializationStrategy (Lkotlinx/serialization/modules/SerializersModule;Lcom/github/avrokotlin/avro4k/AvroSchema;)Lkotlinx/serialization/DeserializationStrategy;
+	protected fun resolveFixedDeserializationStrategy (Lkotlinx/serialization/modules/SerializersModule;Lcom/github/avrokotlin/avro4k/AvroSchema;)Lkotlinx/serialization/DeserializationStrategy;
+	protected fun resolveMapDeserializationStrategy (Lkotlinx/serialization/modules/SerializersModule;Lcom/github/avrokotlin/avro4k/AvroSchema;)Lkotlinx/serialization/DeserializationStrategy;
+	protected fun resolveRecordDeserializationStrategy (Lkotlinx/serialization/modules/SerializersModule;Lcom/github/avrokotlin/avro4k/AvroSchema;)Lkotlinx/serialization/DeserializationStrategy;
+}
+
+public class com/github/avrokotlin/avro4k/serializer/AnySerializer : com/github/avrokotlin/avro4k/serializer/AbstractAnySerializer {
+	public fun <init> ()V
+	protected fun inferSerializationStrategyFromNonSerializableType (Lkotlinx/serialization/modules/SerializersModule;Ljava/lang/Class;)Lkotlinx/serialization/SerializationStrategy;
+	public fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+}
+
 public final class com/github/avrokotlin/avro4k/serializer/AvroDuration {
 	public static final field Companion Lcom/github/avrokotlin/avro4k/serializer/AvroDuration$Companion;
 	public synthetic fun <init> (IIILkotlin/jvm/internal/DefaultConstructorMarker;)V

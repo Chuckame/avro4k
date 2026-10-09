@@ -2,6 +2,8 @@ package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.CoreSchema
+import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
+import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.SomeEnum
 import com.github.avrokotlin.avro4k.ValueClassWithGenericField
 import com.github.avrokotlin.avro4k.apacheSchema
@@ -13,6 +15,7 @@ import com.github.avrokotlin.avro4k.serializer.AnySerializer
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
 import com.github.avrokotlin.avro4k.serializer.UUIDSerializer
 import com.github.avrokotlin.avro4k.toAvro4k
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.should
 import io.kotest.matchers.shouldBe
@@ -36,6 +39,7 @@ import kotlinx.serialization.serializer
 import org.apache.avro.LogicalTypes
 import org.apache.avro.Schema
 import org.junit.jupiter.api.assertThrows
+import java.lang.reflect.Modifier
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -48,6 +52,19 @@ import kotlin.uuid.toKotlinUuid
 
 class AnySerializerTest : StringSpec() {
     init {
+        "AnySerializer needs only the experimental opt-in, as neither it nor its superclasses or their members are internal API" {
+            // the build opts every module in to the internal API, so this is checked on the compiled markers instead
+            AnySerializer::class.java.isAnnotationPresent(ExperimentalAvro4kApi::class.java) shouldBe true
+            val internal = InternalAvro4kApi::class.java
+            val types = generateSequence<Class<*>>(AnySerializer::class.java) { it.superclass }.takeWhile { it != Any::class.java }.toList()
+            types.map { it.simpleName } shouldBe listOf("AnySerializer", "AbstractAnySerializer")
+            for (type in types) {
+                withClue(type.name) { type.isAnnotationPresent(internal) shouldBe false }
+                for (method in type.declaredMethods.filter { Modifier.isPublic(it.modifiers) || Modifier.isProtected(it.modifiers) }) {
+                    withClue("${type.name}.${method.name}") { method.isAnnotationPresent(internal) shouldBe false }
+                }
+            }
+        }
         "The AnySerializer is registered in the default serializers module" {
             Avro.serializersModule.serializer<Any>() should beInstanceOf<AnySerializer>()
         }

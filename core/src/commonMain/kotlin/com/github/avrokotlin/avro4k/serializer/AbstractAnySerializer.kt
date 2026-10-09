@@ -3,7 +3,7 @@ package com.github.avrokotlin.avro4k.serializer
 import com.github.avrokotlin.avro4k.AvroConfiguration
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.InternalAvro4kApi
+import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.decoder.AvroFormatDecoder
 import kotlinx.serialization.DeserializationStrategy
@@ -33,10 +33,14 @@ internal val AnyTypeSerializersModule: SerializersModule
  * its customization hooks. Encoding infers the strategy from the value's runtime type, which only [AnySerializer]
  * knows how to inspect on each platform.
  *
+ * Not meant to be used directly (its constructor is internal): use or extend [AnySerializer]. It is public, and
+ * experimental like [AnySerializer], because it holds what [AnySerializer]'s users see: [nullable] and the decoding hooks
+ * a subclass overrides.
+ *
  * At decoding, it delegates the process to the inferred [KSerializer] from the [AvroSchema.type] (example: [AvroSchema.Type.BOOLEAN] is handled by the [Boolean]'s serializer).
  * For more customization about named types, see [resolveFixedDeserializationStrategy], [resolveEnumDeserializationStrategy], and [resolveRecordDeserializationStrategy].
  */
-@InternalAvro4kApi
+@ExperimentalAvro4kApi
 public abstract class AbstractAnySerializer internal constructor() : KSerializer<Any> {
     /**
      * By writer schema, identity first, backed by equality: a writer schema handed in fresh (but equal) on every call —
@@ -144,7 +148,7 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
      * @param writerSchema the schema from which the value is being decoded
      * @return the serializer to be used, or `null` (the default) if no serializer is found.
      */
-    @InternalAvro4kApi
+    @ExperimentalAvro4kApi
     protected open fun SerializersModule.preResolveDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any>? {
         return null
     }
@@ -160,7 +164,7 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
      * @param writerSchema the schema always being of the type [AvroSchema.Type.ARRAY]
      * @return the serializer to be used for array types when decoding
      */
-    @InternalAvro4kApi
+    @ExperimentalAvro4kApi
     protected open fun SerializersModule.resolveArrayDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return ListSerializer(this@AbstractAnySerializer.nullable)
     }
@@ -176,7 +180,7 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
      * @param writerSchema the schema always being of the type [AvroSchema.Type.MAP]
      * @return the serializer to be used for map types when decoding
      */
-    @InternalAvro4kApi
+    @ExperimentalAvro4kApi
     protected open fun SerializersModule.resolveMapDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return MapSerializer(String.serializer(), this@AbstractAnySerializer.nullable)
     }
@@ -192,7 +196,7 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
      * @param writerSchema the schema always being of the type [AvroSchema.Type.ENUM]
      * @return the serializer to be used for enum types when decoding
      */
-    @InternalAvro4kApi
+    @ExperimentalAvro4kApi
     protected open fun SerializersModule.resolveEnumDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return String.serializer()
     }
@@ -208,7 +212,7 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
      * @param writerSchema the schema always being of the type [AvroSchema.Type.FIXED]
      * @return the serializer to be used for fixed types when decoding
      */
-    @InternalAvro4kApi
+    @ExperimentalAvro4kApi
     protected open fun SerializersModule.resolveFixedDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return ByteArraySerializer()
     }
@@ -226,7 +230,7 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
      * @param writerSchema the schema always being of the type [AvroSchema.Type.RECORD]
      * @return the serializer to be used for record types when decoding
      */
-    @InternalAvro4kApi
+    @ExperimentalAvro4kApi
     protected open fun SerializersModule.resolveRecordDeserializationStrategy(writerSchema: AvroSchema): DeserializationStrategy<Any> {
         return MapSerializer(String.serializer(), this@AbstractAnySerializer.nullable)
     }

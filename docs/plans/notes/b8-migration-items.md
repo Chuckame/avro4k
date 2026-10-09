@@ -150,7 +150,7 @@ convert with the `apache-interop` module: `apacheSchema.toAvro4k()`, `avroSchema
 | `AvroSingleObject(schemaRegistry)` lambda, `encodeToSink` / `encodeToStream` / `encodeToByteArray(writerSchema, …)` | `Schema` | `AvroSchema` |
 | `AvroObjectContainer.openWriter(schema, …)` | `Schema` | `AvroSchema` |
 | `MissingFieldsEncodingException(fields, writerSchema[, descriptor])` | `List<Schema.Field>, Schema` | `List<AvroSchema.RecordSchema.Field>, AvroSchema` |
-| internal-API (`@InternalAvro4kApi`): `AnySerializer` hooks, `trySelectNamedSchema`, `namedSchemaNotFoundInUnionError`, `isNamedSchema` | `Schema`, `Schema.Type` | `AvroSchema`, `AvroSchema.Type` |
+| `AnySerializer` hooks (experimental since M3-24); internal-API (`@InternalAvro4kApi`): `trySelectNamedSchema`, `namedSchemaNotFoundInUnionError`, `isNamedSchema` | `Schema`, `Schema.Type` | `AvroSchema`, `AvroSchema.Type` |
 
 Behaviour to call out: `AvroSchema.toString()` is not json (`toJsonElement()`); `toApacheSchema()` keeps `char` and custom
 logical types; an Apache schema equal to one already converted maps to the first one's conversion (docs/aliases of the
@@ -238,9 +238,10 @@ One line each, with where the details are. Not rewritten here.
   - a value of any type (what `decodeValue()` was meant for): `decoder.decodeSerializableValue(AnySerializer())`. It
     returns the Kotlin values `AnySerializer` decodes (`AvroConfiguration.logicalTypes` applied; a fixed as `ByteArray`,
     an enum as `String`, a record or a map as `Map<String, Any?>`, an array as `List<Any?>`), never an Apache
-    `GenericData` value. **Open, for the user (`m3-23.md`):** `AnySerializer` is itself `@InternalAvro4kApi`, and today
-    it works only on the binary decoder — on a missing field's default and through `decodeFromGenericData` it throws a
-    `ClassCastException` (it casts the decoder to the binary one).
+    `GenericData` value. `AnySerializer` (and its superclass `AbstractAnySerializer`, which holds `nullable` and the
+    decoding hooks) is **`@ExperimentalAvro4kApi`** since M3-24 (it was `@InternalAvro4kApi`: user decision
+    2026-10-10), and works on every avro4k decoder: from bytes, on a missing field's default and through
+    `decodeFromGenericData` (it used to throw a `ClassCastException` on the last two: [`m3-24.md`](m3-24.md)).
   Nothing else in avro4k (Confluent, kotlin-generator, gradle-plugin, benchmark) called it.
 
 ## Platform differences (from [`m3-13.md`](m3-13.md), core moving to `commonMain`) — document prominently

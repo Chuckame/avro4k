@@ -1,7 +1,7 @@
 package com.github.avrokotlin.avro4k.serializer
 
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.InternalAvro4kApi
+import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
  * At decoding, it delegates the process to the inferred [KSerializer] from the [AvroSchema.type] (example: [AvroSchema.Type.BOOLEAN] is handled by the [Boolean]'s serializer).
  * For more customization about named types, see [resolveFixedDeserializationStrategy], [resolveEnumDeserializationStrategy], and [resolveRecordDeserializationStrategy].
  */
-@InternalAvro4kApi
+@ExperimentalAvro4kApi
 public actual open class AnySerializer actual constructor() : AbstractAnySerializer() {
     // No need to use a WeakHashMap with class keys
     private val encodingCache = ConcurrentHashMap<Class<out Any>, SerializationStrategy<Any>>()
@@ -69,7 +69,7 @@ public actual open class AnySerializer actual constructor() : AbstractAnySeriali
      *
      * @return the serializer to use for the given [type], or `null` if none, which will raise a [SerializationException].
      */
-    @InternalAvro4kApi
+    @ExperimentalAvro4kApi
     protected open fun SerializersModule.inferSerializationStrategyFromNonSerializableType(type: Class<out Any>): SerializationStrategy<*>? {
         return null
     }
