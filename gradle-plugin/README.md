@@ -137,6 +137,48 @@ val yourConfiguredInstance = Avro {
 }
 ```
 
+If your type, or its serializer, requires an opt-in (it is annotated with an annotation class marked `@RequiresOptIn`),
+declare its marker with `requiresOptIn` before `asType` or `asContextualType`. Only the generated files using this logical type
+opt in to it:
+```kotlin
+avro4k {
+    sourcesGeneration {
+        logicalTypes {
+            register("custom").requiresOptIn("your.own.ExperimentalTypeApi").asType("your.own.Type", "your.own.CustomKSerializer")
+        }
+    }
+}
+```
+
+> [!NOTE]
+> `kotlin.uuid.Uuid` is stable since Kotlin 2.4, but experimental before. So that the generated code also compiles with an older
+> Kotlin API version, the files using `kotlin.uuid.Uuid` always opt in to `kotlin.uuid.ExperimentalUuidApi`: nothing to configure.
+
+### Opt-ins and annotations on generated files
+
+Every generated file has a single `@file:OptIn(...)`, with avro4k's markers (the generated code uses avro4k's internal API), the ones
+required by the logical types it uses, and the ones you add for every file. You can also add your own annotations to every generated file:
+```kotlin
+avro4k {
+    sourcesGeneration {
+        fileAnnotations {
+            optIn("your.own.ExperimentalApi")
+            // the arguments are Kotlin code, written as is
+            annotation("kotlin.Suppress", "\"RedundantVisibilityModifier\"")
+        }
+    }
+}
+```
+Every generated file then starts with:
+```kotlin
+@file:OptIn(
+    ExperimentalApi::class,
+    ExperimentalAvro4kApi::class,
+    InternalAvro4kApi::class,
+)
+@file:Suppress("RedundantVisibilityModifier")
+```
+
 ### Generated code details
 
 The plugin generates Kotlin data classes from Avro schema files, following that:

@@ -90,6 +90,101 @@ class Avro4kGradlePluginIntegrationTest {
         generatedContent shouldContain "ignoredType: String"
     }
 
+    @Test
+    fun `sources generation can be configured with opt-ins and file annotations`() {
+        settingsFile.writeText("")
+        schemaFile.writeText(
+            """
+            {
+                "type" : "record",
+                "name" : "Schema",
+                "fields" : [
+                    {
+                        "name" : "uuid",
+                        "type" : {"type":"string", "logicalType":"uuid"}
+                    },
+                    {
+                        "name" : "customType",
+                        "type" : {"type":"string", "logicalType":"custom-logical-type"}
+                    },
+                    {
+                        "name" : "nested",
+                        "type" : {"type":"record", "name":"Nested", "fields":[{"name":"plain", "type":"string"}]}
+                    }
+                ]
+            }
+            """.trimIndent()
+        )
+        buildFile.writeText(
+            """
+            plugins {
+                id("io.github.avro-kotlin")
+            }
+            avro4k {
+                sourcesGeneration {
+                    inputSchemas.from(file("schema.avsc"))
+                    logicalTypes {
+                        register("custom-logical-type").requiresOptIn("your.own.OwnTypeApi").asType("your.own.OwnType", "your.own.OwnTypeSerializer")
+                    }
+                    fileAnnotations {
+                        optIn("your.own.ExperimentalApi", "com.github.avrokotlin.avro4k.InternalAvro4kApi")
+                        annotation("kotlin.Suppress", "\"RedundantVisibilityModifier\"", "\"UnusedImport\"")
+                    }
+                }
+            }
+            """.trimIndent()
+        )
+
+        val result =
+            GradleRunner.create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withArguments("generateAvroKotlinSources", "--stacktrace")
+                .forwardOutput()
+                .withDebug(true)
+                .build()!!
+
+        result.shouldHaveTaskSuccess(":generateAvroKotlinSources")
+
+        val generatedContent = generatedSourceFile.readText()
+        println("Generated file:\n$generatedContent")
+        generatedContent shouldContain
+            """
+            @file:OptIn(
+                ExperimentalApi::class,
+                ExperimentalAvro4kApi::class,
+                ExperimentalUuidApi::class,
+                InternalAvro4kApi::class,
+                OwnTypeApi::class,
+            )
+            @file:Suppress(
+                "RedundantVisibilityModifier",
+                "UnusedImport",
+            )
+            """.trimIndent()
+        generatedContent shouldContain "import your.own.OwnTypeApi"
+        generatedContent shouldContain "import kotlin.uuid.ExperimentalUuidApi"
+        generatedContent shouldContain "customType: @Serializable(with = OwnTypeSerializer::class) OwnType"
+
+        // The opt-ins of the logical types are only in the files using them
+        val nestedContent = projectDir.resolve("build/generated/sources/avro/main/Nested.kt").readText()
+        println("Generated nested file:\n$nestedContent")
+        nestedContent shouldContain
+            """
+            @file:OptIn(
+                ExperimentalApi::class,
+                ExperimentalAvro4kApi::class,
+                InternalAvro4kApi::class,
+            )
+            @file:Suppress(
+                "RedundantVisibilityModifier",
+                "UnusedImport",
+            )
+            """.trimIndent()
+        nestedContent shouldNotContain "OwnTypeApi"
+        nestedContent shouldNotContain "ExperimentalUuidApi"
+    }
+
     fun BuildResult.shouldHaveTaskSuccess(taskPath: String) {
         val task = this.task(taskPath)
         withClue("'$taskPath' task should succeed") {

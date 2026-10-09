@@ -3,13 +3,17 @@ package com.github.avrokotlin.avro4k.plugin.gradle
 import com.github.avrokotlin.avro4k.FieldNamingStrategy
 import com.github.avrokotlin.avro4k.KotlinGenerator
 import com.github.avrokotlin.avro4k.generateKotlinClassesFromFiles
+import com.squareup.kotlinpoet.AnnotationSpec
+import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FileSpec
 import org.gradle.api.Action
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.IgnoreEmptyDirectories
 import org.gradle.api.tasks.Input
@@ -100,6 +104,35 @@ public interface Avro4kPluginSourcesGenerationExtension {
      */
     public fun logicalTypes(action: Action<in Avro4kPluginSourcesGenerationLogicalTypesExtension>): Unit =
         action.execute(logicalTypes)
+
+    @get:Nested
+    public val fileAnnotations: Avro4kPluginSourcesGenerationFileAnnotationsExtension
+
+    /**
+     * Configures the opt-ins and the annotations added to every generated file.
+     *
+     * Each generated file has a single `@file:OptIn(...)`, with the markers given here, the ones avro4k needs, and the ones required
+     * by the logical types the file uses (see [LogicalTypeBuilder.requiresOptIn]).
+     *
+     * Example:
+     * ```
+     * avro4k {
+     *   sourcesGeneration {
+     *     fileAnnotations {
+     *       optIn("your.own.ExperimentalApi")
+     *       annotation("kotlin.Suppress", "\"RedundantVisibilityModifier\"")
+     *     }
+     *   }
+     * }
+     * ```
+     * Then every generated file starts with:
+     * ```
+     * @file:OptIn(ExperimentalApi::class, ExperimentalAvro4kApi::class, InternalAvro4kApi::class)
+     * @file:Suppress("RedundantVisibilityModifier")
+     * ```
+     */
+    public fun fileAnnotations(action: Action<in Avro4kPluginSourcesGenerationFileAnnotationsExtension>): Unit =
+        action.execute(fileAnnotations)
 }
 
 public interface Avro4kPluginSourcesGenerationLogicalTypesExtension {
@@ -111,16 +144,76 @@ public interface Avro4kPluginSourcesGenerationLogicalTypesExtension {
     public val mappings: MapProperty<String, LogicalTypeMapping>
 }
 
+public interface Avro4kPluginSourcesGenerationFileAnnotationsExtension {
+    /**
+     * The fully qualified names of the opt-in marker classes (annotation classes annotated with `@RequiresOptIn`) that every generated
+     * file opts in to.
+     */
+    @get:Input
+    public val optIns: SetProperty<String>
+
+    /** The annotations added to every generated file, with the `file` use-site target. */
+    @get:Input
+    public val annotations: ListProperty<FileAnnotation>
+
+    /**
+     * Makes every generated file opt in to the given markers, in its `@file:OptIn(...)`.
+     *
+     * @param markerClassNames the fully qualified names of the opt-in marker classes
+     */
+    public fun optIn(vararg markerClassNames: String) {
+        optIns.addAll(*markerClassNames)
+    }
+
+    /**
+     * Adds the annotation to every generated file, as `@file:<annotation simple name>(<arguments>)`.
+     * Use [optIn] for `kotlin.OptIn`, as a file can only have one.
+     *
+     * @param className the fully qualified name of the annotation class, imported in the generated files
+     * @param arguments the arguments of the annotation, as Kotlin code written as is (e.g. `"\"a string\""`, `"your.own.Type::class"`, `"level = 2"`)
+     */
+    public fun annotation(className: String, vararg arguments: String) {
+        require(className != "kotlin.OptIn") { "Use optIn(...) to opt in to markers in the generated files, instead of annotation(\"kotlin.OptIn\", ...)" }
+        annotations.add(FileAnnotation(className, arguments.toList()))
+    }
+}
+
 @ConsistentCopyVisibility
 public data class LogicalTypeMapping internal constructor(
     val type: String,
     val serializerType: String?,
+    val requiredOptIns: List<String> = emptyList(),
+) : java.io.Serializable
+
+/** An annotation added to every generated file, see [Avro4kPluginSourcesGenerationFileAnnotationsExtension.annotation]. */
+@ConsistentCopyVisibility
+public data class FileAnnotation internal constructor(
+    val className: String,
+    val arguments: List<String>,
 ) : java.io.Serializable
 
 public class LogicalTypeBuilder internal constructor(
     private val logicalTypeName: String,
     private val whenBuilt: (String, LogicalTypeMapping) -> Unit,
 ) {
+    private var requiredOptIns: List<String> = emptyList()
+
+    /**
+     * Declares the opt-in markers that the class of this logical type, or its serializer, requires. The generated files using this
+     * logical type opt in to them, in their `@file:OptIn(...)`; the other files do not. To be called before [asType] or [asContextualType]:
+     * ```
+     * register("custom").requiresOptIn("your.own.ExperimentalApi").asType("your.own.Type", "your.own.CustomKSerializer")
+     * ```
+     * Not needed for `kotlin.uuid.Uuid`: the files using it always opt in to `kotlin.uuid.ExperimentalUuidApi`, so they also compile with a
+     * Kotlin API version older than 2.4, where it is experimental.
+     *
+     * @param markerClassNames the fully qualified names of the opt-in marker classes
+     */
+    public fun requiresOptIn(vararg markerClassNames: String): LogicalTypeBuilder {
+        requiredOptIns = requiredOptIns + markerClassNames
+        return this
+    }
+
     /**
      * Maps the logical type to a given class with a serializer set at compile-time for better performances (no lookup at runtime).
      * The fields generated from a logical type will be annotated with `@kotlinx.serialization.Serializable(with = serializerTypeName)`.
@@ -130,7 +223,7 @@ public class LogicalTypeBuilder internal constructor(
      * @param serializerTypeName the fully qualified name of the serializer to be used
      */
     public fun asType(className: String, serializerTypeName: String) {
-        whenBuilt(logicalTypeName, LogicalTypeMapping(className, serializerTypeName))
+        whenBuilt(logicalTypeName, LogicalTypeMapping(className, serializerTypeName, requiredOptIns))
     }
 
     /**
@@ -150,7 +243,7 @@ public class LogicalTypeBuilder internal constructor(
      * To specify the serializer at compile-time (recommended), use [asType] instead.
      */
     public fun asContextualType(className: String) {
-        whenBuilt(logicalTypeName, LogicalTypeMapping(className, null))
+        whenBuilt(logicalTypeName, LogicalTypeMapping(className, null, requiredOptIns))
     }
 }
 
@@ -171,6 +264,12 @@ public abstract class GenerateKotlinAvroSourcesTask : DefaultTask() {
     @get:Input
     public abstract val useKotlinConventionForFieldNames: Property<Boolean>
 
+    @get:Input
+    public abstract val fileOptIns: SetProperty<String>
+
+    @get:Input
+    public abstract val fileAnnotations: ListProperty<FileAnnotation>
+
     @TaskAction
     public fun generateKotlinSources() {
         val logicalTypes = logicalTypes.get()
@@ -189,8 +288,16 @@ public abstract class GenerateKotlinAvroSourcesTask : DefaultTask() {
                         KotlinGenerator.LogicalTypeDescriptor(
                             logicalTypeName = it.key,
                             kotlinClassName = it.value.type,
-                            kSerializerClassName = it.value.serializerType
+                            kSerializerClassName = it.value.serializerType,
+                            requiredOptIns = it.value.requiredOptIns
                         )
+                    },
+                fileOptIns = fileOptIns.getOrElse(emptySet()).toList(),
+                fileAnnotations =
+                    fileAnnotations.getOrElse(emptyList()).map { annotation ->
+                        AnnotationSpec.builder(ClassName.bestGuess(annotation.className))
+                            .apply { annotation.arguments.forEach { addMember("%L", it) } }
+                            .build()
                     }
             )
         val outputDir = outputDir.asFile.get()

@@ -35,6 +35,8 @@ public class Avro4kGradlePlugin : Plugin<Project> {
                 outputDir.set(extension.sourcesGeneration.outputDir)
                 useKotlinConventionForFieldNames.set(extension.sourcesGeneration.useKotlinConventionForFieldNames)
                 logicalTypes.set(extension.sourcesGeneration.logicalTypes.mappings)
+                fileOptIns.set(extension.sourcesGeneration.fileAnnotations.optIns)
+                fileAnnotations.set(extension.sourcesGeneration.fileAnnotations.annotations)
             }
 
         project.plugins.withId("org.jetbrains.kotlin.jvm") {
