@@ -2,7 +2,7 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.Buffer
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
-import com.github.avrokotlin.avro4k.internal.avro4kToApacheUncached
+import com.github.avrokotlin.avro4k.internal.parsingFingerprintCrc64AvroBytes
 import kotlinx.io.Buffer
 import kotlinx.io.Sink
 import kotlinx.io.Source
@@ -14,7 +14,6 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
-import org.apache.avro.SchemaNormalization
 
 /**
  * Single Avro objects are encoded as follows:
@@ -24,7 +23,9 @@ import org.apache.avro.SchemaNormalization
  *
  * [spec](https://avro.apache.org/docs/1.12.1/specification/#single-object-encoding)
  *
- * @param schemaRegistry a function to find a schema by its fingerprint, and returns null when not found. You should use [SchemaNormalization.parsingFingerprint64] to generate the fingerprint.
+ * @param schemaRegistry a function to find a schema by its fingerprint, and returns null when not found. The fingerprint is
+ *   the 64-bit CRC-64-AVRO fingerprint of the schema's Parsing Canonical Form, e.g. Apache Avro's
+ *   `SchemaNormalization.parsingFingerprint64` on the JVM.
  */
 @ExperimentalAvro4kApi
 public class AvroSingleObject(
@@ -51,11 +52,8 @@ public class AvroSingleObject(
      */
     private val fingerprintCache = IdentityFirstCache<AvroSchema, ByteArray>()
 
-    // Apache's normalization needs its own model: converted on a miss only, uncached, as nothing else needs that form
-    private fun AvroSchema.crc64avro(): ByteArray =
-        fingerprintCache.getOrPut(this) {
-            SchemaNormalization.parsingFingerprint("CRC-64-AVRO", avro4kToApacheUncached(this))
-        }
+    // Byte for byte the fingerprint Apache Avro's `SchemaNormalization.parsingFingerprint("CRC-64-AVRO", …)` computes
+    private fun AvroSchema.crc64avro(): ByteArray = fingerprintCache.getOrPut(this) { parsingFingerprintCrc64AvroBytes() }
 
     public fun <T> encodeToSink(
         writerSchema: AvroSchema,

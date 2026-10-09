@@ -31,7 +31,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
-import org.apache.avro.AvroTypeException
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
@@ -393,18 +392,18 @@ private fun BigDecimal.validateDecimal(schema: AvroSchema): BigDecimal {
             value = setScale(scale, RoundingMode.UNNECESSARY)
             scaleAdjusted = true
         } catch (_: ArithmeticException) {
-            throw AvroTypeException("Cannot encode decimal with scale $valueScale as scale $scale without rounding")
+            throw SerializationException("Cannot encode decimal with scale $valueScale as scale $scale without rounding")
         }
     }
     val precision = schema.decimalPrecision
     val valuePrecision = value.precision()
     if (valuePrecision > precision) {
         if (scaleAdjusted) {
-            throw AvroTypeException(
+            throw SerializationException(
                 "Cannot encode decimal with precision $valuePrecision as max precision $precision. This is after safely adjusting scale from $valueScale to required $scale"
             )
         } else {
-            throw AvroTypeException("Cannot encode decimal with precision $valuePrecision as max precision $precision")
+            throw SerializationException("Cannot encode decimal with precision $valuePrecision as max precision $precision")
         }
     }
     return value

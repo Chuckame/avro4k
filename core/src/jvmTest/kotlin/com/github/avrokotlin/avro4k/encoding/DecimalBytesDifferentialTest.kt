@@ -8,6 +8,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import kotlinx.serialization.SerializationException
 import org.apache.avro.AvroTypeException
 import org.apache.avro.Conversions
 import org.apache.avro.LogicalTypes
@@ -84,7 +85,8 @@ internal class DecimalBytesDifferentialTest : StringSpec({
         for (value in listOf(BigDecimal("1.234"), BigDecimal("123.4"), BigDecimal("12345"))) {
             withClue(value) {
                 val apache = shouldThrow<AvroTypeException> { conversion.toBytes(value, schema, schema.logicalType) }
-                shouldThrow<AvroTypeException> { Avro.encodeWith(schema, BigDecimalSerializer, value) }.message shouldBe apache.message
+                // a SerializationException, as every avro4k encoding failure, with Apache's message
+                shouldThrow<SerializationException> { Avro.encodeWith(schema, BigDecimalSerializer, value) }.message shouldBe apache.message
             }
         }
     }
