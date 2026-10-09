@@ -10,10 +10,14 @@ import kotlinx.serialization.serializer
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericContainer
 
-private const val DEPRECATION_MSG =
-    "The GenericData serialization has been deprecated prior to the new confluent-kafka-serializer module. Please file an issue if you still need GenericData serialization without a confluent schema registry"
-
-@Deprecated(message = DEPRECATION_MSG, level = DeprecationLevel.WARNING)
+/**
+ * Encodes [value] with [serializer] into Apache Avro's generic data model, following [writerSchema]: a record as an
+ * Apache `GenericData.Record`, a fixed as a `GenericData.Fixed`, an enum as a `GenericData.EnumSymbol`, an array as a
+ * collection, a map as a map, a string as an Apache `Utf8`, bytes as a `ByteBuffer`, a primitive as its boxed value, a logical
+ * type as its underlying type's value. The result can be written by Apache's `GenericDatumWriter`.
+ *
+ * From the `avro4k-apache-interop` artifact (JVM only), which bridges avro4k and Apache Avro.
+ */
 @ExperimentalAvro4kApi
 public fun <T> Avro.encodeToGenericData(
     writerSchema: Schema,
@@ -28,27 +32,42 @@ public fun <T> Avro.encodeToGenericData(
     return result
 }
 
-@Deprecated(message = DEPRECATION_MSG, level = DeprecationLevel.WARNING)
+/**
+ * Encodes [value] into Apache Avro's generic data model, following the schema avro4k infers for [T] (see
+ * [Avro.schema]). See the overload taking a writer schema for the generic values produced.
+ *
+ * From the `avro4k-apache-interop` artifact (JVM only), which bridges avro4k and Apache Avro.
+ */
 @ExperimentalAvro4kApi
 public inline fun <reified T> Avro.encodeToGenericData(value: T): Any? {
     val serializer = serializersModule.serializer<T>()
     // Apache-typed, as the generic data it produces: the generated schema's Apache form, through the cached converter
-    @Suppress("DEPRECATION")
     return encodeToGenericData(schema(serializer).toApacheSchema(), serializer, value)
 }
 
-@Deprecated(message = DEPRECATION_MSG, level = DeprecationLevel.WARNING)
+/**
+ * Encodes [value] into Apache Avro's generic data model, following [writerSchema], with the serializer of [T] from
+ * [Avro.serializersModule]. See the overload taking a serializer for the generic values produced.
+ *
+ * From the `avro4k-apache-interop` artifact (JVM only), which bridges avro4k and Apache Avro.
+ */
 @ExperimentalAvro4kApi
 public inline fun <reified T> Avro.encodeToGenericData(
     writerSchema: Schema,
     value: T,
 ): Any? {
     val serializer = serializersModule.serializer<T>()
-    @Suppress("DEPRECATION")
     return encodeToGenericData(writerSchema, serializer, value)
 }
 
-@Deprecated(message = DEPRECATION_MSG, level = DeprecationLevel.WARNING)
+/**
+ * Decodes [value], a value of Apache Avro's generic data model (e.g. read by Apache's `GenericDatumReader`), written
+ * with [writerSchema], with [deserializer]. Reader and writer schemas are resolved as when decoding bytes (missing
+ * fields take their default, an `int` can be read as a `long`…), and a union takes the branch of the generic value it
+ * holds.
+ *
+ * From the `avro4k-apache-interop` artifact (JVM only), which bridges avro4k and Apache Avro.
+ */
 @ExperimentalAvro4kApi
 public fun <T> Avro.decodeFromGenericData(
     writerSchema: Schema,
@@ -60,22 +79,30 @@ public fun <T> Avro.decodeFromGenericData(
         .decodeSerializableValue(deserializer)
 }
 
-@Deprecated(message = DEPRECATION_MSG, level = DeprecationLevel.WARNING)
+/**
+ * Decodes [value], a value of Apache Avro's generic data model written with [writerSchema], with the serializer of [T]
+ * from [Avro.serializersModule]. See the overload taking a deserializer.
+ *
+ * From the `avro4k-apache-interop` artifact (JVM only), which bridges avro4k and Apache Avro.
+ */
 @ExperimentalAvro4kApi
 public inline fun <reified T> Avro.decodeFromGenericData(
     writerSchema: Schema,
     value: Any?,
 ): T {
     val deserializer = serializersModule.serializer<T>()
-    @Suppress("DEPRECATION")
     return decodeFromGenericData(writerSchema, deserializer, value)
 }
 
-@Deprecated(message = DEPRECATION_MSG, level = DeprecationLevel.WARNING)
+/**
+ * Decodes [value], an Apache generic container (e.g. a `GenericRecord`), with its own schema as writer schema and the
+ * serializer of [T] from [Avro.serializersModule]; `null` for a `null` value. See the overload taking a deserializer.
+ *
+ * From the `avro4k-apache-interop` artifact (JVM only), which bridges avro4k and Apache Avro.
+ */
 @ExperimentalAvro4kApi
 public inline fun <reified T> Avro.decodeFromGenericData(value: GenericContainer?): T? {
     if (value == null) return null
     val deserializer = serializersModule.serializer<T>()
-    @Suppress("DEPRECATION")
     return decodeFromGenericData(value.schema, deserializer, value)
 }

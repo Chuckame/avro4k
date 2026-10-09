@@ -144,7 +144,7 @@ convert with the `apache-interop` module: `apacheSchema.toAvro4k()`, `avroSchema
 | `encodeToSink` / `decodeFromSource` (kotlinx-io, okio), `encodeToStream` / `decodeFromStream`, `decodeFromByteBuffer` | `writerSchema: Schema` | `AvroSchema` |
 | `AvroEncoder.currentWriterSchema`, `AvroDecoder.currentWriterSchema` | `Schema` | `AvroSchema` |
 | `AvroDecoder.decodeFixed()` | `GenericFixed` | `ByteArray` (for a `GenericFixed`: `GenericData.Fixed(currentWriterSchema.toApacheSchema(), decodeFixed())`) |
-| `decodeResolving*` resolver lambdas | `(Schema) -> …` | `(AvroSchema) -> …` |
+| `decodeResolving*` resolver lambdas | `(Schema) -> …` | removed by M3-24 (see below) |
 | `AvroSerializer.getSchema(context)` and all built-in serializers | `Schema` | `AvroSchema` (from Apache: `toAvro4k()`) |
 | `AvroStringable.createSchema()`, `AvroFixed.createSchema(elementLocation)` | `Schema` | `AvroSchema` |
 | `AvroSingleObject(schemaRegistry)` lambda, `encodeToSink` / `encodeToStream` / `encodeToByteArray(writerSchema, …)` | `Schema` | `AvroSchema` |
@@ -207,7 +207,7 @@ One line each, with where the details are. Not rewritten here.
 - **#320:** `Record` and `ListRecord` are removed; `encodeToGenericData` returns an Apache `GenericData.Record`
   (mutable, unlike `ListRecord`; it equals another `GenericData.Record` with the same schema and values, where
   `ListRecord`'s data-class `equals` only matched another `ListRecord`).
-- The deprecated `GenericData` API (`Avro.encodeToGenericData` / `decodeFromGenericData`, all six overloads) now comes
+- The `GenericData` API (`Avro.encodeToGenericData` / `decodeFromGenericData`, all six overloads) now comes
   from the `avro4k-apache-interop` artifact (`com.github.avro-kotlin.avro4k:avro4k-apache-interop`): same package,
   names, signatures and facade class (`AvroGenericDataExtensionsKt`), so source and Java callers only add the
   dependency. Fixed on the way: a plain `java.util.List` (not a `GenericArray`) in a nullable position now decodes
@@ -243,6 +243,46 @@ One line each, with where the details are. Not rewritten here.
     2026-10-10), and works on every avro4k decoder: from bytes, on a missing field's default and through
     `decodeFromGenericData` (it used to throw a `ClassCastException` on the last two: [`m3-24.md`](m3-24.md)).
   Nothing else in avro4k (Confluent, kotlin-generator, gradle-plugin, benchmark) called it.
+
+- **`decodeResolving*` are removed** (user decision, 2026-10-10; [`m3-24.md`](m3-24.md)): `AvroDecoder.decodeResolvingAny`,
+  `decodeResolvingBoolean`, `…Byte`, `…Short`, `…Int`, `…Long`, `…Float`, `…Double`, `…Char` (all
+  `@ExperimentalAvro4kApi`) and their `AnyValueDecoder`, `BooleanValueDecoder`, `ByteValueDecoder`, `ShortValueDecoder`,
+  `IntValueDecoder`, `LongValueDecoder`, `FloatValueDecoder`, `DoubleValueDecoder`, `CharValueDecoder` fun interfaces.
+  They walked a union's branches to find one the resolver accepted; every avro4k decoder now reports the value's own
+  branch as `currentWriterSchema` (never a union), so a custom serializer reads it and switches on its type:
+  ```kotlin
+  // before
+  decoder.decodeResolvingAny({ SerializationException("unsupported") }) { schema ->
+      when (schema.type) {
+          AvroSchema.Type.LONG -> AnyValueDecoder { Instant.ofEpochMilli(decoder.decodeLong()) }
+          AvroSchema.Type.STRING -> AnyValueDecoder { Instant.parse(decoder.decodeString()) }
+          else -> null
+      }
+  }
+  // now
+  val schema = decoder.currentWriterSchema
+  when (schema.type) {
+      AvroSchema.Type.LONG -> Instant.ofEpochMilli(decoder.decodeLong())
+      AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
+      else -> throw SerializationException("unsupported")
+  }
+  ```
+  The built-in serializers were rewritten so, with the same results and the same error messages.
+- **The generic data decoder resolves unions from the generic value** (M3-24): `decodeFromGenericData` used to give
+  serializers the whole union as `currentWriterSchema`. It now gives the branch holding the value, as the binary decoder
+  gives the branch of the written index: `null` → null; an Apache record, fixed or enum symbol → the named branch of its
+  schema's full name; a map → map; a collection → array; a char sequence → string; a `ByteBuffer`/`ByteArray` → bytes;
+  a boxed primitive → its type; nothing matching exactly → the only non-null branch, else a `SerializationException`
+  when the schema is read. **Only previously-wrong multi-branch cases change**: every `["null", X]` field decodes as
+  before, while a value of a later branch of a union with several non-null branches is no longer read with the first
+  matching one (e.g. a `long` timestamp in `["null", "string", timestamp-millis]` failed, a uuid string in
+  `["null", fixed-uuid, "string"]` silently became a wrong UUID, a decimal fixed was read with another fixed's scale).
+  Also fixed: a nullable `AvroDuration` or `kotlin.time.Duration` (`["null", duration fixed]`) failed through
+  `decodeFromGenericData`; `AnySerializer` works there and on a missing field's default (it threw
+  `ClassCastException`), and decodes a record as a map and an enum as a string there too.
+- **The `GenericData` API is no longer deprecated** (user decision, 2026-10-10): `encodeToGenericData` /
+  `decodeFromGenericData` (all six overloads) lose `@Deprecated` now that they live in their own artifact,
+  `avro4k-apache-interop`. They stay `@ExperimentalAvro4kApi`. Callers can drop their `@Suppress("DEPRECATION")`.
 
 ## Platform differences (from [`m3-13.md`](m3-13.md), core moving to `commonMain`) — document prominently
 

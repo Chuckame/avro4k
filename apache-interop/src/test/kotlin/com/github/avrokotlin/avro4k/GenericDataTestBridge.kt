@@ -6,7 +6,7 @@ import kotlinx.serialization.SerializationStrategy
 import org.apache.avro.Schema
 
 /*
- * The generic data tests speak Apache's `Schema`, like the deprecated `GenericData` API they test. These helpers have the
+ * The generic data tests speak Apache's `Schema`, like the `GenericData` API they test. These helpers have the
  * names and shapes of core's test bridge, which those tests were written against.
  */
 
@@ -14,7 +14,6 @@ import org.apache.avro.Schema
 internal fun Avro.apacheSchema(serializer: KSerializer<*>): Schema = schema(serializer).toApacheSchema()
 
 /** `Avro.encodeToGenericData(writerSchema, …)`. */
-@Suppress("DEPRECATION")
 internal fun <T> Avro.encodeToGenericDataWith(
     writerSchema: Schema,
     serializer: SerializationStrategy<T>,
@@ -22,7 +21,6 @@ internal fun <T> Avro.encodeToGenericDataWith(
 ): Any? = encodeToGenericData(writerSchema, serializer, value)
 
 /** `Avro.decodeFromGenericData(writerSchema, …)`. */
-@Suppress("DEPRECATION")
 internal fun <T> Avro.decodeFromGenericDataWith(
     writerSchema: Schema,
     deserializer: DeserializationStrategy<T>,

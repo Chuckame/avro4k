@@ -86,11 +86,10 @@ public fun <T> AvroSingleObject.encodeWith(
 ): ByteArray = encodeToByteArray(writerSchema.toAvro4k(), serializer, value)
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Deprecated GenericData API (from apache-interop, Apache-typed)
+// GenericData API (from apache-interop, Apache-typed)
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** `Avro.encodeToGenericData(writerSchema, …)`. */
-@Suppress("DEPRECATION")
 public fun <T> Avro.encodeToGenericDataWith(
     writerSchema: Schema,
     serializer: SerializationStrategy<T>,
@@ -98,7 +97,6 @@ public fun <T> Avro.encodeToGenericDataWith(
 ): Any? = encodeToGenericData(writerSchema, serializer, value)
 
 /** `Avro.decodeFromGenericData(writerSchema, …)`. */
-@Suppress("DEPRECATION")
 public fun <T> Avro.decodeFromGenericDataWith(
     writerSchema: Schema,
     deserializer: DeserializationStrategy<T>,
