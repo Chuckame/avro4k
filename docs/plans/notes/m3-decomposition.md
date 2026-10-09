@@ -296,6 +296,23 @@ decoding of `uuid` changes type; its suite must pass, tests pinning `java.util.U
 trees moved). Before M3-16 (fixtures decoding to `Any`) and B7/B8. `ACC`; not api (`defaultLogicalTypes` is internal), but
 the generated sources change on purpose. Removes one of the silent platform differences in `b8-migration-items.md`.
 
+**M3-22 · `AvroSerializationException` hierarchy** (GitHub #267 and #269, user remark 2026-10-09; **api**, alone). Every
+exception avro4k throws for a schema, encoding or decoding failure becomes an `AvroSerializationException` (public, `open`,
+common, extends `kotlinx.serialization.SerializationException` so existing `catch` blocks keep working), with a small set
+of subclasses by failure family. Candidates to settle in the design: schema generation (today's internal
+`AvroSchemaGenerationException`, made public, **with the path** to the failing element, #267); malformed input while
+decoding (#269: no `IllegalArgumentException`/`UnsupportedOperationException`/`IndexOutOfBounds`/`ArithmeticException`
+escaping from bad bytes — add a seeded random-bytes decoding test, as the issue suggests); writer-schema validation
+failures (the common validating codec's messages, which already carry a path); reader/writer schema mismatch while
+resolving. Existing public exceptions (`MissingFieldsEncodingException`, `AvroDurationParseException`) are re-parented
+under the base, **never renamed**; adding a superclass between them and `SerializationException` keeps binary
+compatibility (check with `apiCheck` after `apiDump`: only additions and the changed superclass). **Step 1: write the
+hierarchy (names, constructors, which throw sites map to which class, what stays a programming error such as
+`IllegalArgumentException` for a bad configuration) into `notes/m3-22.md` and stop for the user's approval.** Step 2:
+implement, inventory every `throw` in core main code (`internal/exceptions.kt` is the factory to extend), one test per
+family. Deps: M3-14 (Apache's exceptions gone from core, files settled). Before M3-16 and the B8 `apiDump`. `ACC+KMP`.
+Migration-guide item. Perf: none (throw paths only; message building stays lazy).
+
 ## 4. B2 decisions
 
 - **ABI** (`C/internal/codec/`, `@InternalAvro4kApi public abstract class`), mirroring Apache's grammar so `ValidatingEncoder` and

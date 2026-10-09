@@ -183,7 +183,7 @@ One line each, with where the details are. Not rewritten here.
 - [`m3-13.md`](m3-13.md), §2: an invalid `@AvroDefault` for its field type fails with a `SerializationException` (same
   message) instead of Apache's `AvroTypeException` (the item m3-09 left for later).
 - [`m3-18.md`](m3-18.md): **`validateSerialization` failures are `kotlinx.serialization.SerializationException`s**
-  (default taken, **open to the user's veto**) instead of Apache's `AvroTypeException` (or the
+  (user, 2026-10-09: to become a subclass of the new `AvroSerializationException`, see `m3-decomposition.md` M3-22) instead of Apache's `AvroTypeException` (or the
   `ArrayIndexOutOfBoundsException` Apache threw for an out-of-range union index), with a new message naming the call,
   what was expected and where (e.g. ``Invalid call writeLong() at 'inner.l' for the writer schema: expected a value of
   type int``). The flag now works on every platform, also for the Apache codecs handed to
