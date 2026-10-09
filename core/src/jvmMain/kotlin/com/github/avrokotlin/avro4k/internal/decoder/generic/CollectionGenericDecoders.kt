@@ -128,8 +128,19 @@ internal class ArrayGenericDecoder(
     private var currentItem: Any? = null
     private var decodedNullMark = false
 
+    /**
+     * The generic tree decoder does not resolve unions, so a plain list (not a `GenericArray`, which carries its own schema)
+     * in a nullable position comes with its `["null", array]` union as writer schema: pick its array branch.
+     */
+    private val arraySchema: AvroSchema =
+        if (writerSchema.isUnion) {
+            writerSchema.types.firstOrNull { it.type === AvroSchema.Type.ARRAY } ?: writerSchema
+        } else {
+            writerSchema
+        }
+
     override val currentAvroSchema: AvroSchema
-        get() = writerSchema.elementType
+        get() = arraySchema.elementType
 
     override fun decodeNotNullMark(): Boolean {
         decodedNullMark = true
