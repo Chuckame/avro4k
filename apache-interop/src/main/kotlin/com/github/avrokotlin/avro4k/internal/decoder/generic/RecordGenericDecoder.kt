@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.decoder.generic
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.defaultValueDecoder
@@ -69,7 +70,7 @@ internal class RecordGenericDecoder(
         }
 
     /** A missing field's default picks its branch from its json value, as its own decoder does to decode it. */
-    override fun resolveUnion(union: AvroSchema.UnionSchema): AvroSchema =
+    override fun resolveUnion(union: AvroSchema.UnionSchema): ResolvedSchema =
         when (val element = currentElement) {
             is DecodingStep.DeserializeWriterField -> super.resolveUnion(union)
             is DecodingStep.GetDefaultValue -> avro.defaultValueDecoder(element).currentWriterSchema

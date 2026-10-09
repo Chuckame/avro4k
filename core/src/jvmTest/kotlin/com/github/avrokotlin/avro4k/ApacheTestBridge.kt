@@ -119,6 +119,6 @@ public fun AvroDecoder.decodeFixedBytes(): ByteArray = decodeFixed()
  * tests, because the stubbed value must have core's type.
  */
 public fun AvroDecoder.stubWriterSchema(writerSchema: Schema) {
-    val converted = writerSchema.toAvro4k()
+    val converted = writerSchema.toAvro4k() as ResolvedSchema
     every { currentWriterSchema } returns converted
 }

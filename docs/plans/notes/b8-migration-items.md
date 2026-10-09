@@ -142,7 +142,8 @@ convert with the `apache-interop` module: `apacheSchema.toAvro4k()`, `avroSchema
 | `Avro.schema(descriptor)`, `Avro.schema(serializer)`, `Avro.schema<T>()` | `Schema` | `AvroSchema` |
 | `Avro.encodeToByteArray` / `decodeFromByteArray` with a `writerSchema` (+ reified) | `Schema` | `AvroSchema` |
 | `encodeToSink` / `decodeFromSource` (kotlinx-io, okio), `encodeToStream` / `decodeFromStream`, `decodeFromByteBuffer` | `writerSchema: Schema` | `AvroSchema` |
-| `AvroEncoder.currentWriterSchema`, `AvroDecoder.currentWriterSchema` | `Schema` | `AvroSchema` |
+| `AvroEncoder.currentWriterSchema` | `Schema` | `AvroSchema` |
+| `AvroDecoder.currentWriterSchema` | `Schema` | `ResolvedSchema` (never a union; since M3-24, user request) |
 | `AvroDecoder.decodeFixed()` | `GenericFixed` | `ByteArray` (for a `GenericFixed`: `GenericData.Fixed(currentWriterSchema.toApacheSchema(), decodeFixed())`) |
 | `decodeResolving*` resolver lambdas | `(Schema) -> …` | removed by M3-24 (see below) |
 | `AvroSerializer.getSchema(context)` and all built-in serializers | `Schema` | `AvroSchema` (from Apache: `toAvro4k()`) |
@@ -280,6 +281,11 @@ One line each, with where the details are. Not rewritten here.
   Also fixed: a nullable `AvroDuration` or `kotlin.time.Duration` (`["null", duration fixed]`) failed through
   `decodeFromGenericData`; `AnySerializer` works there and on a missing field's default (it threw
   `ClassCastException`), and decodes a record as a map and an enum as a string there too.
+- **`AvroDecoder.currentWriterSchema` returns a `ResolvedSchema`** (user request, 2026-10-10, M3-24), no longer an
+  `AvroSchema`: it is never a union (the branch holding the value). Kotlin callers compile unchanged (a subtype);
+  already-compiled callers must be recompiled (the JVM return type changed). The binary decoder now resolves a union
+  still unresolved when the schema is read (e.g. on the decoder `decodeInlineElement` returns, before any decode) by
+  reading its index, where it used to return the union.
 - **The `GenericData` API is no longer deprecated** (user decision, 2026-10-10): `encodeToGenericData` /
   `decodeFromGenericData` (all six overloads) lose `@Deprecated` now that they live in their own artifact,
   `avro4k-apache-interop`. They stay `@ExperimentalAvro4kApi`. Callers can drop their `@Suppress("DEPRECATION")`.

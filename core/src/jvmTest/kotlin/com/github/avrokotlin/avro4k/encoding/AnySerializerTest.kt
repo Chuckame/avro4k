@@ -4,6 +4,7 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.CoreSchema
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.SomeEnum
 import com.github.avrokotlin.avro4k.ValueClassWithGenericField
 import com.github.avrokotlin.avro4k.apacheSchema
@@ -30,8 +31,10 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.encoding.decodeStructure
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
@@ -74,13 +77,11 @@ class AnySerializerTest : StringSpec() {
 
             assertThrows<SerializationException> { AnySerializer().serialize(encoder, NonSerializableType) }
         }
-        "should throw error when serializing union schema" {
-            val decoder = mockk<AbstractAvroDirectDecoder>()
-            every { decoder.serializersModule } returns EmptySerializersModule()
-            every { decoder.avro } returns Avro
-            decoder.stubWriterSchemas(Schema.createUnion(Schema.create(Schema.Type.INT)))
+        "never sees a union: the binary decoder resolves the branch of a union value handed out by decodeInlineElement" {
+            val writerSchema = Avro.schema(NullableLongHolder.serializer().descriptor)
+            val bytes = Avro.encodeToByteArray(writerSchema, NullableLongHolder.serializer(), NullableLongHolder(42))
 
-            assertThrows<UnsupportedOperationException> { AnySerializer().deserialize(decoder) }
+            Avro.decodeFromByteArray(writerSchema, AnyThroughInlineElement, bytes) shouldBe 42L
         }
         "should throw error when serializing null schema" {
             val decoder = mockk<AbstractAvroDirectDecoder>()
@@ -535,5 +536,24 @@ class AnySerializerTest : StringSpec() {
 private fun AbstractAvroDirectDecoder.stubWriterSchemas(writerSchema: Schema) {
     val converted = writerSchema.toAvro4k()
     every { currentAvroSchema } returns converted
-    every { currentWriterSchema } returns converted
+    every { currentWriterSchema } returns converted as ResolvedSchema
+}
+
+@Serializable
+private data class NullableLongHolder(val value: Long?)
+
+/**
+ * Reads [NullableLongHolder]'s `["null", "long"]` field with [AnySerializer] through [CompositeDecoder.decodeInlineElement],
+ * which hands out the decoder positioned on the field before its union index is read.
+ */
+private object AnyThroughInlineElement : DeserializationStrategy<Any> {
+    override val descriptor = NullableLongHolder.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): Any =
+        decoder.decodeStructure(descriptor) {
+            decodeElementIndex(descriptor) shouldBe 0
+            val value = AnySerializer().deserialize(decodeInlineElement(descriptor, 0))
+            decodeElementIndex(descriptor) shouldBe CompositeDecoder.DECODE_DONE
+            value
+        }
 }

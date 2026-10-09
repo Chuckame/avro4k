@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
 import com.github.avrokotlin.avro4k.internal.decoder.AvroFormatDecoder
 import com.github.avrokotlin.avro4k.internal.enumDefaultIndex
@@ -47,11 +48,12 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroForm
     /** The writer schema of the value being decoded, as the parent structure gives it: possibly a union. */
     abstract val currentAvroSchema: AvroSchema
 
-    final override val currentWriterSchema: AvroSchema
-        get() {
-            val schema = currentAvroSchema
-            return if (schema is AvroSchema.UnionSchema) resolveUnion(schema) else schema
-        }
+    final override val currentWriterSchema: ResolvedSchema
+        get() =
+            when (val schema = currentAvroSchema) {
+                is ResolvedSchema -> schema
+                is AvroSchema.UnionSchema -> resolveUnion(schema)
+            }
 
     /**
      * The generic value at the current position, or `null`, **without moving to the next one**: a serializer may read
@@ -60,7 +62,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroForm
     protected abstract fun currentGenericValueOrNull(): Any?
 
     /** The branch of [union] holding the current value. */
-    protected open fun resolveUnion(union: AvroSchema.UnionSchema): AvroSchema {
+    protected open fun resolveUnion(union: AvroSchema.UnionSchema): ResolvedSchema {
         val value = currentGenericValueOrNull()
         return union.branchOfOrNull(value) ?: throw noUnionBranchError(value, union)
     }
@@ -276,7 +278,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroForm
  *
  * Branches are compared by type and by full name only, never with the structural `equals` of a schema.
  */
-internal fun AvroSchema.UnionSchema.branchOfOrNull(value: Any?): AvroSchema? {
+internal fun AvroSchema.UnionSchema.branchOfOrNull(value: Any?): ResolvedSchema? {
     val exact =
         when (value) {
             null -> branchOfType(AvroSchema.Type.NULL)
@@ -309,10 +311,10 @@ internal fun AvroSchema.UnionSchema.branchOfOrNull(value: Any?): AvroSchema? {
     return exact ?: onlyNonNullBranch()
 }
 
-private fun AvroSchema.UnionSchema.branchOfType(type: AvroSchema.Type): AvroSchema? = types.firstOrNull { it.type === type }
+private fun AvroSchema.UnionSchema.branchOfType(type: AvroSchema.Type): ResolvedSchema? = types.firstOrNull { it.type === type }
 
-private fun AvroSchema.UnionSchema.onlyNonNullBranch(): AvroSchema? {
-    var found: AvroSchema? = null
+private fun AvroSchema.UnionSchema.onlyNonNullBranch(): ResolvedSchema? {
+    var found: ResolvedSchema? = null
     for (branch in types) {
         if (branch.type === AvroSchema.Type.NULL) continue
         if (found != null) return null

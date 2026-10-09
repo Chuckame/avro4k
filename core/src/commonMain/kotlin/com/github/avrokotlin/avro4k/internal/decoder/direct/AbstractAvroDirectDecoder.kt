@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
@@ -36,8 +37,15 @@ internal abstract class AbstractAvroDirectDecoder(
     /** The writer schema of the value being decoded; a union until [decodeAndResolveUnion] selects its branch. */
     abstract var currentAvroSchema: AvroSchema
 
-    final override val currentWriterSchema: AvroSchema
-        get() = currentAvroSchema
+    /**
+     * Never a union: one still unresolved (e.g. on the decoder [decodeInlineElement] hands out, before anything is
+     * decoded) is resolved here by reading its index, as decoding the value would.
+     */
+    final override val currentWriterSchema: ResolvedSchema
+        get() {
+            decodeAndResolveUnion()
+            return currentAvroSchema as ResolvedSchema
+        }
 
     private var decodedCollectionSize = -1
 

@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.SerializationException
@@ -45,10 +46,11 @@ public interface AvroDecoder : Decoder {
     /**
      * Provides the schema used to encode the current value.
      *
-     * It won't return a union as the schema correspond to the actual value.
+     * Never a union: when the value was written with a union, it is the union's branch holding the value (the branch of
+     * the written index, the branch of a default's json, or the branch of a generic value).
      */
     @ExperimentalAvro4kApi
-    public val currentWriterSchema: AvroSchema
+    public val currentWriterSchema: ResolvedSchema
 
     /**
      * Decode a [AvroSchema.Type.BYTES] value.
@@ -72,7 +74,8 @@ internal fun AvroDecoder.unsupportedWriterTypeError(
     vararg fallbackTypes: AvroSchema.Type,
 ): Throwable {
     val fallbacksStr = if (fallbackTypes.isNotEmpty()) ", and also not matching to any compatible type (one of ${fallbackTypes.joinToString()})." else ""
-    val schema = currentWriterSchema
+    // the binary decoder's own schema: building the message must not resolve a union by reading its index
+    val schema = (this as? AbstractAvroDirectDecoder)?.currentAvroSchema ?: currentWriterSchema
     return SerializationException(
         "Unsupported schema named '${schema.fullNameForMessages}' for decoded type of $mainType$fallbacksStr. Actual schema: ${schema.toSchemaJsonString()}"
     )

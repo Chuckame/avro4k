@@ -7,6 +7,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.LockableList
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import com.github.avrokotlin.avro4k.isNullable
@@ -189,10 +190,11 @@ private fun JsonElement.isNumberLiteral() = this is JsonPrimitive && this !is Js
  * The schema generation puts that branch first anyway (see `ClassVisitor`), since most other Avro implementations only
  * ever read a union's default from its first branch.
  */
-internal fun AvroSchema.resolveDefaultBranch(value: JsonElement): AvroSchema {
-    if (this !is UnionSchema) return this
-    return types.firstOrNull { value.isValidDefaultFor(it) } ?: throw noCompatibleBranchError(toSchemaJsonString(), value)
-}
+internal fun AvroSchema.resolveDefaultBranch(value: JsonElement): ResolvedSchema =
+    when (this) {
+        is ResolvedSchema -> this
+        is UnionSchema -> types.firstOrNull { value.isValidDefaultFor(it) } ?: throw noCompatibleBranchError(toSchemaJsonString(), value)
+    }
 
 private fun noCompatibleBranchError(
     unionJson: String,

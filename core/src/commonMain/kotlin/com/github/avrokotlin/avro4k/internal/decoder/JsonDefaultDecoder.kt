@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.decoder
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
@@ -66,9 +67,9 @@ internal class JsonDefaultDecoder(
     /**
      * The given schema, unless it is a union: then the branch matching the kind of [value].
      */
-    val currentAvroSchema: AvroSchema = schema.resolveDefaultBranch(value)
+    val currentAvroSchema: ResolvedSchema = schema.resolveDefaultBranch(value)
 
-    override val currentWriterSchema: AvroSchema
+    override val currentWriterSchema: ResolvedSchema
         get() = currentAvroSchema
 
     override val serializersModule: SerializersModule
