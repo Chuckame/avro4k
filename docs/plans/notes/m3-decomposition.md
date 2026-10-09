@@ -312,6 +312,33 @@ unchanged) and record why. Deps: M3-21 (both touch `Platform.jvm.kt`). Before M3
 only the `decodeValue` removal (and whatever `@InternalAvro4kApi` change the default route needs, listed). Migration-guide
 item (who called `decodeValue()` in a custom serializer: `currentWriterSchema` + the typed `decode*` methods, or `decodeResolving*`, as the deprecation message says).
 
+**M3-24 · Generic decoder resolves unions; `decodeResolving*` removed; generic data API undeprecated** (user decisions
+2026-10-10; **api**, alone). Three steps, in this order, each its own commit:
+1. **`apache-interop`'s generic decoder resolves unions from the runtime value**, in one place
+   (`AbstractAvroGenericDecoder.currentWriterSchema` returns the resolved branch), the way the binary decoder resolves them
+   from the index: `null` → the null branch; `IndexedRecord`/`GenericFixed`/`GenericEnumSymbol` (any `GenericContainer`) →
+   the named branch with the value's schema full name; `Map` → map; `Collection`/`GenericArray` → array; `CharSequence` →
+   string; `ByteBuffer`/`ByteArray` → bytes; `Int`/`Long`/`Float`/`Double`/`Boolean` → that type. Unambiguous by the spec (no
+   two branches of one type except named types). **Fallback when nothing matches exactly: the single non-null branch** if
+   there is one (every `["null", X]` field keeps today's behaviour, e.g. an `Int` held for a `long`), else a clear error.
+   Branch lookup by identity/type only, no structural equality. Replaces the map/array decoders' own `["null", …]` picking.
+   **Tests first** (they must pass before step 2 starts): nullable logical types through `decodeFromGenericData` (`Instant`,
+   `BigDecimal` bytes/fixed, `Uuid` string/fixed, `Duration` fixed, java.time), unions with several non-null branches (a
+   value of the second branch decodes correctly — today it can be misread), named-type unions, and **`AnySerializer` through
+   generic decoding and on a missing field's default** (today a `ClassCastException`: it casts to the binary decoder; make it
+   read the public `currentWriterSchema` instead — no public API change).
+2. **Remove `decodeResolving*`**: rewrite the 11 `decodeResolvingAny` call sites (`AvroDuration`, Kotlin stdlib, Java
+   stdlib, java.time serializers) to `when (currentWriterSchema.type) { … else -> throw <same UnexpectedDecodeSchemaError> }`,
+   same messages; then delete the 9 `decodeResolving*` functions, the 9 `*ValueDecoder` fun interfaces and the
+   `@PublishedApi findValueDecoder`. Update `AvroSerializer.deserializeAvro`'s KDoc (it recommends them) and `AvroDecoder`'s
+   KDoc list. No new public API.
+3. **Undeprecate** `encodeToGenericData`/`decodeFromGenericData` in `apache-interop` (drop `@Deprecated`, KDoc says what they
+   do and that they come from `avro4k-apache-interop`; README/migration items to match).
+Deps: M3-23. Before M3-14 and M3-22. `ACC+KMP`; `core.api`: only removals (step 2); `apache-interop.api`: unchanged
+(deprecation is not in the dump — check). Migration-guide items: `decodeResolving*` removal with the `when` pattern; generic
+union resolution (only previously-wrong multi-branch cases change); generic data API no longer deprecated. Perf: one
+allocation fewer per decoded logical-type value off the JVM (measured in M5, no A/B here).
+
 **M3-22 · `AvroSerializationException` hierarchy** (GitHub #267 and #269, user remark 2026-10-09; **api**, alone). Every
 exception avro4k throws for a schema, encoding or decoding failure becomes an `AvroSerializationException` (public, `open`,
 common, extends `kotlinx.serialization.SerializationException` so existing `catch` blocks keep working), with a small set
