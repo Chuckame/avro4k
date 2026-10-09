@@ -182,6 +182,14 @@ One line each, with where the details are. Not rewritten here.
 - [`m3-12.md`](m3-12.md), §4: the public API on `AvroSchema` (section above), with its behaviour notes.
 - [`m3-13.md`](m3-13.md), §2: an invalid `@AvroDefault` for its field type fails with a `SerializationException` (same
   message) instead of Apache's `AvroTypeException` (the item m3-09 left for later).
+- [`m3-18.md`](m3-18.md): **`validateSerialization` failures are `kotlinx.serialization.SerializationException`s**
+  (default taken, **open to the user's veto**) instead of Apache's `AvroTypeException` (or the
+  `ArrayIndexOutOfBoundsException` Apache threw for an out-of-range union index), with a new message naming the call,
+  what was expected and where (e.g. ``Invalid call writeLong() at 'inner.l' for the writer schema: expected a value of
+  type int``). The flag now works on every platform, also for the Apache codecs handed to
+  `encodeWithApacheEncoder`/`decodeWithApacheDecoder` (Confluent, object container files), and it is **stricter than
+  Apache's**: the encoded or decoded value must be complete, a call after its end is rejected, and collections count
+  their items (one value per `startItem()` when encoding; every block read to its end when decoding).
 
 ## Removed or changed by the GitHub "V3" issues (user decisions, 2026-10-09)
 
@@ -198,9 +206,8 @@ One line each, with where the details are. Not rewritten here.
 
 These are **silent**: the same code behaves differently on the JVM and elsewhere.
 
-- **`validateSerialization`** checks every call against the writer schema **only on the JVM** (Apache's
-  `ValidatingEncoder`/`ValidatingDecoder`). On JS and native the flag is ignored for now, until a common validating
-  codec exists.
+- ~~**`validateSerialization`** checks every call against the writer schema **only on the JVM**~~ — no longer a
+  platform difference: since [`m3-18.md`](m3-18.md) avro4k's own validating codec runs on every platform.
 - **`Avro.Default`'s serializers module**: the Kotlin standard library serializers and `AnySerializer` everywhere; the
   java.time, `UUID`, `BigDecimal`, `BigInteger` and `URL` serializers on the JVM only.
 - **`AvroConfiguration.logicalTypes`' defaults** (what `AnySerializer` decodes a logical type to): `duration` as
