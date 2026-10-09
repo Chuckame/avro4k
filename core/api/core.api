@@ -145,11 +145,6 @@ public final synthetic class com/github/avrokotlin/avro4k/AvroFixed$Impl : com/g
 	public final synthetic fun size ()I
 }
 
-public final class com/github/avrokotlin/avro4k/AvroGenericDataExtensionsKt {
-	public static final fun decodeFromGenericData (Lcom/github/avrokotlin/avro4k/Avro;Lorg/apache/avro/Schema;Lkotlinx/serialization/DeserializationStrategy;Ljava/lang/Object;)Ljava/lang/Object;
-	public static final fun encodeToGenericData (Lcom/github/avrokotlin/avro4k/Avro;Lorg/apache/avro/Schema;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;)Ljava/lang/Object;
-}
-
 public final class com/github/avrokotlin/avro4k/AvroKotlinxIoExtensionsKt {
 	public static final fun decodeFromSource (Lcom/github/avrokotlin/avro4k/Avro;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/DeserializationStrategy;Lkotlinx/io/Source;)Ljava/lang/Object;
 	public static final fun encodeToSink (Lcom/github/avrokotlin/avro4k/Avro;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/io/Sink;)V

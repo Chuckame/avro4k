@@ -3,8 +3,9 @@ package com.github.avrokotlin.avro4k.internal.encoder.generic
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
-import com.github.avrokotlin.avro4k.internal.avro4kToApache
-import com.github.avrokotlin.avro4k.internal.schema.fields
+import com.github.avrokotlin.avro4k.internal.fields
+import com.github.avrokotlin.avro4k.internal.resolveRecordFields
+import com.github.avrokotlin.avro4k.toApacheSchema
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
@@ -18,7 +19,7 @@ internal fun RecordGenericEncoder(
     avro: Avro,
     onEncoded: (GenericRecord) -> Unit,
 ): CompositeEncoder {
-    return when (val encodingWorkflow = avro.recordResolver.resolveFields(schema, descriptor).encoding) {
+    return when (val encodingWorkflow = avro.resolveRecordFields(schema, descriptor).encoding) {
         is EncodingWorkflow.ExactMatch -> RecordContiguousExactEncoder(schema, avro, onEncoded)
 
         is EncodingWorkflow.ContiguousWithSkips -> RecordContiguousSkippingEncoder(encodingWorkflow.fieldsToSkip, schema, avro, onEncoded)
@@ -92,7 +93,7 @@ private abstract class AbstractRecordGenericEncoder(
     private val schema: AvroSchema,
     private val onEncoded: (GenericRecord) -> Unit,
 ) : AbstractAvroGenericEncoder() {
-    private val record = GenericData.Record(avro4kToApache(schema))
+    private val record = GenericData.Record(schema.toApacheSchema())
 
     private var currentFieldIndex = -1
 

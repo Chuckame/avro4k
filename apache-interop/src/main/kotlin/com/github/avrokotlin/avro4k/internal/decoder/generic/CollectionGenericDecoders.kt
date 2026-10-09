@@ -4,10 +4,10 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
-import com.github.avrokotlin.avro4k.internal.schema.elementType
-import com.github.avrokotlin.avro4k.internal.schema.isUnion
-import com.github.avrokotlin.avro4k.internal.schema.types
-import com.github.avrokotlin.avro4k.internal.schema.valueType
+import com.github.avrokotlin.avro4k.internal.elementType
+import com.github.avrokotlin.avro4k.internal.isUnion
+import com.github.avrokotlin.avro4k.internal.types
+import com.github.avrokotlin.avro4k.internal.valueType
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor

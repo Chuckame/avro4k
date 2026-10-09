@@ -3,7 +3,7 @@ package com.github.avrokotlin.avro4k.internal.decoder.generic
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
-import com.github.avrokotlin.avro4k.internal.schema.types
+import com.github.avrokotlin.avro4k.internal.types
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 

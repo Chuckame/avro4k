@@ -2,8 +2,8 @@ package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.internal.avro4kToApache
-import com.github.avrokotlin.avro4k.internal.schema.elementType
+import com.github.avrokotlin.avro4k.internal.elementType
+import com.github.avrokotlin.avro4k.toApacheSchema
 import kotlinx.serialization.descriptors.SerialDescriptor
 import org.apache.avro.generic.GenericArray
 import org.apache.avro.generic.GenericData
@@ -29,7 +29,7 @@ internal class ArrayGenericEncoder(
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
-        onEncoded(GenericData.Array(avro4kToApache(schema), values.asList()))
+        onEncoded(GenericData.Array(schema.toApacheSchema(), values.asList()))
     }
 
     override fun encodeValue(value: Any) {

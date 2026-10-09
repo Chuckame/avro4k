@@ -4,14 +4,15 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
-import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
-import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
+import com.github.avrokotlin.avro4k.internal.enumDefaultIndex
+import com.github.avrokotlin.avro4k.internal.interceptedDeserializer
 import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toDoubleExact
 import com.github.avrokotlin.avro4k.internal.toFloatExact
 import com.github.avrokotlin.avro4k.internal.toIntExact
 import com.github.avrokotlin.avro4k.internal.toLongExact
 import com.github.avrokotlin.avro4k.internal.toShortExact
+import com.github.avrokotlin.avro4k.toAvro4k
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
@@ -54,7 +55,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
         get() = avro.serializersModule
 
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
-        return SerializerLocatorMiddleware.apply(deserializer)
+        return interceptedDeserializer(deserializer)
             .deserialize(this)
     }
 
@@ -66,7 +67,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                     is GenericArray<*> ->
                         ArrayGenericDecoder(
                             collection = value,
-                            writerSchema = apacheToAvro4k(value.schema),
+                            writerSchema = value.schema.toAvro4k(),
                             avro = avro
                         )
 
@@ -100,7 +101,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
 
             is PolymorphicKind ->
                 when (val value = decodeValue()) {
-                    is GenericContainer -> PolymorphicGenericDecoder(avro, descriptor, apacheToAvro4k(value.schema), value)
+                    is GenericContainer -> PolymorphicGenericDecoder(avro, descriptor, value.schema.toAvro4k(), value)
                     else -> PolymorphicGenericDecoder(avro, descriptor, currentAvroSchema, value)
                 }
 
@@ -197,7 +198,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
         return when (val value = decodeValue()) {
             is GenericEnumSymbol<*>, is CharSequence -> {
                 enumDescriptor.getElementIndex(value.toString()).takeIf { it >= 0 }
-                    ?: avro.enumResolver.getDefaultValueIndex(enumDescriptor)
+                    ?: avro.enumDefaultIndex(enumDescriptor)
                     ?: throw SerializationException("Unknown enum symbol '$value' for Enum '${enumDescriptor.serialName}'")
             }
 

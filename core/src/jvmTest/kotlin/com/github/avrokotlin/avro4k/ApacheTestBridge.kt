@@ -86,7 +86,7 @@ public fun <T> AvroSingleObject.encodeWith(
 ): ByteArray = encodeToByteArray(writerSchema.toAvro4k(), serializer, value)
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Deprecated GenericData API (moving to apache-interop, where it may stay Apache-typed)
+// Deprecated GenericData API (from apache-interop, Apache-typed)
 // ---------------------------------------------------------------------------------------------------------------------
 
 /** `Avro.encodeToGenericData(writerSchema, …)`. */

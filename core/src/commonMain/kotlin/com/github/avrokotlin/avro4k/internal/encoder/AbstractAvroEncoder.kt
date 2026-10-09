@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.internal.encoder
 
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.ensureFixedSize
 import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
@@ -28,57 +29,65 @@ import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.encoding.CompositeEncoder
 
+/**
+ * The base of every avro4k encoder: it resolves unions and checks each value against the writer schema, then hands the
+ * value to the `*Unchecked` method of the right Avro type.
+ *
+ * Public only for the generic data encoder of the `apache-interop` module, which builds Apache `GenericData` values
+ * instead of bytes.
+ */
+@InternalAvro4kApi
 @OptIn(ExperimentalSerializationApi::class)
-internal abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
+public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     private var selectedUnionIndex: Int = -1
 
     /**
      * The writer schema of the value being encoded, as avro4k's own model: the schema core's runtime reads. Once a union
      * branch is selected ([encodeUnionIndex]), it is that branch.
      */
-    abstract var currentAvroSchema: AvroSchema
+    public abstract var currentAvroSchema: AvroSchema
 
     final override val currentWriterSchema: AvroSchema
         get() = currentAvroSchema
 
-    abstract fun getRecordEncoder(descriptor: SerialDescriptor): CompositeEncoder
+    public abstract fun getRecordEncoder(descriptor: SerialDescriptor): CompositeEncoder
 
-    abstract fun getPolymorphicEncoder(descriptor: SerialDescriptor): CompositeEncoder
+    public abstract fun getPolymorphicEncoder(descriptor: SerialDescriptor): CompositeEncoder
 
-    abstract fun getMapEncoder(
+    public abstract fun getMapEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder
 
-    abstract fun getArrayEncoder(
+    public abstract fun getArrayEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder
 
-    abstract fun encodeUnionIndexUnchecked(index: Int)
+    public abstract fun encodeUnionIndexUnchecked(index: Int)
 
-    abstract fun encodeNullUnchecked()
+    public abstract fun encodeNullUnchecked()
 
-    abstract fun encodeBooleanUnchecked(value: Boolean)
+    public abstract fun encodeBooleanUnchecked(value: Boolean)
 
-    abstract fun encodeIntUnchecked(value: Int)
+    public abstract fun encodeIntUnchecked(value: Int)
 
-    abstract fun encodeLongUnchecked(value: Long)
+    public abstract fun encodeLongUnchecked(value: Long)
 
-    abstract fun encodeFloatUnchecked(value: Float)
+    public abstract fun encodeFloatUnchecked(value: Float)
 
-    abstract fun encodeDoubleUnchecked(value: Double)
+    public abstract fun encodeDoubleUnchecked(value: Double)
 
     /** Encodes a STRING whose content is already UTF-8 encoded. */
-    abstract fun encodeStringUnchecked(utf8: ByteArray)
+    public abstract fun encodeStringUnchecked(utf8: ByteArray)
 
-    abstract fun encodeStringUnchecked(value: String)
+    public abstract fun encodeStringUnchecked(value: String)
 
-    abstract fun encodeBytesUnchecked(value: ByteArray)
+    public abstract fun encodeBytesUnchecked(value: ByteArray)
 
-    abstract fun encodeFixedUnchecked(value: ByteArray)
+    public abstract fun encodeFixedUnchecked(value: ByteArray)
 
-    abstract fun encodeEnumUnchecked(symbol: String)
+    public abstract fun encodeEnumUnchecked(symbol: String)
 
     override fun <T> encodeSerializableValue(
         serializer: SerializationStrategy<T>,

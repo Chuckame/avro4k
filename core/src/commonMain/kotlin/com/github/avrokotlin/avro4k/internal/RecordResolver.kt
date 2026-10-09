@@ -4,6 +4,7 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDefault
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
+import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
 import com.github.avrokotlin.avro4k.internal.schema.asSchemaList
 import com.github.avrokotlin.avro4k.internal.schema.fields
@@ -338,15 +339,23 @@ internal class RecordResolver(
     private fun AvroSchema.isTypeOf(expectedType: AvroSchema.Type): Boolean = asSchemaList().any { it.type === expectedType }
 }
 
-internal class SerializationWorkflow(
+/**
+ * How the elements of a class descriptor map to the fields of a writer record schema, resolved once per pair by
+ * [RecordResolver.resolveFields].
+ *
+ * Public, as [EncodingWorkflow] and the [DecodingStep]s a generic data decoder reads, only for the generic data trees
+ * of the `apache-interop` module.
+ */
+@InternalAvro4kApi
+public class SerializationWorkflow internal constructor(
     /**
      * Decoding steps are ordered regarding the writer schema and not the class descriptor.
      */
-    val decoding: Array<DecodingStep>,
+    public val decoding: Array<DecodingStep>,
     /**
      * Encoding steps are ordered regarding the class descriptor and not the writer schema.
      */
-    val encoding: EncodingWorkflow,
+    public val encoding: EncodingWorkflow,
     /**
      * The step of each element, by element index, when its value is missing: a [DecodingStep.GetDefaultValue],
      * [DecodingStep.IgnoreOptionalElement] or [DecodingStep.MissingElementValueFailure]. Used for the fields a record default
@@ -355,41 +364,55 @@ internal class SerializationWorkflow(
      */
     missingElements: Lazy<Array<DecodingStep>>,
 ) {
-    val missingElements: Array<DecodingStep> by missingElements
+    internal val missingElements: Array<DecodingStep> by missingElements
 }
 
-internal sealed interface EncodingWorkflow {
+@InternalAvro4kApi
+public sealed interface EncodingWorkflow {
     /**
      * The descriptor elements exactly matches the writer schema fields as a 1-to-1 mapping.
      */
-    data object ExactMatch : EncodingWorkflow
+    @InternalAvro4kApi
+    public data object ExactMatch : EncodingWorkflow
 
-    class ContiguousWithSkips(
-        val fieldsToSkip: BooleanArray,
+    @InternalAvro4kApi
+    public class ContiguousWithSkips internal constructor(
+        public val fieldsToSkip: BooleanArray,
     ) : EncodingWorkflow
 
-    class NonContiguous(
-        val descriptorToWriterFieldIndex: IntArray,
+    @InternalAvro4kApi
+    public class NonContiguous internal constructor(
+        public val descriptorToWriterFieldIndex: IntArray,
     ) : EncodingWorkflow
 
-    class MissingWriterFields(
-        val missingWriterFields: List<Int>,
+    @InternalAvro4kApi
+    public class MissingWriterFields internal constructor(
+        public val missingWriterFields: List<Int>,
     ) : EncodingWorkflow
 }
 
-internal sealed interface DecodingStep {
+/**
+ * One step of decoding a record, in the writer schema's field order.
+ *
+ * Public, with all its steps (Kotlin has no `internal` class nested in an interface), only for the generic data decoder
+ * of the `apache-interop` module, which reads the [ValidatedDecodingStep]s and skips the others.
+ */
+@InternalAvro4kApi
+public sealed interface DecodingStep {
     /**
      * This is a flag indicating that the element is deserializable.
      */
-    sealed interface ValidatedDecodingStep : DecodingStep {
-        val elementIndex: Int
-        val schema: AvroSchema
+    @InternalAvro4kApi
+    public sealed interface ValidatedDecodingStep : DecodingStep {
+        public val elementIndex: Int
+        public val schema: AvroSchema
     }
 
     /**
      * The element is present in the writer schema and the class descriptor.
      */
-    data class DeserializeWriterField(
+    @InternalAvro4kApi
+    public data class DeserializeWriterField(
         override val elementIndex: Int,
         val writerFieldIndex: Int,
         override val schema: AvroSchema,
@@ -401,7 +424,8 @@ internal sealed interface DecodingStep {
      * - if the [com.github.avrokotlin.avro4k.AvroConfiguration.implicitNulls] is enabled, the default value is `null`.
      * - if the [com.github.avrokotlin.avro4k.AvroConfiguration.implicitEmptyCollections] is enabled, the default value is an empty array or map.
      */
-    data class GetDefaultValue(
+    @InternalAvro4kApi
+    public data class GetDefaultValue(
         override val elementIndex: Int,
         /**
          * The reader field's schema, or its branch matching [defaultValue] when it is a union.
@@ -416,7 +440,8 @@ internal sealed interface DecodingStep {
     /**
      * The element is present in the writer schema but not in the class descriptor, so it is skipped.
      */
-    data class SkipWriterField(
+    @InternalAvro4kApi
+    public data class SkipWriterField(
         val writerFieldIndex: Int,
         val schema: AvroSchema,
     ) : DecodingStep
@@ -425,7 +450,8 @@ internal sealed interface DecodingStep {
      * The element is present in the class descriptor but not in the writer schema.
      * Also, the element don't have a default value but is optional, so we can skip the element.
      */
-    data class IgnoreOptionalElement(
+    @InternalAvro4kApi
+    public data class IgnoreOptionalElement(
         val elementIndex: Int,
     ) : DecodingStep
 
@@ -433,7 +459,8 @@ internal sealed interface DecodingStep {
      * The element is present in the class descriptor but not in the writer schema.
      * It does not have any default value and is not optional, so it fails as it cannot get any value for it.
      */
-    data class MissingElementValueFailure(
+    @InternalAvro4kApi
+    public data class MissingElementValueFailure(
         val elementIndex: Int,
     ) : DecodingStep
 }

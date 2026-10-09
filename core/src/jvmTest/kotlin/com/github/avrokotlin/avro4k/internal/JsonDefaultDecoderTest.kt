@@ -12,7 +12,6 @@ import com.github.avrokotlin.avro4k.decodeFromGenericDataWith
 import com.github.avrokotlin.avro4k.decodeWith
 import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
-import com.github.avrokotlin.avro4k.internal.decoder.generic.AvroValueGenericDecoder
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
 import com.github.avrokotlin.avro4k.toAvro4k
 import io.kotest.assertions.throwables.shouldThrow
@@ -21,6 +20,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.serialization.Contextual
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -30,6 +30,9 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.descriptors.element
 import kotlinx.serialization.encoding.CompositeDecoder
@@ -58,7 +61,7 @@ import java.math.BigDecimal
  * Apache `GenericData` values and decoding those with the generic decoder.
  *
  * The differential tests pin the new decoder to that former path, kept here as the oracle: [formerConvert] is the
- * conversion `RecordResolver` used to do, and [AvroValueGenericDecoder] the decoder it fed. They must agree on every
+ * conversion `RecordResolver` used to do, and the generic data decoder (`decodeFromGenericData`) the decoder it fed. They must agree on every
  * value, and fail together.
  *
  * The oracle carries exactly the changes the Avro specification required afterwards (each marked "spec:" in
@@ -344,11 +347,23 @@ private fun JsonDefaultDecoder(
     schema: Schema,
 ) = JsonDefaultDecoder(avro, value, schema.toAvro4k())
 
-private fun AvroValueGenericDecoder(
-    avro: Avro,
+/**
+ * Runs [decode] on the generic data decoder of [value], as the former path did: through the public `decodeFromGenericData`,
+ * since that decoder now lives in apache-interop.
+ */
+private fun decodeWithFormerPath(
     value: Any?,
     schema: Schema,
-) = AvroValueGenericDecoder(avro, value, schema.toAvro4k())
+    decode: (AvroDecoder) -> Any?,
+): Any? = Avro.decodeFromGenericDataWith(schema, DecodingWith(decode), value)
+
+private class DecodingWith(
+    private val decode: (AvroDecoder) -> Any?,
+) : DeserializationStrategy<Any?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("DecodingWith", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): Any? = decode(decoder as AvroDecoder)
+}
 
 private fun AvroDefault.toFieldDefault(schema: Schema) = toFieldDefault(schema.toAvro4k())
 
@@ -378,7 +393,7 @@ private fun assertSameAsFormerPath(
     currentJson: () -> JsonElement = { parseDefault(default) },
     decode: (AvroDecoder) -> Any?,
 ) {
-    val former = runCatching { decode(AvroValueGenericDecoder(Avro, parseDefault(default).formerConvert(schema), schema)) }
+    val former = runCatching { decodeWithFormerPath(parseDefault(default).formerConvert(schema), schema, decode) }
     val current = runCatching { decode(JsonDefaultDecoder(Avro, currentJson(), schema)) }
     withClue("former: $former, current: $current") {
         current.isSuccess shouldBe former.isSuccess

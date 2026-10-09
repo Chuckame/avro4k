@@ -1,8 +1,8 @@
 package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import com.github.avrokotlin.avro4k.internal.encoder.AbstractAvroEncoder
+import com.github.avrokotlin.avro4k.toApacheSchema
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.modules.SerializersModule
@@ -61,7 +61,7 @@ internal abstract class AbstractAvroGenericEncoder : AbstractAvroEncoder() {
     }
 
     override fun encodeFixedUnchecked(value: ByteArray) {
-        encodeValue(GenericData.Fixed(avro4kToApache(currentAvroSchema), value))
+        encodeValue(GenericData.Fixed(currentAvroSchema.toApacheSchema(), value))
     }
 
     override fun encodeIntUnchecked(value: Int) {
@@ -81,6 +81,6 @@ internal abstract class AbstractAvroGenericEncoder : AbstractAvroEncoder() {
     }
 
     override fun encodeEnumUnchecked(symbol: String) {
-        encodeValue(GenericData.EnumSymbol(avro4kToApache(currentAvroSchema), symbol))
+        encodeValue(GenericData.EnumSymbol(currentAvroSchema.toApacheSchema(), symbol))
     }
 }

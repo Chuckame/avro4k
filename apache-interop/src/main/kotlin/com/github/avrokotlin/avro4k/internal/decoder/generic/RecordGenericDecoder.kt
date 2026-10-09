@@ -4,8 +4,9 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
-import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
-import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
+import com.github.avrokotlin.avro4k.internal.defaultValueDecoder
+import com.github.avrokotlin.avro4k.internal.resolveRecordFields
+import com.github.avrokotlin.avro4k.toAvro4k
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
@@ -18,7 +19,7 @@ internal class RecordGenericDecoder(
     override val avro: Avro,
 ) : AbstractAvroGenericDecoder() {
     // from descriptor element index to schema field
-    private val classDescriptor = avro.recordResolver.resolveFields(apacheToAvro4k(record.schema), descriptor)
+    private val classDescriptor = avro.resolveRecordFields(record.schema.toAvro4k(), descriptor)
     private lateinit var currentElement: DecodingStep.ValidatedDecodingStep
     private var nextDecodingStep = 0
 
@@ -38,7 +39,7 @@ internal class RecordGenericDecoder(
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
         return when (val element = currentElement) {
             is DecodingStep.DeserializeWriterField -> super.decodeSerializableValue(deserializer)
-            is DecodingStep.GetDefaultValue -> JsonDefaultDecoder(avro, element.defaultValue, element.schema).decodeSerializableValue(deserializer)
+            is DecodingStep.GetDefaultValue -> avro.defaultValueDecoder(element).decodeSerializableValue(deserializer)
         }
     }
 
@@ -52,7 +53,7 @@ internal class RecordGenericDecoder(
                 if (element.defaultValue is JsonNull) {
                     throw DecodedNullError(descriptor, element.elementIndex)
                 } else {
-                    JsonDefaultDecoder(avro, element.defaultValue, element.schema).decodeValue()
+                    avro.defaultValueDecoder(element).decodeValue()
                 }
         }
     }

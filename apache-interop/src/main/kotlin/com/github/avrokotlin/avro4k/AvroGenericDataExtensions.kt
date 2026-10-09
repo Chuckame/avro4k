@@ -1,9 +1,9 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
-import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import com.github.avrokotlin.avro4k.internal.decoder.generic.AvroValueGenericDecoder
 import com.github.avrokotlin.avro4k.internal.encoder.generic.AvroValueGenericEncoder
+import com.github.avrokotlin.avro4k.toApacheSchema
+import com.github.avrokotlin.avro4k.toAvro4k
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer
@@ -22,7 +22,7 @@ public fun <T> Avro.encodeToGenericData(
 ): Any? {
     var result: Any? = null
     // converted once per call, identity-cached: the encoders only read the AvroSchema
-    AvroValueGenericEncoder(this, apacheToAvro4k(writerSchema)) {
+    AvroValueGenericEncoder(this, writerSchema.toAvro4k()) {
         result = it
     }.encodeSerializableValue(serializer, value)
     return result
@@ -34,7 +34,7 @@ public inline fun <reified T> Avro.encodeToGenericData(value: T): Any? {
     val serializer = serializersModule.serializer<T>()
     // Apache-typed, as the generic data it produces: the generated schema's Apache form, through the cached converter
     @Suppress("DEPRECATION")
-    return encodeToGenericData(avro4kToApache(schema(serializer)), serializer, value)
+    return encodeToGenericData(schema(serializer).toApacheSchema(), serializer, value)
 }
 
 @Deprecated(message = DEPRECATION_MSG, level = DeprecationLevel.WARNING)
@@ -56,7 +56,7 @@ public fun <T> Avro.decodeFromGenericData(
     value: Any?,
 ): T {
     // converted once per call, identity-cached: the decoders only read the AvroSchema
-    return AvroValueGenericDecoder(this, value, apacheToAvro4k(writerSchema))
+    return AvroValueGenericDecoder(this, value, writerSchema.toAvro4k())
         .decodeSerializableValue(deserializer)
 }
 

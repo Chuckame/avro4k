@@ -5,7 +5,7 @@ plugins {
     kotlin("plugin.serialization")
 }
 
-description = "Avro4k's bridge between its multiplatform AvroSchema and Apache Avro's Schema (JVM only)."
+description = "Avro4k's bridge to Apache Avro (JVM only): conversion between its multiplatform AvroSchema and Apache Avro's Schema, and the GenericData encoding and decoding."
 
 dependencies {
     api(project(":core"))

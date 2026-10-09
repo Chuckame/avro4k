@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.decoder
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
+import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
@@ -15,8 +16,15 @@ import kotlinx.serialization.encoding.AbstractDecoder
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.modules.SerializersModule
 
+/**
+ * Decodes a polymorphic value: finds the serial name of the subclass from the writer schema's name, then decodes the
+ * value with [newDecoder].
+ *
+ * Public only for the generic data decoder of the `apache-interop` module.
+ */
+@InternalAvro4kApi
 @OptIn(ExperimentalSerializationApi::class)
-internal abstract class AbstractPolymorphicDecoder(
+public abstract class AbstractPolymorphicDecoder(
     protected val avro: Avro,
     private val descriptor: SerialDescriptor,
     private val schema: AvroSchema,
@@ -68,9 +76,9 @@ internal abstract class AbstractPolymorphicDecoder(
             .decodeSerializableValue(deserializer)
     }
 
-    abstract fun newDecoder(chosenSchema: AvroSchema): Decoder
+    public abstract fun newDecoder(chosenSchema: AvroSchema): Decoder
 
-    final override fun decodeSequentially() = true
+    final override fun decodeSequentially(): Boolean = true
 
     final override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         throw IllegalIndexedAccessError()
