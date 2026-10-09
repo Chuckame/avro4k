@@ -11,6 +11,12 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. Done: M3-01 … M3-08 (batches 1 and 2, then M3-08). Next: batch 3 (M3-09 ∥ M3-10).
 
+### Resume here (2026-10-09): M3-18 started
+
+`main` merged in (`90d4425`: Kotlin 2.4.20, JUnit 6, Gradle 9.8, Apache Avro 1.12.2, the object container sync marker);
+`ACC` step 1 green on the merged tree, `:core:jvmTest` 942 → 944 (the two sync-marker tests from `main`). M3-18 (common
+validating codec) is running as one agent in a worktree; next after it: M3-19.
+
 ### Resume here (2026-09-26): after the cumulative benchmark re-run on AC power
 
 The cumulative comparison was re-measured on AC power (`1e56a30`, runbook [`notes/benchmark-rerun-on-ac.md`](notes/benchmark-rerun-on-ac.md) done) and supersedes the battery run (`2abfc30`): **nothing is worse than M0**. The JIT investigation it called for is also done (same commit, `benchmark/README.md` → "The two JIT-sensitive rows"): `complex` read @1 is a rare slow fork (1 of 9), not a regression; `simple` write @25 is bimodal (6 of 9 forks −33%) from compile order, made costly by oversized per-value encode methods — fixed by C1/C4 in M5, nothing to do in M3. Re-measure that row after C1/C4.
