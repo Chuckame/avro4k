@@ -217,6 +217,10 @@ One line each, with where the details are. Not rewritten here.
   and generated code types `uuid` properties as `kotlin.uuid.Uuid`; how to go back to `java.util.UUID` is in the
   gradle-plugin README.
 
+- **`AvroDecoder.decodeValue()`** (deprecated) is removed (user decision, 2026-10-09; unit M3-23 in `m3-decomposition.md`).
+  Custom serializers read `currentWriterSchema` and decode with the matching typed `decode*` method, or use the
+  `decodeResolving*` helpers, as its deprecation message already said.
+
 ## Platform differences (from [`m3-13.md`](m3-13.md), core moving to `commonMain`) — document prominently
 
 These are **silent**: the same code behaves differently on the JVM and elsewhere.

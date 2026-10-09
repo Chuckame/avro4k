@@ -298,6 +298,20 @@ decoding of `uuid` changes type; its suite must pass, tests pinning `java.util.U
 trees moved). Before M3-16 (fixtures decoding to `Any`) and B7/B8. `ACC`; not api (`defaultLogicalTypes` is internal), but
 the generated sources change on purpose. Removes one of the silent platform differences in `b8-migration-items.md`.
 
+**M3-23 · Remove the deprecated `AvroDecoder.decodeValue()`** (user decision 2026-10-09, no GitHub issue; **api**, alone).
+Delete `decodeValue()` from the public `AvroDecoder` interface and its core implementations (`AbstractAvroDirectDecoder`,
+`JsonDefaultDecoder`), and the `genericFixedValue` `expect`/`actual` it was the only user of (the JVM actual builds an Apache
+`GenericData.Fixed`, so core `commonMain`'s last Apache-shaped seam goes with it). **Trap:** `apache-interop`'s generic trees
+are built on it — `AbstractAvroGenericDecoder` routes every `decode*` through `decodeValue()`, and `RecordGenericDecoder`
+reads a missing field's default as a generic value with `avro.defaultValueDecoder(step).decodeValue()`. The trees keep their
+own internal method (no longer an override of a public one); the default case needs another route that adds **no public
+API** — e.g. decode the default with the field's own deserializer through the `AvroDecoder` returned by
+`defaultValueDecoder` instead of going through a generic value, or convert the json default to a generic value inside
+`apache-interop`. Pick the one that keeps `decodeFromGenericData`'s results identical (existing default tests must pass
+unchanged) and record why. Deps: M3-21 (both touch `Platform.jvm.kt`). Before M3-14 and M3-22. `ACC+KMP`; `core.api` diff:
+only the `decodeValue` removal (and whatever `@InternalAvro4kApi` change the default route needs, listed). Migration-guide
+item (who called `decodeValue()` in a custom serializer: `currentWriterSchema` + the typed `decode*` methods, or `decodeResolving*`, as the deprecation message says).
+
 **M3-22 · `AvroSerializationException` hierarchy** (GitHub #267 and #269, user remark 2026-10-09; **api**, alone). Every
 exception avro4k throws for a schema, encoding or decoding failure becomes an `AvroSerializationException` (public, `open`,
 common, extends `kotlinx.serialization.SerializationException` so existing `catch` blocks keep working), with a small set
