@@ -179,11 +179,9 @@ private class KotlinxSerializationDatumWriter<T>(
     private val serializer: SerializationStrategy<T>,
     private val avro: Avro,
 ) : DatumWriter<T> {
-    private lateinit var apacheWriterSchema: Schema
     private lateinit var writerSchema: AvroSchema
 
     override fun setSchema(schema: Schema) {
-        apacheWriterSchema = schema
         writerSchema = apacheToAvro4k(schema)
     }
 
@@ -191,7 +189,7 @@ private class KotlinxSerializationDatumWriter<T>(
         datum: T,
         encoder: org.apache.avro.io.Encoder,
     ) {
-        avro.encodeWithApacheEncoder(apacheWriterSchema, writerSchema, serializer, datum, encoder)
+        avro.encodeWithApacheEncoder(writerSchema, serializer, datum, encoder)
     }
 }
 
@@ -200,11 +198,9 @@ private class KotlinxSerializationDatumReader<T>(
     private val deserializer: DeserializationStrategy<T>,
     private val avro: Avro,
 ) : DatumReader<T> {
-    private lateinit var apacheWriterSchema: Schema
     private lateinit var writerSchema: AvroSchema
 
     override fun setSchema(schema: Schema) {
-        apacheWriterSchema = schema
         writerSchema = apacheToAvro4k(schema)
     }
 
@@ -212,6 +208,6 @@ private class KotlinxSerializationDatumReader<T>(
         reuse: T?,
         decoder: org.apache.avro.io.Decoder,
     ): T {
-        return avro.decodeWithApacheDecoder(apacheWriterSchema, writerSchema, deserializer, decoder)
+        return avro.decodeWithApacheDecoder(writerSchema, deserializer, decoder)
     }
 }

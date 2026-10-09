@@ -1,9 +1,6 @@
 package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.codec.validating
 import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
 import com.github.avrokotlin.avro4k.serializer.AvroDurationSerializer
 import com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer
@@ -25,7 +22,7 @@ import kotlinx.serialization.modules.plus
 import org.apache.avro.generic.GenericData
 
 // What the code shared by every platform gets from the platform it runs on. On the JVM: the java.time, java.util,
-// java.math and java.net serializers next to the Kotlin ones, and Apache's validating encoder and decoder.
+// java.math and java.net serializers next to the Kotlin ones.
 
 /**
  * The serializers module of [com.github.avrokotlin.avro4k.Avro.Default]: the serializers of the Java standard library
@@ -50,16 +47,6 @@ internal actual fun defaultLogicalTypes(): Map<String, KSerializer<out Any>> =
         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS to InstantSerializer,
         LOGICAL_TYPE_NAME_TIMESTAMP_MICROS to InstantSerializer
     )
-
-/**
- * This encoder, checking every call against [writerSchema], for
- * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization]: wrapped in Apache's validating encoder, which
- * needs the schema in Apache's model (converted through the cached converter).
- */
-internal actual fun AvroBinaryEncoder.validatingAgainst(writerSchema: AvroSchema): AvroBinaryEncoder = validating(avro4kToApache(writerSchema))
-
-/** This decoder, checking every call against [writerSchema]: see [validatingAgainst] for the encoder. */
-internal actual fun AvroBinaryDecoder.validatingAgainst(writerSchema: AvroSchema): AvroBinaryDecoder = validating(avro4kToApache(writerSchema))
 
 /**
  * The generic value of a fixed default, for the deprecated `AvroDecoder.decodeValue`: an Apache `GenericData.Fixed`

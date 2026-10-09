@@ -8,8 +8,6 @@ import com.github.avrokotlin.avro4k.internal.codec.ApacheEncoderAdapter
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import org.apache.avro.Schema
-import org.apache.avro.io.DecoderFactory
-import org.apache.avro.io.EncoderFactory
 
 /**
  * Encodes [value] into an Apache [binaryEncoder] handed in from outside (Confluent's serializers, the object container
@@ -23,24 +21,17 @@ public fun <T> Avro.encodeWithApacheEncoder(
     value: T,
     binaryEncoder: org.apache.avro.io.Encoder,
 ) {
-    encodeWithApacheEncoder(writerSchema, apacheToAvro4k(writerSchema), serializer, value, binaryEncoder)
+    encodeWithApacheEncoder(apacheToAvro4k(writerSchema), serializer, value, binaryEncoder)
 }
 
-/** [encodeWithApacheEncoder] with both forms of the writer schema, for a caller that converted it once for many calls. */
+/** [encodeWithApacheEncoder] with the writer schema already converted, for a caller that converted it once for many calls. */
 internal fun <T> Avro.encodeWithApacheEncoder(
-    apacheWriterSchema: Schema,
     writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
     binaryEncoder: org.apache.avro.io.Encoder,
 ) {
-    val apacheEncoder =
-        if (configuration.validateSerialization) {
-            EncoderFactory.get().validatingEncoder(apacheWriterSchema, binaryEncoder)
-        } else {
-            binaryEncoder
-        }
-    encodeWithBinaryEncoder(writerSchema, serializer, value, ApacheEncoderAdapter(apacheEncoder))
+    encodeWithValidation(writerSchema, serializer, value, ApacheEncoderAdapter(binaryEncoder))
 }
 
 /** Decodes a value from an Apache [binaryDecoder] handed in from outside. Converts like [encodeWithApacheEncoder]. */
@@ -49,20 +40,13 @@ public fun <T> Avro.decodeWithApacheDecoder(
     writerSchema: Schema,
     deserializer: DeserializationStrategy<T>,
     binaryDecoder: org.apache.avro.io.Decoder,
-): T = decodeWithApacheDecoder(writerSchema, apacheToAvro4k(writerSchema), deserializer, binaryDecoder)
+): T = decodeWithApacheDecoder(apacheToAvro4k(writerSchema), deserializer, binaryDecoder)
 
-/** [decodeWithApacheDecoder] with both forms of the writer schema, for a caller that converted it once for many calls. */
+/** [decodeWithApacheDecoder] with the writer schema already converted, for a caller that converted it once for many calls. */
 internal fun <T> Avro.decodeWithApacheDecoder(
-    apacheWriterSchema: Schema,
     writerSchema: AvroSchema,
     deserializer: DeserializationStrategy<T>,
     binaryDecoder: org.apache.avro.io.Decoder,
 ): T {
-    val apacheDecoder =
-        if (configuration.validateSerialization) {
-            DecoderFactory.get().validatingDecoder(apacheWriterSchema, binaryDecoder)
-        } else {
-            binaryDecoder
-        }
-    return decodeWithBinaryDecoder(writerSchema, deserializer, ApacheDecoderAdapter(apacheDecoder))
+    return decodeWithValidation(writerSchema, deserializer, ApacheDecoderAdapter(binaryDecoder))
 }

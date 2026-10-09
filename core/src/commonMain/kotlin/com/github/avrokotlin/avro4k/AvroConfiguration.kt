@@ -36,9 +36,11 @@ public data class AvroConfiguration(
      *
      * By default, to `false`.
      *
-     * **Only on the JVM**, where each encoding and decoding call is checked against the writer schema by Apache Avro's
-     * `org.apache.avro.io.ValidatingEncoder` and `org.apache.avro.io.ValidatingDecoder`. On the other platforms the flag
-     * is ignored for now: values are encoded and decoded without validation.
+     * When enabled, on every platform, each low-level write or read of a value is checked against the writer schema
+     * before it is done: the record fields in order, the union branch index and then the chosen branch, the item count
+     * of each array and map, the enum index and the fixed size, and the exact primitive type (no promotion). The value
+     * must also be complete once encoded or decoded. A mismatch throws a [kotlinx.serialization.SerializationException]
+     * naming what was expected and where in the value. Slower, so not for production use.
      */
     @ExperimentalAvro4kApi
     val validateSerialization: Boolean = false,

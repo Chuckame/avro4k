@@ -24,7 +24,7 @@ Here are the main features:
 > **Platforms**: the core runs on the JVM, JS (browser and Node.js) and Kotlin/Native (Apple, Linux, Windows and Android native targets): schema
 > generation, and binary encoding and decoding of your classes and the Kotlin types (`Uuid`, `Instant`, `Duration`…) through the `Avro` API.
 > <br/>These stay **JVM-only** for now: `AvroObjectContainer` and `AvroSingleObject`, the Java types (`UUID`, `BigDecimal`, `BigInteger`, `java.time`…), the Apache Avro
-> interop (`GenericData`, Apache `Schema`), and `validateSerialization` (ignored on the other platforms). wasm is not supported yet.
+> interop (`GenericData`, Apache `Schema`). wasm is not supported yet.
 
 # Quick start
 
@@ -490,7 +490,7 @@ By default, `Avro` is configured with the following behavior:
 - `implicitNulls`: The nullable fields are considered null when decoding if the writer record's schema does not contain this field.
 - `implicitEmptyCollections`: The non-nullable map and collection fields are considered empty when decoding if the writer record's schema does not contain this field.
   - If `implicitNulls` is true, it takes precedence so the empty collections are set as null if the value is missing instead of an empty collection.
-- `validateSerialization`: There is no validation of the schema when encoding or decoding data, which means that serializing using a custom serializer could lead to unexpected behavior. Be careful with your custom serializers. More details [in this section](#set-a-custom-schema).
+- `validateSerialization`: There is no validation of the schema when encoding or decoding data, which means that serializing using a custom serializer could lead to unexpected behavior. Be careful with your custom serializers. More details [in this section](#set-a-custom-schema). When enabled (a debugging aid, on every platform), every write and read is checked against the writer schema and a mismatch fails with a `SerializationException` saying what was expected and where.
 - `fieldNamingStrategy`: The record's field naming strategy is using the original kotlin field name. To change it, [check this section](#changing-records-field-name).
 - `logicalTypes`: Indicates how a logical type should be deserialized when decoding generically to `Any`. Check this section for more details: [generic decoding](#generic-decoding-for-decoding-a-type-that-is-not-known-at-compile-time).
 
