@@ -11,7 +11,7 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-10): M3-18 … M3-24 done — next is M3-14
+### Resume here (2026-10-10): M3-18 … M3-24 done — next are M3-25 and M3-26, then M3-14
 
 **Branch** `v3/m2-foundation`, clean, everything committed. M3 units done this session (all merged, ledger rows below):
 M3-18 (common validating codec), M3-20 (#318/#319 okio and stream APIs removed), M3-19 (GenericData API → `apache-interop`,
@@ -21,15 +21,14 @@ data API undeprecated). Last measured: `:core:jvmTest` 973, apache-interop 545, 
 skipped), gradle-plugin 2; jsNode/jsBrowser 157, macosArm64/iosSimulatorArm64 160.
 
 **Next, in order:** M3-25, M3-26 (below), then **M3-14** (Apache exit from core; read its "Amended after M3-19" paragraph — the four
-`@InternalAvro4kApi` forwarders in `jvmMain/internal/AvroInternalExtensions.kt` stay in core; `AvroFormatDecoder` from M3-24 is
-core too) → **M3-22** (exception hierarchy, #267/#269 — design first, user approval before implementing) → M3-16 (cross-platform
+`@InternalAvro4kApi` forwarders in `jvmMain/internal/AvroInternalExtensions.kt` stay in core) → **M3-22** (exception hierarchy, #267/#269 — design first, user approval before implementing) → M3-16 (cross-platform
 fixtures) → M3-17 (re-baseline + review over all of M3). Containers / single-object: when the user schedules them. Then M4, M5.
 Before briefing any unit: `gh issue list -R avro-kotlin/avro4k --milestone V3 --state open` (open now: #267, #269 → M3-22;
 #318/#319/#320/#429 close when the branch reaches `main`).
 
 **User answers (2026-10-10):** M3-24 commits 6–7 (`ResolvedSchema`) confirmed and merged (`8c1bfc8`, `faa8769`);
-`AbstractAnySerializer` stays experimental public API; `AvroFormatDecoder` is fine — but the user asked why it is not merged into
-`AvroDecoder` (see the next point).
+`AbstractAnySerializer` stays experimental public API; `AvroFormatDecoder` is to be merged into `AvroDecoder` (M3-25); generated
+files get opt-ins through a generic mechanism (M3-26). Both are left for a fresh session by the user's choice.
 
 **Next, before M3-14:** **M3-25** (merge `AvroFormatDecoder` into `AvroDecoder`, `avro` on both codecs) and **M3-26**
 (generic opt-ins/annotations on generated files, `Uuid` opt-in built in) — both user-decided 2026-10-10, specs in the
