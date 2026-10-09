@@ -1,16 +1,14 @@
-@file:Suppress("DEPRECATION")
-
 package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.ListRecord
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
 import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import com.github.avrokotlin.avro4k.internal.schema.fields
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
+import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
 
 @Suppress("FunctionName")
@@ -94,7 +92,7 @@ private abstract class AbstractRecordGenericEncoder(
     private val schema: AvroSchema,
     private val onEncoded: (GenericRecord) -> Unit,
 ) : AbstractAvroGenericEncoder() {
-    private val fieldValues: Array<Any?> = Array(schema.fields.size) { null }
+    private val record = GenericData.Record(avro4kToApache(schema))
 
     private var currentFieldIndex = -1
 
@@ -106,14 +104,14 @@ private abstract class AbstractRecordGenericEncoder(
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
-        onEncoded(ListRecord(avro4kToApache(schema), fieldValues.asList()))
+        onEncoded(record)
     }
 
     override fun encodeValue(value: Any) {
-        fieldValues[currentFieldIndex] = value
+        record.put(currentFieldIndex, value)
     }
 
     override fun encodeNullUnchecked() {
-        fieldValues[currentFieldIndex] = null
+        record.put(currentFieldIndex, null)
     }
 }

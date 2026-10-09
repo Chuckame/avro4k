@@ -601,21 +601,6 @@ public abstract interface class com/github/avrokotlin/avro4k/IntValueDecoder {
 public abstract interface annotation class com/github/avrokotlin/avro4k/InternalAvro4kApi : java/lang/annotation/Annotation {
 }
 
-public final class com/github/avrokotlin/avro4k/ListRecord : com/github/avrokotlin/avro4k/Record {
-	public fun <init> (Lorg/apache/avro/Schema;Ljava/util/List;)V
-	public fun <init> (Lorg/apache/avro/Schema;[Ljava/lang/Object;)V
-	public final fun copy (Lorg/apache/avro/Schema;Ljava/util/List;)Lcom/github/avrokotlin/avro4k/ListRecord;
-	public static synthetic fun copy$default (Lcom/github/avrokotlin/avro4k/ListRecord;Lorg/apache/avro/Schema;Ljava/util/List;ILjava/lang/Object;)Lcom/github/avrokotlin/avro4k/ListRecord;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun get (I)Ljava/lang/Object;
-	public fun get (Ljava/lang/String;)Ljava/lang/Object;
-	public fun getSchema ()Lorg/apache/avro/Schema;
-	public fun hashCode ()I
-	public fun put (ILjava/lang/Object;)V
-	public fun put (Ljava/lang/String;Ljava/lang/Object;)V
-	public fun toString ()Ljava/lang/String;
-}
-
 public abstract interface class com/github/avrokotlin/avro4k/LongValueDecoder {
 	public abstract fun decodeLong (Lcom/github/avrokotlin/avro4k/AvroDecoder;)J
 }
@@ -635,9 +620,6 @@ public final class com/github/avrokotlin/avro4k/Name {
 	public final fun getSpace ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
-}
-
-public abstract interface class com/github/avrokotlin/avro4k/Record : org/apache/avro/generic/GenericRecord, org/apache/avro/specific/SpecificRecord {
 }
 
 public abstract class com/github/avrokotlin/avro4k/ResolvedSchema : com/github/avrokotlin/avro4k/AvroSchema, com/github/avrokotlin/avro4k/WithProps {
