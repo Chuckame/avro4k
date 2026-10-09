@@ -274,6 +274,28 @@ the api diffs of both modules. Perf: generic tree is unbenchmarked; not covered.
 schema inference from runtime values). Since Confluent already depends on `apache-interop`, decide here whether those move next to
 the generic trees and are shared, instead of keeping two copies — details in `notes/m3-08.md`.
 
+**Amended 2026-10-09 (GitHub #320, user decision):** `J/ListRecord.kt` (`ListRecord` and `Record`) is **deleted**, not
+moved; `RecordGenericEncoder` builds an Apache `GenericData.Record` for `encodeToGenericData`. Drop whatever core had to
+expose only for `ListRecord` from the `@InternalAvro4kApi` set. Migration-guide item. Runs after M3-20.
+
+**M3-20 · Remove the deprecated okio and stream APIs** (GitHub #318 and #319, user decision 2026-10-09; **api**, alone). Delete
+`J/AvroOkioExtensions.kt` and its tests, core's `jvmMain` okio dependency (check nothing else in core needs it), the
+deprecated `encodeToStream`/`decodeFromStream` of `J/AvroJVMExtensions.kt`, and `AvroSingleObject`'s deprecated stream
+methods. **Not** in scope (not deprecated): `decodeFromByteBuffer`, `AvroObjectContainer`'s `OutputStream`/`InputStream`
+entry points. Benchmark and Confluent must not call any removed function (check; move them to the kotlinx-io overloads if
+they do). Deps: M3-18 done (both touch core entry points). Before M3-19 and M3-14. `ACC`; review the `core.api` diff (only
+removals). Migration-guide items. Perf: none.
+
+**M3-21 · `uuid` decodes to `kotlin.uuid.Uuid` on the JVM too** (GitHub #429, user decision 2026-10-09). JVM default
+`logicalTypes`: `uuid` → `KotlinUuidSerializer`, like JS and native (reverses that one M3-13 default; the java.time /
+`BigDecimal` mappings stay). `java.util.UUID` stays supported when a property is typed so; only what `AnySerializer`
+decodes changes. kotlin-generator: generated `uuid` properties become `kotlin.uuid.Uuid` (it derives its mapping from
+core's default) — regenerate the golden sources deliberately and review them. gradle-plugin `README.md`: update the mapping
+table and add the example the issue asks for (configuring code generation back to `java.util.UUID`). Confluent: generic
+decoding of `uuid` changes type; its suite must pass, tests pinning `java.util.UUID` updated and listed. Deps: M3-19 (generic
+trees moved). Before M3-16 (fixtures decoding to `Any`) and B7/B8. `ACC`; not api (`defaultLogicalTypes` is internal), but
+the generated sources change on purpose. Removes one of the silent platform differences in `b8-migration-items.md`.
+
 ## 4. B2 decisions
 
 - **ABI** (`C/internal/codec/`, `@InternalAvro4kApi public abstract class`), mirroring Apache's grammar so `ValidatingEncoder` and

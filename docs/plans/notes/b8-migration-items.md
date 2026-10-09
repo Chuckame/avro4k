@@ -183,6 +183,17 @@ One line each, with where the details are. Not rewritten here.
 - [`m3-13.md`](m3-13.md), §2: an invalid `@AvroDefault` for its field type fails with a `SerializationException` (same
   message) instead of Apache's `AvroTypeException` (the item m3-09 left for later).
 
+## Removed or changed by the GitHub "V3" issues (user decisions, 2026-10-09)
+
+- **#318:** the deprecated okio overloads (`encodeToSink`/`decodeFromSource` on `okio.BufferedSink`/`BufferedSource`)
+  are removed; core no longer depends on okio. Use the kotlinx-io overloads (`kotlinx-io-okio` bridges an okio stream).
+- **#319:** the deprecated `Avro.encodeToStream`/`decodeFromStream` and `AvroSingleObject.encodeToStream`/`decodeFromStream`
+  are removed. Use the kotlinx-io overloads (`asSink()`/`asSource()` wrap a Java stream).
+- **#320:** `Record` and `ListRecord` are removed; `encodeToGenericData` returns an Apache `GenericData.Record`.
+- **#429:** `AnySerializer` (and so Confluent's generic decoding) decodes `uuid` to `kotlin.uuid.Uuid` on the JVM too,
+  and generated code types `uuid` properties as `kotlin.uuid.Uuid`; how to go back to `java.util.UUID` is in the
+  gradle-plugin README.
+
 ## Platform differences (from [`m3-13.md`](m3-13.md), core moving to `commonMain`) — document prominently
 
 These are **silent**: the same code behaves differently on the JVM and elsewhere.
