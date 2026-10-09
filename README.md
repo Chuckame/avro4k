@@ -66,6 +66,7 @@ fun main() {
 Avro4k is also able to encode and decode objects to and from any kotlinx-io `Sink` and `Source`, which means any supported bridge to kotlinx-io is supported by avro4k.
 
 As an example, for JVM streams, you can use `InputStream.asSource().buffered()` and `OutputStream.asSink().buffered()`.
+For okio, the [`kotlinx-io-okio`](https://github.com/Kotlin/kotlinx-io) bridge wraps an okio `Source` with `asKotlinxIoRawSource().buffered()` and an okio `Sink` with `asKotlinxIoRawSink().buffered()`.
 
 > [!NOTE]
 > Note the required `buffered()` call to allow avro4k accessing the `read` and `write` methods.
@@ -91,7 +92,7 @@ fun main() {
     // Serializing objects
     val data = Project("kotlinx.serialization", "Kotlin")
     val outputStream: OutputStream = TODO("Your output stream here, e.g. FileOutputStream, etc.")
-    val sink = output.asSink().buffered()
+    val sink = outputStream.asSink().buffered()
     Avro.encodeToSink(data, sink)
     sink.close() // Will flush the data to the output stream at the same time
 

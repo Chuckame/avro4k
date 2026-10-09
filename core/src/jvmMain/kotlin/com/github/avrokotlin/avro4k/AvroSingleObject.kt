@@ -6,9 +6,6 @@ import com.github.avrokotlin.avro4k.internal.avro4kToApacheUncached
 import kotlinx.io.Buffer
 import kotlinx.io.Sink
 import kotlinx.io.Source
-import kotlinx.io.asSink
-import kotlinx.io.asSource
-import kotlinx.io.buffered
 import kotlinx.io.readByteArray
 import kotlinx.io.readLongLe
 import kotlinx.serialization.BinaryFormat
@@ -18,8 +15,6 @@ import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
 import org.apache.avro.SchemaNormalization
-import java.io.InputStream
-import java.io.OutputStream
 
 /**
  * Single Avro objects are encoded as follows:
@@ -62,14 +57,6 @@ public class AvroSingleObject(
             SchemaNormalization.parsingFingerprint("CRC-64-AVRO", avro4kToApacheUncached(this))
         }
 
-    @Deprecated("Use encodeToSink instead", ReplaceWith("encodeToSink(writerSchema, serializer, value, outputStream.asSink().buffered())"))
-    public fun <T> encodeToStream(
-        writerSchema: AvroSchema,
-        serializer: SerializationStrategy<T>,
-        value: T,
-        outputStream: OutputStream,
-    ): Unit = encodeToSink(writerSchema, serializer, value, outputStream.asSink().buffered())
-
     public fun <T> encodeToSink(
         writerSchema: AvroSchema,
         serializer: SerializationStrategy<T>,
@@ -81,12 +68,6 @@ public class AvroSingleObject(
         sink.write(writerSchema.crc64avro())
         avro.encodeToSink(writerSchema, serializer, value, sink)
     }
-
-    @Deprecated("Use decodeFromSource instead", ReplaceWith("decodeFromSource(deserializer, inputStream.asSource().buffered())"))
-    public fun <T> decodeFromStream(
-        deserializer: DeserializationStrategy<T>,
-        inputStream: InputStream,
-    ): T = decodeFromSource(deserializer, inputStream.asSource().buffered())
 
     public fun <T> decodeFromSource(
         deserializer: DeserializationStrategy<T>,

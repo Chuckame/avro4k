@@ -79,7 +79,6 @@ kotlin {
         jvmMain {
             dependencies {
                 api(libs.apache.avro)
-                implementation(libs.okio)
             }
         }
 

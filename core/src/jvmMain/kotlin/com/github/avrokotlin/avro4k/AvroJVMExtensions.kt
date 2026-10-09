@@ -2,72 +2,11 @@ package com.github.avrokotlin.avro4k
 
 import kotlinx.io.Buffer
 import kotlinx.io.UnsafeIoApi
-import kotlinx.io.asSink
-import kotlinx.io.asSource
-import kotlinx.io.buffered
 import kotlinx.io.transferFrom
 import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer
-import java.io.InputStream
-import java.io.OutputStream
 import java.nio.ByteBuffer
-
-@Deprecated("Use encodeToSink instead", ReplaceWith("encodeToSink(writerSchema, serializer, value, outputStream.asSink().buffered())"))
-@ExperimentalAvro4kApi
-public fun <T> Avro.encodeToStream(
-    writerSchema: AvroSchema,
-    serializer: SerializationStrategy<T>,
-    value: T,
-    outputStream: OutputStream,
-) {
-    encodeToSink(writerSchema, serializer, value, outputStream.asSink().buffered())
-}
-
-@Deprecated("Use encodeToSink instead", replaceWith = ReplaceWith("encodeToSink(value, outputStream.asSink().buffered())"))
-@ExperimentalAvro4kApi
-public inline fun <reified T> Avro.encodeToStream(
-    value: T,
-    outputStream: OutputStream,
-) {
-    encodeToSink(value, outputStream.asSink().buffered())
-}
-
-@Deprecated("Use encodeToSink instead", replaceWith = ReplaceWith("encodeToSink(writerSchema, value, outputStream.asSink().buffered())"))
-@ExperimentalAvro4kApi
-public inline fun <reified T> Avro.encodeToStream(
-    writerSchema: AvroSchema,
-    value: T,
-    outputStream: OutputStream,
-) {
-    encodeToSink(writerSchema, value, outputStream.asSink().buffered())
-}
-
-@Deprecated("Use decodeFromSource instead", replaceWith = ReplaceWith("decodeFromSource(deserializer, inputStream.asSource().buffered())"))
-@ExperimentalAvro4kApi
-public fun <T> Avro.decodeFromStream(
-    writerSchema: AvroSchema,
-    deserializer: DeserializationStrategy<T>,
-    inputStream: InputStream,
-): T {
-    return decodeFromSource(writerSchema, deserializer, inputStream.asSource().buffered())
-}
-
-@Deprecated("Use decodeFromSource instead", replaceWith = ReplaceWith("decodeFromSource(inputStream.asSource().buffered())"))
-@ExperimentalAvro4kApi
-public inline fun <reified T> Avro.decodeFromStream(inputStream: InputStream): T {
-    return decodeFromSource(inputStream.asSource().buffered())
-}
-
-@Deprecated("Use decodeFromSource instead", replaceWith = ReplaceWith("decodeFromSource(writerSchema, inputStream.asSource().buffered())"))
-@ExperimentalAvro4kApi
-public inline fun <reified T> Avro.decodeFromStream(
-    writerSchema: AvroSchema,
-    inputStream: InputStream,
-): T {
-    return decodeFromSource(writerSchema, inputStream.asSource().buffered())
-}
 
 /**
  * Decode the value [T] from the given ByteBuffer, helpful when expecting zero-copy decoding from the jvm.

@@ -150,11 +150,6 @@ public final class com/github/avrokotlin/avro4k/AvroGenericDataExtensionsKt {
 	public static final fun encodeToGenericData (Lcom/github/avrokotlin/avro4k/Avro;Lorg/apache/avro/Schema;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;)Ljava/lang/Object;
 }
 
-public final class com/github/avrokotlin/avro4k/AvroJVMExtensionsKt {
-	public static final fun decodeFromStream (Lcom/github/avrokotlin/avro4k/Avro;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/DeserializationStrategy;Ljava/io/InputStream;)Ljava/lang/Object;
-	public static final fun encodeToStream (Lcom/github/avrokotlin/avro4k/Avro;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Ljava/io/OutputStream;)V
-}
-
 public final class com/github/avrokotlin/avro4k/AvroKotlinxIoExtensionsKt {
 	public static final fun decodeFromSource (Lcom/github/avrokotlin/avro4k/Avro;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/DeserializationStrategy;Lkotlinx/io/Source;)Ljava/lang/Object;
 	public static final fun encodeToSink (Lcom/github/avrokotlin/avro4k/Avro;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/io/Sink;)V
@@ -207,11 +202,6 @@ public final class com/github/avrokotlin/avro4k/AvroObjectContainerMetadataDumpe
 public final class com/github/avrokotlin/avro4k/AvroObjectContainerWriter : java/io/Closeable {
 	public fun close ()V
 	public final fun writeValue (Ljava/lang/Object;)V
-}
-
-public final class com/github/avrokotlin/avro4k/AvroOkioExtensionsKt {
-	public static final fun decodeFromSource (Lcom/github/avrokotlin/avro4k/Avro;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/DeserializationStrategy;Lokio/BufferedSource;)Ljava/lang/Object;
-	public static final fun encodeToSink (Lcom/github/avrokotlin/avro4k/Avro;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lokio/BufferedSink;)V
 }
 
 public abstract interface annotation class com/github/avrokotlin/avro4k/AvroProp : java/lang/annotation/Annotation {
@@ -541,10 +531,8 @@ public final class com/github/avrokotlin/avro4k/AvroSingleObject : kotlinx/seria
 	public synthetic fun <init> (Lkotlin/jvm/functions/Function1;Lcom/github/avrokotlin/avro4k/Avro;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun decodeFromByteArray (Lkotlinx/serialization/DeserializationStrategy;[B)Ljava/lang/Object;
 	public final fun decodeFromSource (Lkotlinx/serialization/DeserializationStrategy;Lkotlinx/io/Source;)Ljava/lang/Object;
-	public final fun decodeFromStream (Lkotlinx/serialization/DeserializationStrategy;Ljava/io/InputStream;)Ljava/lang/Object;
 	public fun encodeToByteArray (Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;)[B
 	public final fun encodeToSink (Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Lkotlinx/io/Sink;)V
-	public final fun encodeToStream (Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/SerializationStrategy;Ljava/lang/Object;Ljava/io/OutputStream;)V
 	public final fun getAvro ()Lcom/github/avrokotlin/avro4k/Avro;
 	public fun getSerializersModule ()Lkotlinx/serialization/modules/SerializersModule;
 }
