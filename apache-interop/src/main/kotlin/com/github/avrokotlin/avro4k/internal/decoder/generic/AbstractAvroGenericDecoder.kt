@@ -1,9 +1,9 @@
 package com.github.avrokotlin.avro4k.internal.decoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
+import com.github.avrokotlin.avro4k.internal.decoder.AvroFormatDecoder
 import com.github.avrokotlin.avro4k.internal.enumDefaultIndex
 import com.github.avrokotlin.avro4k.internal.interceptedDeserializer
 import com.github.avrokotlin.avro4k.internal.toByteExact
@@ -13,6 +13,7 @@ import com.github.avrokotlin.avro4k.internal.toIntExact
 import com.github.avrokotlin.avro4k.internal.toLongExact
 import com.github.avrokotlin.avro4k.internal.toShortExact
 import com.github.avrokotlin.avro4k.toAvro4k
+import com.github.avrokotlin.avro4k.toJsonElement
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
@@ -34,18 +35,44 @@ import java.nio.ByteBuffer
 
 /**
  * Decodes the values of Apache's generic data model. Their own schemas (a [GenericContainer]'s, an [IndexedRecord]'s) are
- * Apache schemas, converted to [AvroSchema] through the identity-cached converter: a lookup per record or array, accepted on
- * this deprecated path.
+ * Apache schemas, converted to [AvroSchema] through the identity-cached converter: a lookup per record or array.
+ *
+ * A union is resolved from the generic value it holds (see [branchOfOrNull]), as the binary decoder resolves it from the
+ * written index: [currentWriterSchema] is the value's own branch, never the union.
  */
 @OptIn(ExperimentalSerializationApi::class)
-internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDecoder {
-    internal abstract val avro: Avro
+internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroFormatDecoder {
+    abstract override val avro: Avro
 
-    /** The writer schema of the value being decoded. */
+    /** The writer schema of the value being decoded, as the parent structure gives it: possibly a union. */
     abstract val currentAvroSchema: AvroSchema
 
     final override val currentWriterSchema: AvroSchema
-        get() = currentAvroSchema
+        get() {
+            val schema = currentAvroSchema
+            return if (schema is AvroSchema.UnionSchema) resolveUnion(schema) else schema
+        }
+
+    /**
+     * The generic value at the current position, or `null`, **without moving to the next one**: a serializer may read
+     * [currentWriterSchema] before decoding the value.
+     */
+    protected abstract fun currentGenericValueOrNull(): Any?
+
+    /** The branch of [union] holding the current value. */
+    protected open fun resolveUnion(union: AvroSchema.UnionSchema): AvroSchema {
+        val value = currentGenericValueOrNull()
+        return union.branchOfOrNull(value) ?: throw noUnionBranchError(value, union)
+    }
+
+    /**
+     * The schema of a structure's [value] that was just read: the branch holding it when [currentAvroSchema] is a union.
+     * When no branch fits, the union itself, so that only reading the structure's element schemas fails, as before.
+     */
+    private fun structureSchemaOf(value: Any): AvroSchema {
+        val schema = currentAvroSchema
+        return if (schema is AvroSchema.UnionSchema) schema.branchOfOrNull(value) ?: schema else schema
+    }
 
     abstract override fun decodeNotNullMark(): Boolean
 
@@ -78,7 +105,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                     is Collection<*> ->
                         ArrayGenericDecoder(
                             collection = value,
-                            writerSchema = currentAvroSchema,
+                            writerSchema = structureSchemaOf(value),
                             avro = avro
                         )
 
@@ -90,9 +117,12 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                     is Map<*, *> ->
                         MapGenericDecoder(
                             value as Map<CharSequence, Any?>,
-                            currentAvroSchema,
+                            structureSchemaOf(value),
                             avro
                         )
+
+                    // a record decoded as a map of its fields, as the binary decoder does (e.g. by AnySerializer)
+                    is IndexedRecord -> RecordAsMapGenericDecoder(value, avro)
 
                     else -> throw BadDecodedValueError(value, StructureKind.MAP, Map::class)
                 }
@@ -192,9 +222,15 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     override fun decodeString(): String {
         return when (val value = decodeGenericValue()) {
             is CharSequence -> value.toString()
+
             is ByteArray -> value.decodeToString()
+
             is GenericFixed -> value.bytes().decodeToString()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.STRING, CharSequence::class, ByteArray::class, GenericFixed::class)
+
+            // an enum symbol, as the binary decoder reads an enum as a string
+            is GenericEnumSymbol<*> -> value.toString()
+
+            else -> throw BadDecodedValueError(value, PrimitiveKind.STRING, CharSequence::class, ByteArray::class, GenericFixed::class, GenericEnumSymbol::class)
         }
     }
 
@@ -227,3 +263,68 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
         }
     }
 }
+
+/**
+ * The branch of this union that holds the generic [value], by the kind of value, as Apache's `GenericData.resolveUnion`
+ * picks it: `null` → `null`; an Apache record, fixed or enum symbol → the named branch of its schema's full name; a [Map]
+ * → map; a [GenericArray] or any other [Collection] → array; a [CharSequence] → string; a [ByteBuffer] or a [ByteArray] →
+ * bytes; an [Int], [Long], [Float], [Double] or [Boolean] → that type. The specification forbids two branches of the same
+ * type except named types, so the match is unambiguous.
+ *
+ * Nothing matching exactly, the only non-null branch if there is one, as the decoder took it before it resolved unions:
+ * an `Int` held for a `["null", "long"]` field still decodes. Otherwise `null`.
+ *
+ * Branches are compared by type and by full name only, never with the structural `equals` of a schema.
+ */
+internal fun AvroSchema.UnionSchema.branchOfOrNull(value: Any?): AvroSchema? {
+    val exact =
+        when (value) {
+            null -> branchOfType(AvroSchema.Type.NULL)
+
+            // an Apache container too, but of an array: not a named type
+            is GenericArray<*> -> branchOfType(AvroSchema.Type.ARRAY)
+
+            is GenericContainer -> getIndexOrNull(value.schema.fullName)?.let { types[it] }
+
+            is Map<*, *> -> branchOfType(AvroSchema.Type.MAP)
+
+            is Collection<*> -> branchOfType(AvroSchema.Type.ARRAY)
+
+            is CharSequence -> branchOfType(AvroSchema.Type.STRING)
+
+            is ByteBuffer, is ByteArray -> branchOfType(AvroSchema.Type.BYTES)
+
+            is Int -> branchOfType(AvroSchema.Type.INT)
+
+            is Long -> branchOfType(AvroSchema.Type.LONG)
+
+            is Float -> branchOfType(AvroSchema.Type.FLOAT)
+
+            is Double -> branchOfType(AvroSchema.Type.DOUBLE)
+
+            is Boolean -> branchOfType(AvroSchema.Type.BOOLEAN)
+
+            else -> null
+        }
+    return exact ?: onlyNonNullBranch()
+}
+
+private fun AvroSchema.UnionSchema.branchOfType(type: AvroSchema.Type): AvroSchema? = types.firstOrNull { it.type === type }
+
+private fun AvroSchema.UnionSchema.onlyNonNullBranch(): AvroSchema? {
+    var found: AvroSchema? = null
+    for (branch in types) {
+        if (branch.type === AvroSchema.Type.NULL) continue
+        if (found != null) return null
+        found = branch
+    }
+    return found
+}
+
+private fun noUnionBranchError(
+    value: Any?,
+    union: AvroSchema.UnionSchema,
+): SerializationException =
+    SerializationException(
+        "The generic value '$value' of type ${value?.let { it::class.qualifiedName }} matches no branch of the union ${union.toJsonElement()}"
+    )

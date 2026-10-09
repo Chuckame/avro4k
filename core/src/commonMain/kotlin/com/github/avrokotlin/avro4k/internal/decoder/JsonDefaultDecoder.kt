@@ -59,10 +59,10 @@ import kotlinx.serialization.modules.SerializersModule
  */
 @OptIn(ExperimentalSerializationApi::class)
 internal class JsonDefaultDecoder(
-    private val avro: Avro,
+    override val avro: Avro,
     private val value: JsonElement,
     schema: AvroSchema,
-) : AbstractDecoder(), AvroDecoder {
+) : AbstractDecoder(), AvroFormatDecoder {
     /**
      * The given schema, unless it is a union: then the branch matching the kind of [value].
      */

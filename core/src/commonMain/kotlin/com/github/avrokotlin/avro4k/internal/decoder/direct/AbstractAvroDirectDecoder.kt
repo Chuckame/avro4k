@@ -1,11 +1,11 @@
 package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
+import com.github.avrokotlin.avro4k.internal.decoder.AvroFormatDecoder
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.internal.schema.enumSymbols
 import com.github.avrokotlin.avro4k.internal.schema.fixedSize
@@ -30,9 +30,9 @@ import kotlinx.serialization.modules.SerializersModule
 
 @OptIn(ExperimentalSerializationApi::class)
 internal abstract class AbstractAvroDirectDecoder(
-    internal val avro: Avro,
+    final override val avro: Avro,
     protected val binaryDecoder: AvroBinaryDecoder,
-) : AbstractInterceptingDecoder(), AvroDecoder {
+) : AbstractInterceptingDecoder(), AvroFormatDecoder {
     /** The writer schema of the value being decoded; a union until [decodeAndResolveUnion] selects its branch. */
     abstract var currentAvroSchema: AvroSchema
 

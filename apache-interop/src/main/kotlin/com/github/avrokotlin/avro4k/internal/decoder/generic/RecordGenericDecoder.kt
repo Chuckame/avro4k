@@ -60,6 +60,21 @@ internal class RecordGenericDecoder(
         }
     }
 
+    override fun currentGenericValueOrNull(): Any? =
+        when (val element = currentElement) {
+            is DecodingStep.DeserializeWriterField -> record.get(element.writerFieldIndex)
+
+            // no generic value: a default is resolved from its json, below
+            is DecodingStep.GetDefaultValue -> null
+        }
+
+    /** A missing field's default picks its branch from its json value, as its own decoder does to decode it. */
+    override fun resolveUnion(union: AvroSchema.UnionSchema): AvroSchema =
+        when (val element = currentElement) {
+            is DecodingStep.DeserializeWriterField -> super.resolveUnion(union)
+            is DecodingStep.GetDefaultValue -> avro.defaultValueDecoder(element).currentWriterSchema
+        }
+
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         var field: DecodingStep
         do {
