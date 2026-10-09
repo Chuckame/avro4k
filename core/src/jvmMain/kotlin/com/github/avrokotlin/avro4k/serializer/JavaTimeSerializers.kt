@@ -1,10 +1,8 @@
 package com.github.avrokotlin.avro4k.serializer
 
-import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
@@ -74,40 +72,27 @@ public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.q
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): LocalDate {
-        with(decoder) {
-            return decoder.decodeResolvingAny({
-                UnexpectedDecodeSchemaError("LocalDate", AvroSchema.Type.INT, AvroSchema.Type.LONG)
-            }) {
-                when (it.type) {
-                    AvroSchema.Type.INT -> {
-                        when (it.knownLogicalTypeName) {
-                            LOGICAL_TYPE_NAME_DATE, null -> {
-                                AnyValueDecoder { LocalDate.ofEpochDay(decoder.decodeInt().toLong()) }
-                            }
-
-                            else -> null
-                        }
-                    }
-
-                    AvroSchema.Type.LONG -> {
-                        when (it.knownLogicalTypeName) {
-                            null -> {
-                                AnyValueDecoder { LocalDate.ofEpochDay(decoder.decodeLong()) }
-                            }
-
-                            else -> null
-                        }
-                    }
-
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { LocalDate.parse(decoder.decodeString()) }
-                    }
-
-                    else -> null
+        val schema = decoder.currentWriterSchema
+        return when (schema.type) {
+            AvroSchema.Type.INT ->
+                when (schema.knownLogicalTypeName) {
+                    LOGICAL_TYPE_NAME_DATE, null -> LocalDate.ofEpochDay(decoder.decodeInt().toLong())
+                    else -> throw decoder.localDateSchemaError()
                 }
-            }
+
+            AvroSchema.Type.LONG ->
+                when (schema.knownLogicalTypeName) {
+                    null -> LocalDate.ofEpochDay(decoder.decodeLong())
+                    else -> throw decoder.localDateSchemaError()
+                }
+
+            AvroSchema.Type.STRING -> LocalDate.parse(decoder.decodeString())
+
+            else -> throw decoder.localDateSchemaError()
         }
     }
+
+    private fun AvroDecoder.localDateSchemaError() = UnexpectedDecodeSchemaError("LocalDate", AvroSchema.Type.INT, AvroSchema.Type.LONG)
 
     override fun deserializeGeneric(decoder: Decoder): LocalDate {
         return LocalDate.parse(decoder.decodeString())
@@ -167,49 +152,29 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
     private fun LocalTime.toMicroOfDay() = toNanoOfDay() / NANOS_PER_MICROSECOND
 
     override fun deserializeAvro(decoder: AvroDecoder): LocalTime {
-        with(decoder) {
-            return decodeResolvingAny({
-                UnexpectedDecodeSchemaError(
-                    "LocalTime",
-                    AvroSchema.Type.INT,
-                    AvroSchema.Type.LONG,
-                    AvroSchema.Type.STRING
-                )
-            }) {
-                when (it.type) {
-                    AvroSchema.Type.INT -> {
-                        when (it.knownLogicalTypeName) {
-                            LOGICAL_TYPE_NAME_TIME_MILLIS, null -> {
-                                AnyValueDecoder { LocalTime.ofNanoOfDay(decoder.decodeInt() * NANOS_PER_MILLISECOND) }
-                            }
-
-                            else -> null
-                        }
-                    }
-
-                    AvroSchema.Type.LONG -> {
-                        when (it.knownLogicalTypeName) {
-                            null -> {
-                                AnyValueDecoder { LocalTime.ofNanoOfDay(decoder.decodeLong() * NANOS_PER_MILLISECOND) }
-                            }
-
-                            LOGICAL_TYPE_NAME_TIME_MICROS -> {
-                                AnyValueDecoder { LocalTime.ofNanoOfDay(decoder.decodeLong() * NANOS_PER_MICROSECOND) }
-                            }
-
-                            else -> null
-                        }
-                    }
-
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { LocalTime.parse(decoder.decodeString()) }
-                    }
-
-                    else -> null
+        val schema = decoder.currentWriterSchema
+        return when (schema.type) {
+            AvroSchema.Type.INT ->
+                when (schema.knownLogicalTypeName) {
+                    LOGICAL_TYPE_NAME_TIME_MILLIS, null -> LocalTime.ofNanoOfDay(decoder.decodeInt() * NANOS_PER_MILLISECOND)
+                    else -> throw decoder.localTimeSchemaError()
                 }
-            }
+
+            AvroSchema.Type.LONG ->
+                when (schema.knownLogicalTypeName) {
+                    null -> LocalTime.ofNanoOfDay(decoder.decodeLong() * NANOS_PER_MILLISECOND)
+                    LOGICAL_TYPE_NAME_TIME_MICROS -> LocalTime.ofNanoOfDay(decoder.decodeLong() * NANOS_PER_MICROSECOND)
+                    else -> throw decoder.localTimeSchemaError()
+                }
+
+            AvroSchema.Type.STRING -> LocalTime.parse(decoder.decodeString())
+
+            else -> throw decoder.localTimeSchemaError()
         }
     }
+
+    private fun AvroDecoder.localTimeSchemaError() =
+        UnexpectedDecodeSchemaError("LocalTime", AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
 
     override fun deserializeGeneric(decoder: Decoder): LocalTime {
         return LocalTime.parse(decoder.decodeString())
@@ -256,29 +221,18 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): LocalDateTime {
-        return with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG) }) {
-                when (it.type) {
-                    AvroSchema.Type.LONG ->
-                        when (it.knownLogicalTypeName) {
-                            LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> {
-                                AnyValueDecoder { LocalDateTime.ofInstant(Instant.ofEpochMilli(decoder.decodeLong()), ZoneOffset.UTC) }
-                            }
-
-                            LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> {
-                                AnyValueDecoder { LocalDateTime.ofInstant(Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS), ZoneOffset.UTC) }
-                            }
-
-                            else -> null
-                        }
-
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { LocalDateTime.parse(decoder.decodeString()) }
-                    }
-
-                    else -> null
+        val schema = decoder.currentWriterSchema
+        return when (schema.type) {
+            AvroSchema.Type.LONG ->
+                when (schema.knownLogicalTypeName) {
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> LocalDateTime.ofInstant(Instant.ofEpochMilli(decoder.decodeLong()), ZoneOffset.UTC)
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> LocalDateTime.ofInstant(Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS), ZoneOffset.UTC)
+                    else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
                 }
-            }
+
+            AvroSchema.Type.STRING -> LocalDateTime.parse(decoder.decodeString())
+
+            else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
         }
     }
 
@@ -326,31 +280,21 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
         encoder.encodeString(value.toString())
     }
 
-    override fun deserializeAvro(decoder: AvroDecoder): Instant =
-        with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG) }) {
-                when (it.type) {
-                    AvroSchema.Type.LONG ->
-                        when (it.knownLogicalTypeName) {
-                            LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> {
-                                AnyValueDecoder { Instant.ofEpochMilli(decoder.decodeLong()) }
-                            }
-
-                            LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> {
-                                AnyValueDecoder { Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS) }
-                            }
-
-                            else -> null
-                        }
-
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { Instant.parse(decoder.decodeString()) }
-                    }
-
-                    else -> null
+    override fun deserializeAvro(decoder: AvroDecoder): Instant {
+        val schema = decoder.currentWriterSchema
+        return when (schema.type) {
+            AvroSchema.Type.LONG ->
+                when (schema.knownLogicalTypeName) {
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> Instant.ofEpochMilli(decoder.decodeLong())
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS)
+                    else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
                 }
-            }
+
+            AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
+
+            else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
         }
+    }
 
     override fun deserializeGeneric(decoder: Decoder): Instant {
         return Instant.parse(decoder.decodeString())
@@ -397,31 +341,22 @@ public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): Instant {
-        with(decoder) {
-            return decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG, AvroSchema.Type.STRING) }) {
-                when (it.type) {
-                    AvroSchema.Type.LONG ->
-                        when (it.knownLogicalTypeName) {
-                            LOGICAL_TYPE_NAME_TIMESTAMP_MICROS, null -> {
-                                AnyValueDecoder { Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS) }
-                            }
-
-                            LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS -> {
-                                AnyValueDecoder { Instant.ofEpochMilli(decoder.decodeLong()) }
-                            }
-
-                            else -> null
-                        }
-
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { Instant.parse(decoder.decodeString()) }
-                    }
-
-                    else -> null
+        val schema = decoder.currentWriterSchema
+        return when (schema.type) {
+            AvroSchema.Type.LONG ->
+                when (schema.knownLogicalTypeName) {
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS, null -> Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS)
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS -> Instant.ofEpochMilli(decoder.decodeLong())
+                    else -> throw decoder.instantToMicroSchemaError()
                 }
-            }
+
+            AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
+
+            else -> throw decoder.instantToMicroSchemaError()
         }
     }
+
+    private fun AvroDecoder.instantToMicroSchemaError() = UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG, AvroSchema.Type.STRING)
 
     override fun deserializeGeneric(decoder: Decoder): Instant {
         return Instant.parse(decoder.decodeString())

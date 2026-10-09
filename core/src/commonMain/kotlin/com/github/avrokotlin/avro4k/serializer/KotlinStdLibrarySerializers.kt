@@ -2,12 +2,10 @@
 
 package com.github.avrokotlin.avro4k.serializer
 
-import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.schema.fixedSize
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
@@ -82,30 +80,11 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>("kotlin.uuid.Uuid") {
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): Uuid {
-        with(decoder) {
-            return decodeResolvingAny({
-                UnexpectedDecodeSchemaError(
-                    "Uuid",
-                    AvroSchema.Type.STRING,
-                    AvroSchema.Type.FIXED
-                )
-            }) { schema ->
-                when (schema.type) {
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { Uuid.parse(decoder.decodeString()) }
-                    }
-
-                    AvroSchema.Type.FIXED -> {
-                        if (schema.fixedSize == 16) {
-                            AnyValueDecoder { Uuid.fromByteArray(decoder.decodeBytes()) }
-                        } else {
-                            null
-                        }
-                    }
-
-                    else -> null
-                }
-            }
+        val schema = decoder.currentWriterSchema
+        return when {
+            schema.type == AvroSchema.Type.STRING -> Uuid.parse(decoder.decodeString())
+            schema.type == AvroSchema.Type.FIXED && schema.fixedSize == 16 -> Uuid.fromByteArray(decoder.decodeBytes())
+            else -> throw decoder.UnexpectedDecodeSchemaError("Uuid", AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
         }
     }
 
@@ -170,35 +149,22 @@ public object KotlinInstantSerializer : AvroSerializer<Instant>("kotlin.time.Ins
         encoder.encodeString(value.toString())
     }
 
-    override fun deserializeAvro(decoder: AvroDecoder): Instant =
-        with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG) }) {
-                when (it.type) {
-                    AvroSchema.Type.LONG ->
-                        when (it.knownLogicalTypeName) {
-                            LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> {
-                                AnyValueDecoder { Instant.fromEpochMilliseconds(decoder.decodeLong()) }
-                            }
-
-                            LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> {
-                                AnyValueDecoder { Instant.fromEpochMicros(decoder.decodeLong()) }
-                            }
-
-                            LOGICAL_TYPE_NAME_TIMESTAMP_NANOS -> {
-                                AnyValueDecoder { Instant.fromEpochNanos(decoder.decodeLong()) }
-                            }
-
-                            else -> null
-                        }
-
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { Instant.parse(decoder.decodeString()) }
-                    }
-
-                    else -> null
+    override fun deserializeAvro(decoder: AvroDecoder): Instant {
+        val schema = decoder.currentWriterSchema
+        return when (schema.type) {
+            AvroSchema.Type.LONG ->
+                when (schema.knownLogicalTypeName) {
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> Instant.fromEpochMilliseconds(decoder.decodeLong())
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> Instant.fromEpochMicros(decoder.decodeLong())
+                    LOGICAL_TYPE_NAME_TIMESTAMP_NANOS -> Instant.fromEpochNanos(decoder.decodeLong())
+                    else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
                 }
-            }
+
+            AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
+
+            else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
         }
+    }
 
     override fun deserializeGeneric(decoder: Decoder): Instant {
         return Instant.parse(decoder.decodeString())

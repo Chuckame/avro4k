@@ -1,13 +1,11 @@
 package com.github.avrokotlin.avro4k.serializer
 
-import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.ensureFixedSize
 import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
 import com.github.avrokotlin.avro4k.internal.Buffer
@@ -176,22 +174,19 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>("com.github.
 
     override fun deserializeAvro(decoder: AvroDecoder): AvroDuration {
         return with(decoder) {
-            decodeResolvingAny({ UnexpectedDecodeSchemaError(descriptor.serialName, AvroSchema.Type.FIXED, AvroSchema.Type.STRING) }) {
-                when (it.type) {
-                    AvroSchema.Type.FIXED -> {
-                        if (it.knownLogicalTypeName == LOGICAL_TYPE_NAME && it.fixedSize == DURATION_BYTES) {
-                            AnyValueDecoder { decodeDuration(contextOf<AvroDecoder>().decodeFixed()) }
-                        } else {
-                            null
-                        }
+            val schema = currentWriterSchema
+            when (schema.type) {
+                AvroSchema.Type.FIXED -> {
+                    if (schema.knownLogicalTypeName == LOGICAL_TYPE_NAME && schema.fixedSize == DURATION_BYTES) {
+                        decodeDuration(decodeFixed())
+                    } else {
+                        throw UnexpectedDecodeSchemaError(descriptor.serialName, AvroSchema.Type.FIXED, AvroSchema.Type.STRING)
                     }
-
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { AvroDuration.parse(contextOf<AvroDecoder>().decodeString()) }
-                    }
-
-                    else -> throw SerializationException("Expected the duration logical type to be of type fixed or string, but had ${it.type}")
                 }
+
+                AvroSchema.Type.STRING -> AvroDuration.parse(decodeString())
+
+                else -> throw SerializationException("Expected the duration logical type to be of type fixed or string, but had ${schema.type}")
             }
         }
     }

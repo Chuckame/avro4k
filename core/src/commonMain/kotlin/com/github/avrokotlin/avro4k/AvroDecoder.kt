@@ -26,20 +26,20 @@ import kotlinx.serialization.encoding.Decoder
  * - [decodeBytes]
  * - [decodeFixed]
  *
+ * To decode a value differently depending on its writer schema (mainly for logical types), read [currentWriterSchema],
+ * which is never a union, then call the matching typed method:
+ * ```kotlin
+ * val schema = decoder.currentWriterSchema
+ * when (schema.type) {
+ *     AvroSchema.Type.LONG -> Instant.ofEpochMilli(decoder.decodeLong())
+ *     AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
+ *     else -> throw SerializationException("Unsupported writer schema $schema")
+ * }
+ * ```
+ *
  * To decode a value as whatever type its [currentWriterSchema] has, without knowing it in advance, use
  * `decodeSerializableValue(AnySerializer())` ([com.github.avrokotlin.avro4k.serializer.AnySerializer]), which also decodes
  * logical types as configured in [AvroConfiguration.logicalTypes].
- *
- * Use the following methods to allow complex decoding using raw values, mainly for logical types:
- * - [decodeResolvingAny]
- * - [decodeResolvingBoolean]
- * - [decodeResolvingByte]
- * - [decodeResolvingShort]
- * - [decodeResolvingInt]
- * - [decodeResolvingLong]
- * - [decodeResolvingFloat]
- * - [decodeResolvingDouble]
- * - [decodeResolvingChar]
  */
 public interface AvroDecoder : Decoder {
     /**
@@ -65,236 +65,6 @@ public interface AvroDecoder : Decoder {
      */
     @ExperimentalAvro4kApi
     public fun decodeFixed(): ByteArray
-}
-
-/**
- * Allows you to decode a value differently depending on the schema (generally its name, type, logicalType), even if it is a union.
- *
- * This reduces the need to manually resolve the type in a union **and** not in a union.
- *
- * For examples, see the [com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer] as it resolves a lot of types and also logical types.
- *
- * **Important note:** Use the specific methods for primitives to avoid auto-boxing and improve performances.
- *
- * @param resolver A lambda that returns a [AnyValueDecoder] that contains the logic to decode the value only when the schema matches. The decoding **MUST** be done in the [AnyValueDecoder] to avoid decoding the value if it is not the right schema. Return null when it is not matching the expected schema.
- * @param error A lambda that throws an exception if the decoder cannot be resolved.
- *
- * @see decodeResolvingBoolean
- * @see decodeResolvingByte
- * @see decodeResolvingShort
- * @see decodeResolvingInt
- * @see decodeResolvingLong
- * @see decodeResolvingFloat
- * @see decodeResolvingDouble
- * @see decodeResolvingChar
- */
-@ExperimentalAvro4kApi
-public inline fun <T : Any> AvroDecoder.decodeResolvingAny(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> AnyValueDecoder<T>?,
-): T {
-    return findValueDecoder(error, resolver).decodeAny()
-}
-
-/**
- * An [Byte] specific [decodeResolvingAny] to prevent auto-boxing (improving performances avoiding primitive<->object conversions).
- *
- * @see decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public inline fun AvroDecoder.decodeResolvingByte(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> ByteValueDecoder?,
-): Byte {
-    return findValueDecoder(error, resolver).decodeByte()
-}
-
-/**
- * An [Short] specific [decodeResolvingAny] to prevent auto-boxing (improving performances avoiding primitive<->object conversions).
- *
- * @see decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public inline fun AvroDecoder.decodeResolvingShort(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> ShortValueDecoder?,
-): Short {
-    return findValueDecoder(error, resolver).decodeShort()
-}
-
-/**
- * An [Int] specific [decodeResolvingAny] to prevent auto-boxing (improving performances avoiding primitive<->object conversions).
- *
- * @see decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public inline fun AvroDecoder.decodeResolvingInt(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> IntValueDecoder?,
-): Int {
-    return findValueDecoder(error, resolver).decodeInt()
-}
-
-/**
- * A [Long] specific [decodeResolvingAny] to prevent auto-boxing (improving performances avoiding primitive<->object conversions).
- *
- * @see decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public inline fun AvroDecoder.decodeResolvingLong(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> LongValueDecoder?,
-): Long {
-    return findValueDecoder(error, resolver).decodeLong()
-}
-
-/**
- * A [Boolean] specific [decodeResolvingAny] to prevent auto-boxing (improving performances avoiding primitive<->object conversions).
- *
- * @see decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public inline fun AvroDecoder.decodeResolvingBoolean(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> BooleanValueDecoder?,
-): Boolean {
-    return findValueDecoder(error, resolver).decodeBoolean()
-}
-
-/**
- * A [Float] specific [decodeResolvingAny] to prevent auto-boxing (improving performances avoiding primitive<->object conversions).
- *
- * @see decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public inline fun AvroDecoder.decodeResolvingFloat(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> FloatValueDecoder?,
-): Float {
-    return findValueDecoder(error, resolver).decodeFloat()
-}
-
-/**
- * A [Double] specific [decodeResolvingAny] to prevent auto-boxing (improving performances avoiding primitive<->object conversions).
- *
- * @see decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public inline fun AvroDecoder.decodeResolvingDouble(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> DoubleValueDecoder?,
-): Double {
-    return findValueDecoder(error, resolver).decodeDouble()
-}
-
-/**
- * A [Char] specific [decodeResolvingAny] to prevent auto-boxing (improving performances avoiding primitive<->object conversions).
- *
- * @see decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public inline fun AvroDecoder.decodeResolvingChar(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> CharValueDecoder?,
-): Char {
-    return findValueDecoder(error, resolver).decodeChar()
-}
-
-/**
- * @see AvroDecoder.decodeResolvingAny
- */
-@ExperimentalAvro4kApi
-public fun interface AnyValueDecoder<T> {
-    context(_: AvroDecoder)
-    public fun decodeAny(): T
-}
-
-/**
- * @see AvroDecoder.decodeResolvingBoolean
- */
-@ExperimentalAvro4kApi
-public fun interface BooleanValueDecoder {
-    context(_: AvroDecoder)
-    public fun decodeBoolean(): Boolean
-}
-
-/**
- * @see AvroDecoder.decodeResolvingByte
- */
-@ExperimentalAvro4kApi
-public fun interface ByteValueDecoder {
-    context(_: AvroDecoder)
-    public fun decodeByte(): Byte
-}
-
-/**
- * @see AvroDecoder.decodeResolvingShort
- */
-@ExperimentalAvro4kApi
-public fun interface ShortValueDecoder {
-    context(_: AvroDecoder)
-    public fun decodeShort(): Short
-}
-
-/**
- * @see AvroDecoder.decodeResolvingInt
- */
-@ExperimentalAvro4kApi
-public fun interface IntValueDecoder {
-    context(_: AvroDecoder)
-    public fun decodeInt(): Int
-}
-
-/**
- * @see AvroDecoder.decodeResolvingLong
- */
-@ExperimentalAvro4kApi
-public fun interface LongValueDecoder {
-    context(_: AvroDecoder)
-    public fun decodeLong(): Long
-}
-
-/**
- * @see AvroDecoder.decodeResolvingFloat
- */
-@ExperimentalAvro4kApi
-public fun interface FloatValueDecoder {
-    context(_: AvroDecoder)
-    public fun decodeFloat(): Float
-}
-
-/**
- * @see AvroDecoder.decodeResolvingDouble
- */
-@ExperimentalAvro4kApi
-public fun interface DoubleValueDecoder {
-    context(_: AvroDecoder)
-    public fun decodeDouble(): Double
-}
-
-/**
- * @see AvroDecoder.decodeResolvingChar
- */
-@ExperimentalAvro4kApi
-public fun interface CharValueDecoder {
-    context(_: AvroDecoder)
-    public fun decodeChar(): Char
-}
-
-@PublishedApi
-internal inline fun <T : Any> AvroDecoder.findValueDecoder(
-    error: () -> Throwable,
-    resolver: (AvroSchema) -> T?,
-): T {
-    val schema = currentWriterSchema
-
-    val foundResolver =
-        if (schema is AvroSchema.UnionSchema) {
-            schema.types.firstNotNullOfOrNull(resolver)
-        } else {
-            resolver(schema)
-        }
-    return foundResolver ?: throw error()
 }
 
 internal fun AvroDecoder.unsupportedWriterTypeError(

@@ -103,7 +103,8 @@ public abstract class AvroSerializer<T>(
     }
 
     /**
-     * Deserialize the value from an Avro decoder. It is highly recommended to use `decoder.decodeResolvingXx` methods. See [AvroDecoder] for more details.
+     * Deserialize the value from an Avro decoder. To decode depending on the writer schema (e.g. a logical type), read
+     * [AvroDecoder.currentWriterSchema], which is never a union, then call the matching typed `decode*` method. See [AvroDecoder] for more details.
      */
     public abstract fun deserializeAvro(decoder: AvroDecoder): T
 }

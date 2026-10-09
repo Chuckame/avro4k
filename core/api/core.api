@@ -1,7 +1,3 @@
-public abstract interface class com/github/avrokotlin/avro4k/AnyValueDecoder {
-	public abstract fun decodeAny (Lcom/github/avrokotlin/avro4k/AvroDecoder;)Ljava/lang/Object;
-}
-
 public abstract class com/github/avrokotlin/avro4k/Avro : kotlinx/serialization/BinaryFormat {
 	public static final field Default Lcom/github/avrokotlin/avro4k/Avro$Default;
 	public synthetic fun <init> (Lcom/github/avrokotlin/avro4k/AvroConfiguration;Lkotlinx/serialization/modules/SerializersModule;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -81,19 +77,6 @@ public abstract interface class com/github/avrokotlin/avro4k/AvroDecoder : kotli
 public final class com/github/avrokotlin/avro4k/AvroDecoder$DefaultImpls {
 	public static fun decodeNullableSerializableValue (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlinx/serialization/DeserializationStrategy;)Ljava/lang/Object;
 	public static fun decodeSerializableValue (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlinx/serialization/DeserializationStrategy;)Ljava/lang/Object;
-}
-
-public final class com/github/avrokotlin/avro4k/AvroDecoderKt {
-	public static final fun decodeResolvingAny (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Ljava/lang/Object;
-	public static final fun decodeResolvingBoolean (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Z
-	public static final fun decodeResolvingByte (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)B
-	public static final fun decodeResolvingChar (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)C
-	public static final fun decodeResolvingDouble (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)D
-	public static final fun decodeResolvingFloat (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)F
-	public static final fun decodeResolvingInt (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)I
-	public static final fun decodeResolvingLong (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)J
-	public static final fun decodeResolvingShort (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)S
-	public static final fun findValueDecoder (Lcom/github/avrokotlin/avro4k/AvroDecoder;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Ljava/lang/Object;
 }
 
 public abstract interface annotation class com/github/avrokotlin/avro4k/AvroDefault : java/lang/annotation/Annotation {
@@ -542,22 +525,6 @@ public final synthetic class com/github/avrokotlin/avro4k/AvroStringable$Impl : 
 	public fun <init> ()V
 }
 
-public abstract interface class com/github/avrokotlin/avro4k/BooleanValueDecoder {
-	public abstract fun decodeBoolean (Lcom/github/avrokotlin/avro4k/AvroDecoder;)Z
-}
-
-public abstract interface class com/github/avrokotlin/avro4k/ByteValueDecoder {
-	public abstract fun decodeByte (Lcom/github/avrokotlin/avro4k/AvroDecoder;)B
-}
-
-public abstract interface class com/github/avrokotlin/avro4k/CharValueDecoder {
-	public abstract fun decodeChar (Lcom/github/avrokotlin/avro4k/AvroDecoder;)C
-}
-
-public abstract interface class com/github/avrokotlin/avro4k/DoubleValueDecoder {
-	public abstract fun decodeDouble (Lcom/github/avrokotlin/avro4k/AvroDecoder;)D
-}
-
 public abstract interface annotation class com/github/avrokotlin/avro4k/ExperimentalAvro4kApi : java/lang/annotation/Annotation {
 }
 
@@ -584,19 +551,7 @@ public final class com/github/avrokotlin/avro4k/FieldNamingStrategy$Builtins$Sna
 	public fun resolve (Lkotlinx/serialization/descriptors/SerialDescriptor;I)Ljava/lang/String;
 }
 
-public abstract interface class com/github/avrokotlin/avro4k/FloatValueDecoder {
-	public abstract fun decodeFloat (Lcom/github/avrokotlin/avro4k/AvroDecoder;)F
-}
-
-public abstract interface class com/github/avrokotlin/avro4k/IntValueDecoder {
-	public abstract fun decodeInt (Lcom/github/avrokotlin/avro4k/AvroDecoder;)I
-}
-
 public abstract interface annotation class com/github/avrokotlin/avro4k/InternalAvro4kApi : java/lang/annotation/Annotation {
-}
-
-public abstract interface class com/github/avrokotlin/avro4k/LongValueDecoder {
-	public abstract fun decodeLong (Lcom/github/avrokotlin/avro4k/AvroDecoder;)J
 }
 
 public final class com/github/avrokotlin/avro4k/MissingFieldsEncodingException : kotlinx/serialization/SerializationException {
@@ -618,10 +573,6 @@ public final class com/github/avrokotlin/avro4k/Name {
 
 public abstract class com/github/avrokotlin/avro4k/ResolvedSchema : com/github/avrokotlin/avro4k/AvroSchema, com/github/avrokotlin/avro4k/WithProps {
 	public synthetic fun <init> (Lcom/github/avrokotlin/avro4k/AvroSchema$Type;Ljava/util/Map;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-}
-
-public abstract interface class com/github/avrokotlin/avro4k/ShortValueDecoder {
-	public abstract fun decodeShort (Lcom/github/avrokotlin/avro4k/AvroDecoder;)S
 }
 
 public final synthetic class com/github/avrokotlin/avro4k/internal/AvroGenerated$Impl : com/github/avrokotlin/avro4k/internal/AvroGenerated {

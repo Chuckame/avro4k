@@ -1,13 +1,11 @@
 package com.github.avrokotlin.avro4k.serializer
 
-import com.github.avrokotlin.avro4k.AnyValueDecoder
 import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ResolvedSchema
-import com.github.avrokotlin.avro4k.decodeResolvingAny
 import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.internal.Buffer
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
@@ -122,30 +120,11 @@ public object UUIDSerializer : AvroSerializer<UUID>(UUID::class.qualifiedName!!)
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): UUID {
-        with(decoder) {
-            return decodeResolvingAny({
-                UnexpectedDecodeSchemaError(
-                    "UUID",
-                    AvroSchema.Type.STRING,
-                    AvroSchema.Type.FIXED
-                )
-            }) { schema ->
-                when (schema.type) {
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { UUID.fromString(decoder.decodeString()) }
-                    }
-
-                    AvroSchema.Type.FIXED -> {
-                        if (schema.fixedSize == 16) {
-                            AnyValueDecoder { parseUuid(decoder.decodeBytes()) }
-                        } else {
-                            null
-                        }
-                    }
-
-                    else -> null
-                }
-            }
+        val schema = decoder.currentWriterSchema
+        return when {
+            schema.type == AvroSchema.Type.STRING -> UUID.fromString(decoder.decodeString())
+            schema.type == AvroSchema.Type.FIXED && schema.fixedSize == 16 -> parseUuid(decoder.decodeBytes())
+            else -> throw decoder.UnexpectedDecodeSchemaError("UUID", AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
         }
     }
 
@@ -200,41 +179,25 @@ public object BigIntegerSerializer : AvroSerializer<BigInteger>(BigInteger::clas
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): BigInteger {
-        with(decoder) {
-            return decodeResolvingAny({
-                UnexpectedDecodeSchemaError(
-                    "BigInteger",
-                    AvroSchema.Type.STRING,
-                    AvroSchema.Type.INT,
-                    AvroSchema.Type.LONG,
-                    AvroSchema.Type.FLOAT,
-                    AvroSchema.Type.DOUBLE
-                )
-            }) { schema ->
-                when (schema.type) {
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { decoder.decodeString().toBigInteger() }
-                    }
+        return when (decoder.currentWriterSchema.type) {
+            AvroSchema.Type.STRING -> decoder.decodeString().toBigInteger()
 
-                    AvroSchema.Type.INT -> {
-                        AnyValueDecoder { decoder.decodeInt().toBigInteger() }
-                    }
+            AvroSchema.Type.INT -> decoder.decodeInt().toBigInteger()
 
-                    AvroSchema.Type.LONG -> {
-                        AnyValueDecoder { decoder.decodeLong().toBigInteger() }
-                    }
+            AvroSchema.Type.LONG -> decoder.decodeLong().toBigInteger()
 
-                    AvroSchema.Type.FLOAT -> {
-                        AnyValueDecoder { decoder.decodeFloat().toBigDecimal().toBigIntegerExact() }
-                    }
+            AvroSchema.Type.FLOAT -> decoder.decodeFloat().toBigDecimal().toBigIntegerExact()
 
-                    AvroSchema.Type.DOUBLE -> {
-                        AnyValueDecoder { decoder.decodeDouble().toBigDecimal().toBigIntegerExact() }
-                    }
+            AvroSchema.Type.DOUBLE -> decoder.decodeDouble().toBigDecimal().toBigIntegerExact()
 
-                    else -> null
-                }
-            }
+            else -> throw decoder.UnexpectedDecodeSchemaError(
+                "BigInteger",
+                AvroSchema.Type.STRING,
+                AvroSchema.Type.INT,
+                AvroSchema.Type.LONG,
+                AvroSchema.Type.FLOAT,
+                AvroSchema.Type.DOUBLE
+            )
         }
     }
 
@@ -357,38 +320,29 @@ public object BigDecimalSerializer : AvroSerializer<BigDecimal>(BigDecimal::clas
     }
 
     override fun deserializeAvro(decoder: AvroDecoder): BigDecimal {
-        with(decoder) {
-            return decodeResolvingAny({
-                UnexpectedDecodeSchemaError(
-                    "BigDecimal",
-                    AvroSchema.Type.STRING,
-                    AvroSchema.Type.BYTES,
-                    AvroSchema.Type.FIXED
-                )
-            }) { schema ->
-                when (schema.type) {
-                    AvroSchema.Type.STRING -> {
-                        AnyValueDecoder { decoder.decodeString().toBigDecimal() }
-                    }
+        val schema = decoder.currentWriterSchema
+        return when (schema.type) {
+            AvroSchema.Type.STRING -> decoder.decodeString().toBigDecimal()
 
-                    AvroSchema.Type.BYTES ->
-                        when (schema.knownLogicalTypeName) {
-                            DECIMAL_LOGICAL_TYPE_NAME -> AnyValueDecoder { decimalFromBytes(decoder.decodeBytes(), schema) }
-                            BIG_DECIMAL_LOGICAL_TYPE_NAME -> AnyValueDecoder { bigDecimalFromBytes(decoder.decodeBytes()) }
-                            else -> null
-                        }
-
-                    AvroSchema.Type.FIXED ->
-                        when (schema.knownLogicalTypeName) {
-                            DECIMAL_LOGICAL_TYPE_NAME -> AnyValueDecoder { decimalFromBytes(decoder.decodeFixed(), schema) }
-                            else -> null
-                        }
-
-                    else -> null
+            AvroSchema.Type.BYTES ->
+                when (schema.knownLogicalTypeName) {
+                    DECIMAL_LOGICAL_TYPE_NAME -> decimalFromBytes(decoder.decodeBytes(), schema)
+                    BIG_DECIMAL_LOGICAL_TYPE_NAME -> bigDecimalFromBytes(decoder.decodeBytes())
+                    else -> throw decoder.bigDecimalSchemaError()
                 }
-            }
+
+            AvroSchema.Type.FIXED ->
+                when (schema.knownLogicalTypeName) {
+                    DECIMAL_LOGICAL_TYPE_NAME -> decimalFromBytes(decoder.decodeFixed(), schema)
+                    else -> throw decoder.bigDecimalSchemaError()
+                }
+
+            else -> throw decoder.bigDecimalSchemaError()
         }
     }
+
+    private fun AvroDecoder.bigDecimalSchemaError() =
+        UnexpectedDecodeSchemaError("BigDecimal", AvroSchema.Type.STRING, AvroSchema.Type.BYTES, AvroSchema.Type.FIXED)
 
     override fun deserializeGeneric(decoder: Decoder): BigDecimal {
         return decoder.decodeString().toBigDecimal()
