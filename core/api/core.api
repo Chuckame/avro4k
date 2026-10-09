@@ -75,7 +75,6 @@ public final synthetic class com/github/avrokotlin/avro4k/AvroDecimal$Impl : com
 public abstract interface class com/github/avrokotlin/avro4k/AvroDecoder : kotlinx/serialization/encoding/Decoder {
 	public abstract fun decodeBytes ()[B
 	public abstract fun decodeFixed ()[B
-	public abstract fun decodeValue ()Ljava/lang/Object;
 	public abstract fun getCurrentWriterSchema ()Lcom/github/avrokotlin/avro4k/AvroSchema;
 }
 

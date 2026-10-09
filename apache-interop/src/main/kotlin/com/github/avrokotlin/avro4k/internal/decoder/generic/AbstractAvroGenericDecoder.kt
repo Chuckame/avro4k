@@ -49,7 +49,11 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
 
     abstract override fun decodeNotNullMark(): Boolean
 
-    abstract override fun decodeValue(): Any
+    /**
+     * The generic value at the current position (an Apache generic container, a collection, a map, a [CharSequence], a
+     * boxed primitive, a [ByteArray]…), never `null`: every `decode*` method reads it, then converts it to the requested type.
+     */
+    abstract fun decodeGenericValue(): Any
 
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
@@ -63,7 +67,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
         return when (descriptor.kind) {
             StructureKind.LIST ->
-                when (val value = decodeValue()) {
+                when (val value = decodeGenericValue()) {
                     is GenericArray<*> ->
                         ArrayGenericDecoder(
                             collection = value,
@@ -82,7 +86,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                 }
 
             StructureKind.MAP ->
-                when (val value = decodeValue()) {
+                when (val value = decodeGenericValue()) {
                     is Map<*, *> ->
                         MapGenericDecoder(
                             value as Map<CharSequence, Any?>,
@@ -94,13 +98,13 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                 }
 
             StructureKind.CLASS, StructureKind.OBJECT ->
-                when (val value = decodeValue()) {
+                when (val value = decodeGenericValue()) {
                     is IndexedRecord -> RecordGenericDecoder(value, descriptor, avro)
                     else -> throw BadDecodedValueError(value, descriptor.kind, IndexedRecord::class)
                 }
 
             is PolymorphicKind ->
-                when (val value = decodeValue()) {
+                when (val value = decodeGenericValue()) {
                     is GenericContainer -> PolymorphicGenericDecoder(avro, descriptor, value.schema.toAvro4k(), value)
                     else -> PolymorphicGenericDecoder(avro, descriptor, currentAvroSchema, value)
                 }
@@ -110,7 +114,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeBoolean(): Boolean {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is Boolean -> value
             is CharSequence -> value.toString().toBoolean()
             else -> throw BadDecodedValueError(value, PrimitiveKind.BOOLEAN, Boolean::class, Int::class, CharSequence::class)
@@ -118,7 +122,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeByte(): Byte {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is Int -> value.toByteExact()
             is Long -> value.toByteExact()
             is BigDecimal -> value.toByteExact()
@@ -128,7 +132,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeShort(): Short {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is Int -> value.toShortExact()
             is Long -> value.toShortExact()
             is BigDecimal -> value.toShortExact()
@@ -138,7 +142,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeInt(): Int {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is Int -> value
             is Long -> value.toIntExact()
             is BigDecimal -> value.toIntExact()
@@ -148,7 +152,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeLong(): Long {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is Long -> value
             is Int -> value.toLong()
             is BigDecimal -> value.toLongExact()
@@ -158,7 +162,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeFloat(): Float {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is Float -> value
             is Double -> value.toFloatExact()
             is BigDecimal -> value.toFloatExact()
@@ -168,7 +172,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeDouble(): Double {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is Double -> value
             is Float -> value.toDouble()
             is BigDecimal -> value.toDoubleExact()
@@ -178,7 +182,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeChar(): Char {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is Int -> value.toChar()
             is CharSequence -> value.single()
             else -> throw BadDecodedValueError(value, PrimitiveKind.CHAR, Int::class, CharSequence::class)
@@ -186,7 +190,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeString(): String {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is CharSequence -> value.toString()
             is ByteArray -> value.decodeToString()
             is GenericFixed -> value.bytes().decodeToString()
@@ -195,7 +199,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is GenericEnumSymbol<*>, is CharSequence -> {
                 enumDescriptor.getElementIndex(value.toString()).takeIf { it >= 0 }
                     ?: avro.enumDefaultIndex(enumDescriptor)
@@ -207,7 +211,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeBytes(): ByteArray {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is ByteArray -> value
             is ByteBuffer -> value.array()
             is GenericFixed -> value.bytes()
@@ -217,7 +221,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
     }
 
     override fun decodeFixed(): ByteArray {
-        return when (val value = decodeValue()) {
+        return when (val value = decodeGenericValue()) {
             is GenericFixed -> value.bytes()
             else -> throw BadDecodedValueError<GenericFixed>(value, GenericFixed::class)
         }

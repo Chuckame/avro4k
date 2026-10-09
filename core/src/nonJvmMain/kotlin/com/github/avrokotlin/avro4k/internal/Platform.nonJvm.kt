@@ -1,6 +1,5 @@
 package com.github.avrokotlin.avro4k.internal
 
-import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
 import com.github.avrokotlin.avro4k.serializer.KotlinInstantSerializer
 import com.github.avrokotlin.avro4k.serializer.KotlinStdLibSerializersModule
@@ -24,9 +23,3 @@ internal actual fun platformLogicalTypes(): Map<String, KSerializer<out Any>> =
         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS to KotlinInstantSerializer,
         LOGICAL_TYPE_NAME_TIMESTAMP_MICROS to KotlinInstantSerializer
     )
-
-/** The bytes themselves: there is no generic fixed type outside the JVM. */
-internal actual fun genericFixedValue(
-    schema: AvroSchema,
-    bytes: ByteArray,
-): Any = bytes

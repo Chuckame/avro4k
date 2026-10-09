@@ -1,6 +1,5 @@
 package com.github.avrokotlin.avro4k.internal
 
-import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.serializer.AvroDurationSerializer
 import com.github.avrokotlin.avro4k.serializer.KotlinUuidSerializer
 import kotlinx.serialization.KSerializer
@@ -25,9 +24,3 @@ internal fun defaultLogicalTypes(): Map<String, KSerializer<out Any>> =
 
 /** The logical types that [defaultLogicalTypes] decodes to a type of the platform it runs on. */
 internal expect fun platformLogicalTypes(): Map<String, KSerializer<out Any>>
-
-/** The generic value of a fixed default, for the deprecated `AvroDecoder.decodeValue`. */
-internal expect fun genericFixedValue(
-    schema: AvroSchema,
-    bytes: ByteArray,
-): Any

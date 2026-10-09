@@ -9,7 +9,6 @@ import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.SerializationWorkflow
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.defaultValueBytes
-import com.github.avrokotlin.avro4k.internal.genericFixedValue
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.resolveDefaultBranch
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
@@ -256,33 +255,6 @@ internal class JsonDefaultDecoder(
         return when (currentAvroSchema.type) {
             AvroSchema.Type.FIXED -> bytesValue()
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.FIXED)
-        }
-    }
-
-    /**
-     * The default as the generic value the former path produced, for a non-null primitive, enum or fixed only.
-     */
-    @Deprecated("Use currentWriterSchema to get the schema and then decode the value using the appropriate decode* method")
-    override fun decodeValue(): Any {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.BOOLEAN -> primitive.boolean
-
-            AvroSchema.Type.INT -> intValue()
-
-            AvroSchema.Type.LONG -> primitive.long
-
-            AvroSchema.Type.FLOAT -> primitive.float
-
-            AvroSchema.Type.DOUBLE -> primitive.double
-
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content
-
-            AvroSchema.Type.BYTES -> bytesValue()
-
-            // the platform's generic value of a fixed, as the former path's (on the JVM, an Apache fixed carrying its schema)
-            AvroSchema.Type.FIXED -> genericFixedValue(currentAvroSchema, decodeFixed())
-
-            else -> throw UnsupportedOperationException("A default value of type ${currentAvroSchema.type} cannot be decoded as a generic value")
         }
     }
 }

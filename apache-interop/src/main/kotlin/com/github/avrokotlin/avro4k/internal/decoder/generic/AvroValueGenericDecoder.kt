@@ -13,7 +13,7 @@ internal class AvroValueGenericDecoder(
 ) : AbstractAvroGenericDecoder() {
     override fun decodeNotNullMark() = value != null
 
-    override fun decodeValue() = value ?: throw DecodedNullError()
+    override fun decodeGenericValue() = value ?: throw DecodedNullError()
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         throw IllegalIndexedAccessError()

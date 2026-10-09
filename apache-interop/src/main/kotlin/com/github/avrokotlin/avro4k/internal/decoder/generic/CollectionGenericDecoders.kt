@@ -89,7 +89,7 @@ internal class MapGenericDecoder(
         return advance() != null
     }
 
-    override fun decodeValue(): Any {
+    override fun decodeGenericValue(): Any {
         if (!decodedNotNullMark) {
             advance()
         } else {
@@ -148,7 +148,7 @@ internal class ArrayGenericDecoder(
         return currentItem != null
     }
 
-    override fun decodeValue(): Any {
+    override fun decodeGenericValue(): Any {
         val value = if (decodedNullMark) currentItem else iterator.next()
         decodedNullMark = false
         return value ?: throw DecodedNullError()

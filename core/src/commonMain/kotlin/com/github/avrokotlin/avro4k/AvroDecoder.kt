@@ -26,6 +26,10 @@ import kotlinx.serialization.encoding.Decoder
  * - [decodeBytes]
  * - [decodeFixed]
  *
+ * To decode a value as whatever type its [currentWriterSchema] has, without knowing it in advance, use
+ * `decodeSerializableValue(AnySerializer())` ([com.github.avrokotlin.avro4k.serializer.AnySerializer]), which also decodes
+ * logical types as configured in [AvroConfiguration.logicalTypes].
+ *
  * Use the following methods to allow complex decoding using raw values, mainly for logical types:
  * - [decodeResolvingAny]
  * - [decodeResolvingBoolean]
@@ -61,17 +65,6 @@ public interface AvroDecoder : Decoder {
      */
     @ExperimentalAvro4kApi
     public fun decodeFixed(): ByteArray
-
-    /**
-     * Decode a value that corresponds to the [currentWriterSchema].
-     *
-     * You should prefer using directly [currentWriterSchema] to get the schema and then decode the value using the appropriate **decode*** method.
-     *
-     * Will be removed in the future as direct decoding isn't capable of it.
-     */
-    @Deprecated("Use currentWriterSchema to get the schema and then decode the value using the appropriate decode* method, or use decodeResolving* for more complex use cases.")
-    @ExperimentalAvro4kApi
-    public fun decodeValue(): Any
 }
 
 /**

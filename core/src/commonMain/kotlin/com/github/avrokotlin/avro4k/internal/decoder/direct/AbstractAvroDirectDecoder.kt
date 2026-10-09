@@ -44,11 +44,6 @@ internal abstract class AbstractAvroDirectDecoder(
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
 
-    @Deprecated("Do not use it for direct encoding")
-    final override fun decodeValue(): Any {
-        throw UnsupportedOperationException("Direct decoding doesn't support decoding generic values")
-    }
-
     @OptIn(InternalSerializationApi::class)
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
         decodeAndResolveUnion()

@@ -152,11 +152,7 @@ internal class JsonDefaultDecoderTest : StringSpec({
                 "decodeString" to { it.decodeString() },
                 "decodeEnum" to { it.decodeEnum(serializer<SomeEnum>().descriptor) },
                 "decodeBytes" to { it.decodeBytes() },
-                "decodeFixed" to { it.decodeFixed() },
-                "decodeValue" to {
-                    @Suppress("DEPRECATION")
-                    it.decodeValue()
-                }
+                "decodeFixed" to { it.decodeFixed() }
             )
         for (schema in schemas) {
             for ((name, decode) in decodeMethods) {

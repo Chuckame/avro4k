@@ -1,6 +1,5 @@
 package com.github.avrokotlin.avro4k.internal
 
-import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.serializer.AnyTypeSerializersModule
 import com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer
 import com.github.avrokotlin.avro4k.serializer.InstantSerializer
@@ -17,7 +16,6 @@ import com.github.avrokotlin.avro4k.serializer.LocalTimeSerializer
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
-import org.apache.avro.generic.GenericData
 
 // What the code shared by every platform gets from the platform it runs on. On the JVM: the java.time, java.util,
 // java.math and java.net serializers next to the Kotlin ones.
@@ -46,12 +44,3 @@ internal actual fun platformLogicalTypes(): Map<String, KSerializer<out Any>> =
         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS to InstantSerializer,
         LOGICAL_TYPE_NAME_TIMESTAMP_MICROS to InstantSerializer
     )
-
-/**
- * The generic value of a fixed default, for the deprecated `AvroDecoder.decodeValue`: an Apache `GenericData.Fixed`
- * carrying its schema in Apache's model, as the generic values of the former default-value path did.
- */
-internal actual fun genericFixedValue(
-    schema: AvroSchema,
-    bytes: ByteArray,
-): Any = GenericData.Fixed(avro4kToApache(schema), bytes)
