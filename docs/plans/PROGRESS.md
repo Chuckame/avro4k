@@ -9,18 +9,46 @@ its row here is updated **and committed**.
 
 **M0, M1 and M2 are complete. M3 is in progress** on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
-batches, and its §1 rules in every brief. Done: M3-01 … M3-08 (batches 1 and 2, then M3-08). Next: batch 3 (M3-09 ∥ M3-10).
+batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-09): M3-18 started, V3 GitHub issues folded in
+### Resume here (2026-10-10): M3-18 … M3-24 done — next is M3-14
 
-`main` merged in (`90d4425`: Kotlin 2.4.20, JUnit 6, Gradle 9.8, Apache Avro 1.12.2, the object container sync marker);
-`ACC` step 1 green on the merged tree, `:core:jvmTest` 942 → 944 (the two sync-marker tests from `main`). M3-18 (common
-validating codec) is done.
+**Branch** `v3/m2-foundation`, clean, everything committed. M3 units done this session (all merged, ledger rows below):
+M3-18 (common validating codec), M3-20 (#318/#319 okio and stream APIs removed), M3-19 (GenericData API → `apache-interop`,
+`Record`/`ListRecord` deleted, #320), M3-21 (`uuid` → `kotlin.uuid.Uuid` on the JVM, #429), M3-23 (`decodeValue()` removed),
+M3-24 commits 1–5 (generic unions resolved from the value, `decodeResolving*` removed, `AnySerializer` experimental, generic
+data API undeprecated). Last measured: `:core:jvmTest` 973, apache-interop 545, Confluent 80, kotlin-generator 151 (1
+skipped), gradle-plugin 2; jsNode/jsBrowser 157, macosArm64/iosSimulatorArm64 160.
 
-The four open issues of the GitHub milestone "V3" are now plan units (user decisions, decision log 2026-10-09). Remaining
-order: **~~M3-18~~ → ~~M3-20 (#318, #319)~~ → ~~M3-19 (now deletes `Record`/`ListRecord`, #320)~~ → ~~M3-21 (#429)~~ → ~~M3-23 (`decodeValue()`)~~ → M3-24 (unions in generic decoding, `decodeResolving*`) → M3-14 → M3-22 (exceptions, #267/#269) → M3-16 →
-M3-17**; containers/single-object when the user schedules them. Before briefing a unit, re-check the milestone for new
-issues: `gh issue list -R avro-kotlin/avro4k --milestone V3 --state open`.
+**Next, in order:** **M3-14** (Apache exit from core; read its "Amended after M3-19" paragraph — the four
+`@InternalAvro4kApi` forwarders in `jvmMain/internal/AvroInternalExtensions.kt` stay in core; `AvroFormatDecoder` from M3-24 is
+core too) → **M3-22** (exception hierarchy, #267/#269 — design first, user approval before implementing) → M3-16 (cross-platform
+fixtures) → M3-17 (re-baseline + review over all of M3). Containers / single-object: when the user schedules them. Then M4, M5.
+Before briefing any unit: `gh issue list -R avro-kotlin/avro4k --milestone V3 --state open` (open now: #267, #269 → M3-22;
+#318/#319/#320/#429 close when the branch reaches `main`).
+
+**Waiting for the user — do not merge or decide without them:**
+1. **M3-24 commits 6–7 are NOT merged**: branch `worktree-agent-ab60eb20a68298036` (`c510be5d` "refactor(core)!:
+   AvroDecoder.currentWriterSchema returns a ResolvedSchema", `a3b3fb1d` its note). The agent reported the user asked it
+   for this directly, mid-unit; the orchestrator never relayed it and could not verify, and it changes a public signature
+   (`getCurrentWriterSchema ()…ResolvedSchema;` in `core.api`). If the user confirms: cherry-pick both onto
+   `v3/m2-foundation`, re-run `ACC+KMP` (the agent ran it green on the tree with them), update the M3-24 row. Same branch's
+   note records the agent's answer to "how could users resolve unions themselves (pluggable)?" — options only, nothing built.
+2. Confirm or revert: `AbstractAnySerializer` is experimental public API too (its overridable hooks); `AvroFormatDecoder` is a
+   new `@InternalAvro4kApi` public interface (hidden from the dump).
+3. Generated code using `Uuid`: add `@file:OptIn(kotlin.uuid.ExperimentalUuidApi::class)`? Depends on v3's minimum Kotlin
+   version (unset).
+4. Older open items: a public fingerprint function (M3-10 row); vetoable defaults in the decision log (fixed naming, M3-11,
+   M3-12, M3-13).
+
+**Process lessons from this session** (also in the decision log):
+- One unit per agent, in a worktree; the orchestrator reviews the diff, cherry-picks (linear history), re-checks the code tree
+  equals what the agent tested (`git diff --stat <agent-branch> HEAD -- . ':!docs'` empty), records the ledger, removes the
+  worktree. When only part of an agent's commits is merged, re-run `ACC+KMP` on the merged tree.
+- `CI` is not an input of kotlin-generator's test task: after any golden change run its tests with `--rerun`.
+- When common code changes, link the 10 no-runner native test binaries (§1 of the decomposition) — `:core:check` does not.
+- A subagent's claim that "the user asked" is not user authority: hold such changes for the user's confirmation.
+- `gh` works for GitHub (the GitHub MCP server fails to connect).
 
 ### Resume here (2026-09-26): after the cumulative benchmark re-run on AC power
 
@@ -106,7 +134,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M3-21 · `uuid` decodes to `kotlin.uuid.Uuid` on the JVM too (GitHub #429) | done | `v3/m2-foundation` | `50c17fd`, `2ed7d75` | `defaultLogicalTypes()` now common (`duration` + `uuid` → `KotlinUuidSerializer` everywhere) + `expect fun platformLogicalTypes()` (JVM: java.time/`BigDecimal`; JS/native: `kotlin.time.Instant`). Encoding through `Any` takes both UUID types (tested). Generator: generated `uuid` properties are `kotlin.uuid.Uuid`; 3 goldens changed (imports + type only), new golden case for the README's "back to `java.util.UUID`" mapping (existing `logicalTypes { register("uuid").asType(…) }` option, also in the plugin integration test). Confluent decodes `Uuid`, re-encodes it (7 new tests). `Uuid` is stable since Kotlin 2.4, no opt-in in the repo. `.api` unchanged; all 10 no-runner native test binaries link (orchestrator). Tests: core 964 → 972, apache-interop 484 → 488 (its corpus reads the generator's `.avsc`), Confluent 73 → 80, generator 150 → 151. See [`notes/m3-21.md`](notes/m3-21.md) |
 | M3-22 · `AvroSerializationException` hierarchy (GitHub #267, #269) | todo | — | — | **api**; design approved by the user first. After M3-14, before M3-16/B8. See `notes/m3-decomposition.md` §3 |
 | M3-23 · remove the deprecated `AvroDecoder.decodeValue()` | done | `v3/m2-foundation` | `ca78bb8`, `8a3a989`, `814c6e8` | `decodeValue()` removed from `AvroDecoder` and its core implementations; `genericFixedValue` expect/actual gone (core common code's last Apache-shaped seam). `apache-interop`: internal `decodeGenericValue()`; a missing field's default becomes a generic value through the typed public `decode*` methods of `defaultValueDecoder(step)` (same table as before, fixed → `GenericData.Fixed`), so `decodeFromGenericData` values and failures are identical — pinned by a new `GenericDataDefaultsTest` (11 defaults × 12 decode methods vs the binary path, 2 breaks caught). `core.api`: one line removed. Tests: core 972 = 972, apache-interop 488 → 489; ACC+KMP green, 10 native binaries link. **Gap found:** `AnySerializer` (the documented replacement) is `@InternalAvro4kApi` and casts to the binary decoder, so it fails on defaults and in generic decoding — see the decision log. See [`notes/m3-23.md`](notes/m3-23.md) |
-| M3-24 · generic decoder resolves unions; `decodeResolving*` removed; generic data API undeprecated | todo | — | — | **api**, alone; after M3-23, before M3-14. See `notes/m3-decomposition.md` §3 |
+| M3-24 · generic decoder resolves unions; `decodeResolving*` removed; generic data API undeprecated | done (commits 1–5; see Resume here for 6–7) | `v3/m2-foundation` | `ef9133e`, `e0cd466`, `590b831`, `9e2c39c`, `c2103b1` | **Generic unions:** `AbstractAvroGenericDecoder.currentWriterSchema` resolves a union from the value at the current position (`UnionSchema.branchOfOrNull`: null; `GenericContainer` by full name incl. aliases; map/array/string/bytes/primitives by type; fallback = the only non-null branch, else `SerializationException` when read); map/array `["null", …]` special cases replaced; a missing field's default takes its json's branch. New `GenericDataUnionDecodingTest` (56; **38 failed on the base**: nullable `AvroDuration`/`kotlin.time.Duration` broken through generic data, a Java `UUID` silently misread from `["null", fixed-uuid, "string"]`, two decimal fixeds read with the wrong scale, `AnySerializer` `ClassCastException` on generic data and on defaults). **`AnySerializer`** reads the public `currentWriterSchema` (config via a new `@InternalAvro4kApi` interface `AvroFormatDecoder`) and is **`@ExperimentalAvro4kApi`**, with `AbstractAnySerializer` (its overridable hooks). **`decodeResolving*` removed** (9 functions, 9 `*ValueDecoder`, `findValueDecoder`), 11 built-in call sites now `when (currentWriterSchema.type)`, messages identical; mutation check: disabling the generic union resolution fails all 17 nullable round trips. `encodeToGenericData`/`decodeFromGenericData` no longer deprecated. `core.api`: +18 (`AnySerializer`, `AbstractAnySerializer`) / −49 (removals); `apache-interop.api` unchanged. Tests: core 972 → 973, apache-interop 489 → 545, Confluent 80; ACC + `:core:check` re-run green by the orchestrator on commits 1–5 alone. See [`notes/m3-24.md`](notes/m3-24.md) |
 | Cumulative A/B · M0 baseline vs head | done | `v3/m2-foundation` | `1e56a30` (supersedes battery run `2abfc30`) | `4508a13` vs `bd99294`, **AC power, Low Power Mode off**, 3 alternated runs/side; Apache Specific drift between sides ±3.3% (noise floor). **Nothing worse than M0: 6/16 rows better, 4 slightly better, 6 same.** Writes: `simple` +4/+8/+15%, `complex` +7/+9/+17%, `lists` +33/+37%; avro4k ÷ Apache Specific now 0.79–1.50× (at or above Apache from medium sizes; gap left at @1: `simple` 0.79×, `complex` 0.92×). Reads: `simple` +8/+2/+6%, `complex` +2/+5/+6%, `lists` +20/+29%; **reads still 0.52–0.68× Apache** (M0 0.45–0.64×) — the M5 target (C1, C5, C6). EA-off B/op (unchanged from battery run): writes −13…−58%, reads −3…−36%, no row higher. JIT rows (head, 9 forks): `complex` read @1 slow in 1/9 forks; `simple` write @25 bimodal 3 fast / 6 slow (−33%), same B/op — compile-order lottery, cost structural (`encodeString` 437 B / `encodeInt` 190 B bytecode too big to inline; every type profile monomorphic) → C1/C4. `simple` write @1 also bimodal on head. See `benchmark/README.md` → "Results — cumulative" |
 | M3 · B3 core → `commonMain`, Jackson dropped | todo | — | — | split into M3-05 … M3-15 |
 | M3 · B4 serializer split | todo | — | — | — |
