@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryDecoder
@@ -15,8 +16,11 @@ import kotlinx.serialization.SerializationStrategy
  * Encodes [value] with [binaryEncoder], every call checked against [writerSchema] when
  * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled (see [ValidatingAvroBinaryEncoder]).
  * Disabled, the encoder is used as is: a single branch.
+ *
+ * Public for the apache-interop module, whose Apache codec entry points encode through it.
  */
-internal fun <T> Avro.encodeWithValidation(
+@InternalAvro4kApi
+public fun <T> Avro.encodeWithValidation(
     writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
@@ -35,7 +39,8 @@ internal fun <T> Avro.encodeWithValidation(
  * Decodes a value with [binaryDecoder], every call checked against [writerSchema] when
  * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled, as [encodeWithValidation] does.
  */
-internal fun <T> Avro.decodeWithValidation(
+@InternalAvro4kApi
+public fun <T> Avro.decodeWithValidation(
     writerSchema: AvroSchema,
     deserializer: DeserializationStrategy<T>,
     binaryDecoder: AvroBinaryDecoder,

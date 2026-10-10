@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
+import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import org.apache.avro.util.Utf8
 import java.nio.ByteBuffer
 
@@ -9,10 +10,11 @@ import java.nio.ByteBuffer
 // by `setItemCount(count)`, as before. With `validateSerialization`, the adapter is wrapped in avro4k's own validating
 // codec, like every other codec.
 //
-// JVM-only by nature, and to move to `apache-interop` when core drops its Apache dependency.
+// Public only for core's own tests, which check avro4k's validating codec against Apache's through them.
 
 /** The codec ABI over an Apache [org.apache.avro.io.Encoder]. */
-internal class ApacheEncoderAdapter(
+@InternalAvro4kApi
+public class ApacheEncoderAdapter(
     private val encoder: org.apache.avro.io.Encoder,
 ) : AvroBinaryEncoder() {
     override fun writeNull() {
@@ -87,7 +89,8 @@ internal class ApacheEncoderAdapter(
 }
 
 /** The codec ABI over an Apache [org.apache.avro.io.Decoder]. */
-internal class ApacheDecoderAdapter(
+@InternalAvro4kApi
+public class ApacheDecoderAdapter(
     private val decoder: org.apache.avro.io.Decoder,
 ) : AvroBinaryDecoder() {
     override fun readNull() {
