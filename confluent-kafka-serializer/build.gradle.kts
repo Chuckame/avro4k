@@ -19,10 +19,12 @@ dependencies {
             strictly("[8.3.2,)")
             prefer(libs.confluent.kafka.avro.serializer.get().version!!)
         }
-        // avro4k declares its own avro dependency
+        // the Apache Avro version is the one declared below
         exclude(group = "org.apache.avro")
         exclude(group = "org.apache.commons", module = "commons-compress")
     }
+    // Confluent's serializers are built on Apache Avro; core no longer brings it
+    api(libs.apache.avro)
     testImplementation(libs.kotest.junit5)
     testImplementation(libs.kotest.core)
     testImplementation(libs.mockk)

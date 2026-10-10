@@ -44,7 +44,7 @@ kotlin {
 
     // `jvmAndNative`: the platforms with real weak references and identity hash codes, sharing one copy-on-write
     // identity cache (JS has neither, and uses its own `WeakMap` instead).
-    // `nonJvm`: the platforms without the Java standard library and Apache Avro, sharing the Kotlin-only defaults.
+    // `nonJvm`: the platforms without the Java standard library, sharing the Kotlin-only defaults.
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     applyDefaultHierarchyTemplate {
         common {
@@ -76,12 +76,6 @@ kotlin {
             }
         }
 
-        jvmMain {
-            dependencies {
-                api(libs.apache.avro)
-            }
-        }
-
         jvmTest {
             dependencies {
                 // toAvro4k()/toApacheSchema() for the Apache-oracle suite. apache-interop depends back on core: that edge
@@ -90,6 +84,8 @@ kotlin {
                 implementation(project(":apache-interop")) {
                     exclude(group = project.group.toString(), module = project.name)
                 }
+                // Apache Avro is the conformance oracle of these tests; core itself does not depend on it
+                implementation(libs.apache.avro)
                 implementation(libs.kotest.junit5)
                 implementation(libs.mockk)
                 implementation(kotlin("reflect"))

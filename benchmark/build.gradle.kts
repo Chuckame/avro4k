@@ -94,6 +94,8 @@ dependencies {
     implementation(project(":core"))
     // internal/CoreBridge.kt converts with its toAvro4k() / toApacheSchema() once core's public API speaks AvroSchema
     implementation(project(":apache-interop"))
+    // the Apache Avro baselines
+    implementation(libs.apache.avro)
 }
 
 kotlin {

@@ -88,6 +88,8 @@ dependencies {
         exclude(module = "kotlin-reflect")
     }
     implementation(project(":apache-interop"))
+    // the generator parses the schema files with Apache Avro
+    implementation(libs.apache.avro)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.kotest.core)

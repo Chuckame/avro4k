@@ -307,6 +307,36 @@ One line each, with where the details are. Not rewritten here.
   `decodeFromGenericData` (all six overloads) lose `@Deprecated` now that they live in their own artifact,
   `avro4k-apache-interop`. They stay `@ExperimentalAvro4kApi`. Callers can drop their `@Suppress("DEPRECATION")`.
 
+## Core without Apache Avro (from [`m3-14.md`](m3-14.md))
+
+- **`AvroObjectContainer` moves to `avro4k-apache-interop`.** Same package (`com.github.avrokotlin.avro4k`), same
+  public API and JVM classes (`AvroObjectContainer`, `AvroObjectContainerKt`, the builder, writer and metadata
+  classes, byte-identical in the `.api` dumps): only the artifact changes. Who: anyone writing or reading object
+  container files. What to do: add a dependency on `com.github.avro-kotlin.avro4k:avro4k-apache-interop` (the BOM
+  lists it); no source change.
+- **Core no longer brings Apache Avro, nor Jackson, transitively.** `avro4k-core`'s published POM and Gradle module
+  metadata have no `org.apache.avro:avro` dependency on any platform. Who: code that uses Apache's API
+  (`SchemaNormalization`, `GenericData`, `CodecFactory`, `Schema.Parser`, Jackson…) and only got it through
+  `avro4k-core`. What to do: depend on `avro4k-apache-interop` (which has `api` on Apache Avro) or on
+  `org.apache.avro:avro` directly. `avro4k-confluent-kafka-serializer` now declares Apache Avro itself (`api`, in
+  place of the one it excludes from Confluent's serializer), so Confluent users are not affected.
+- **`encodeWithApacheEncoder` / `decodeWithApacheDecoder` (internal API) move to `avro4k-apache-interop`**, same package
+  (`com.github.avrokotlin.avro4k.internal`), same signatures, but their JVM facade class changes from
+  `AvroInternalExtensionsKt` to `ApacheCodecKt` (two jars must not hold one class). Who: only `@InternalAvro4kApi`
+  users; Kotlin callers recompile unchanged once the artifact is there, Java or already-compiled callers must be
+  recompiled. The four internal forwarders the generic data trees use (`resolveRecordFields`, `enumDefaultIndex`,
+  `interceptedDeserializer`, `defaultValueDecoder`) stay in core, facade `AvroInternalExtensionsKt` unchanged.
+- **The decimal serializers throw `kotlinx.serialization.SerializationException` instead of Apache's
+  `AvroTypeException`** when a `BigDecimal` does not fit the schema's scale (without rounding) or precision, with the
+  same message as before (Apache's `DecimalConversion`'s). Who: code catching `org.apache.avro.AvroTypeException` (or
+  `AvroRuntimeException`) around encoding decimals. What to do: catch `SerializationException`. The exception hierarchy
+  for avro4k's failures is designed in a later unit and may narrow this to a subclass.
+- `AvroSingleObject`'s fingerprints are computed by core itself, byte for byte Apache's
+  `SchemaNormalization.parsingFingerprint("CRC-64-AVRO", …)`: no change in the bytes. Its KDoc no longer links Apache's
+  `SchemaNormalization`; computing the registry's fingerprints on the JVM still can use it (with Apache Avro on the
+  classpath). A public fingerprint function for the other platforms would be a new API (open, see the `PROGRESS.md`
+  decision log of 2026-09-24).
+
 ## Platform differences (from [`m3-13.md`](m3-13.md), core moving to `commonMain`) — document prominently
 
 These are **silent**: the same code behaves differently on the JVM and elsewhere.

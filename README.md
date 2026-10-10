@@ -23,8 +23,8 @@ Here are the main features:
 > [!NOTE]
 > **Platforms**: the core runs on the JVM, JS (browser and Node.js) and Kotlin/Native (Apple, Linux, Windows and Android native targets): schema
 > generation, and binary encoding and decoding of your classes and the Kotlin types (`Uuid`, `Instant`, `Duration`…) through the `Avro` API.
-> <br/>These stay **JVM-only** for now: `AvroObjectContainer` and `AvroSingleObject`, the Java types (`UUID`, `BigDecimal`, `BigInteger`, `java.time`…), the Apache Avro
-> interop (`GenericData`, Apache `Schema`, from the `apache-interop` module). wasm is not supported yet.
+> <br/>These stay **JVM-only** for now: `AvroSingleObject`, the Java types (`UUID`, `BigDecimal`, `BigInteger`, `java.time`…), and the Apache Avro
+> interop (`AvroObjectContainer`, `GenericData`, Apache `Schema`, from the `apache-interop` module). wasm is not supported yet.
 
 # Quick start
 
@@ -209,7 +209,8 @@ data class Project(val name: String, val language: String)
 
 fun main() {
     val schema = Avro.schema<Project>()
-    // Apache's SchemaNormalization needs an Apache schema: `toApacheSchema()` comes from the `apache-interop` module
+    // Apache's SchemaNormalization needs an Apache schema: `toApacheSchema()` comes from the `apache-interop` module,
+    // which also brings Apache Avro
     val schemasByFingerprint = mapOf(SchemaNormalization.parsingFingerprint64(schema.toApacheSchema()) to schema)
     val singleObjectInstance = AvroSingleObject(schemasByFingerprint::get)
 
@@ -231,6 +232,8 @@ fun main() {
 
 Avro4k provides a way to encode and decode object container — also known as data file — with `AvroObjectContainer` class. This encoding will prefix the binary data with the
 full schema to allow knowing the writer schema when reading the data. This format is perfect for storing many long-term objects in a single file.
+
+`AvroObjectContainer` is built on Apache Avro's data file classes, so it comes from the `avro4k-apache-interop` artifact (JVM only), not from the core.
 
 Be aware that consuming the decoded `Sequence` needs to be done **before** closing the stream, or you will get an exception as a sequence is a "hot" source,
 which means that if there is millions of objects in the file, all the objects are extracted one-by-one when requested. If you take only the first 10 objects and close the stream,
@@ -286,7 +289,8 @@ AvroObjectContainer.openWriter(fileStream) {
 
 # Important notes
 
-- **Avro4k** is highly based on apache avro library, that implies all the schema validation is done by it
+- Since v3, the core of **Avro4k** does not depend on the Apache Avro library. What is built on it (object container files, generic data, the
+  conversions with Apache's `Schema`) comes from the `avro4k-apache-interop` artifact (JVM only), which brings Apache Avro.
 - All members annotated with `@ExperimentalAvro4kApi` are **subject to changes** in future releases without any notice as they are experimental, so please
   check the release notes to check the needed migration. At least, given a version `A.B.C`, only the minor `B` number will be incremented, not the major `A`.
 - **Avro4k** also supports encoding and decoding Apache Avro's generic data (`GenericRecord` and the other generic values), to work with
@@ -385,7 +389,8 @@ Add the avro4k dependency:
 > [!NOTE]
 > The Apache Avro interop is a separate artifact, JVM only: `com.github.avro-kotlin.avro4k:avro4k-apache-interop`. It converts
 > between avro4k's `AvroSchema` and Apache's `Schema` (`toAvro4k()`, `toApacheSchema()`), and holds the
-> `GenericData` encoding and decoding (`Avro.encodeToGenericData`, `Avro.decodeFromGenericData`).
+> `GenericData` encoding and decoding (`Avro.encodeToGenericData`, `Avro.decodeFromGenericData`) and the object container files
+> (`AvroObjectContainer`). The core does not bring Apache Avro: depend on this artifact, or on `org.apache.avro:avro`, to use Apache's API.
 
 ## Versions matrix
 

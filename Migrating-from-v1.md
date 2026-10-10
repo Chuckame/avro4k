@@ -172,6 +172,9 @@ Files.newOutputStream(Path("/your/file.avro")).use { outputStream ->
 }
 ```
 
+Since v3, `AvroObjectContainer` comes from the `avro4k-apache-interop` artifact (same package, same API), as it is built
+on Apache Avro's data file classes and the core no longer depends on Apache Avro.
+
 ## Reading previously written binary encoded (`AvroEncodeFormat.Binary`) files
 
 It was possible to use the `AvroEncodeFormat.Binary` format, which used [binary encoding](https://avro.apache.org/docs/current/spec.html#binary_encoding). The data did not have an embedded schema, so it had to be specified when reading.
