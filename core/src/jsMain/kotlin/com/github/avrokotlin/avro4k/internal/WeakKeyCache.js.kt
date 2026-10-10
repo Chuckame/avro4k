@@ -24,14 +24,14 @@ public actual class WeakKeyCache<K : Any, V : Any> actual constructor() : Cache<
         return putIfAbsent(key, value) ?: value
     }
 
-    internal actual fun getOrNull(key: K): V? = map[key]
+    public actual fun getOrNull(key: K): V? = map[key]
 
-    internal actual fun putIfAbsent(key: K, value: V): V? {
+    public actual fun putIfAbsent(key: K, value: V): V? {
         // Single-threaded: only a re-entrant computation of an equal key can have inserted it since the caller's miss.
         map[key]?.let { return it }
         map[key] = value
         return null
     }
 
-    internal actual val size: Int get() = map.size
+    public actual val size: Int get() = map.size
 }

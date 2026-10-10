@@ -12,9 +12,9 @@ public actual class WeakIdentityKeyCache<K : Any, V : Any> actual constructor() 
 
     actual override fun getOrPut(key: K, compute: () -> V): V = table.getOrPut(key, compute)
 
-    internal actual fun getOrNull(key: K): V? = table.getOrNull(key)
+    public actual fun getOrNull(key: K): V? = table.getOrNull(key)
 
-    internal actual fun putIfAbsent(key: K, value: V): V? = table.putIfAbsent(key, value)
+    public actual fun putIfAbsent(key: K, value: V): V? = table.putIfAbsent(key, value)
 
-    internal actual val size: Int get() = table.size
+    public actual val size: Int get() = table.size
 }

@@ -4,8 +4,8 @@ import com.github.avrokotlin.avro4k.internal.apacheToAvro4k
 import com.github.avrokotlin.avro4k.internal.avro4kToApache
 import org.apache.avro.Schema
 
-// The conversion itself lives in core until core drops its Apache dependency, as core still hands Apache's model to
-// Apache's own classes meanwhile (object container files, single-object fingerprints, the Apache codec adapters).
+// The conversion itself is in internal/AvroSchemaApacheConversion.kt, next to its uncached forms, which other avro4k
+// modules and tests use.
 
 /**
  * Converts this Apache Avro schema to avro4k's multiplatform [AvroSchema].

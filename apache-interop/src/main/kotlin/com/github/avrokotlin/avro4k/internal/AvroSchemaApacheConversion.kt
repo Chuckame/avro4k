@@ -39,9 +39,9 @@ import java.util.IdentityHashMap
 import java.util.concurrent.atomic.AtomicReference
 import com.github.avrokotlin.avro4k.toJsonElement as avroSchemaToJson
 
-// The conversions between Apache's Schema and avro4k's AvroSchema. Hosted in core (JVM only) until core drops its Apache
-// dependency, as core still hands Apache's model to Apache's own classes (the object container files, the validating
-// codec, the generic data values); apache-interop's public toAvro4k()/toApacheSchema() delegate here.
+// The conversions between Apache's Schema and avro4k's AvroSchema, behind the public toAvro4k()/toApacheSchema(). The
+// entry points below are internal API, for the other avro4k modules and tests that need the uncached forms or the cache
+// sizes.
 //
 // ## Pairing ("two-way seeding")
 //
@@ -165,7 +165,8 @@ public fun avro4kToApacheUncached(schema: AvroSchema): Schema {
 public fun apacheConversionCacheSize(): Int = avro4kByApache.size + apacheByAvro4k.size
 
 /** Number of canonical Apache schemas matched by equality, stale ones included. For tests. */
-internal fun apacheConversionEqualityCacheSize(): Int = avro4kByEqualApache.size
+@InternalAvro4kApi
+public fun apacheConversionEqualityCacheSize(): Int = avro4kByEqualApache.size
 
 /**
  * One cache value: a link to the node paired with the key, either strong (the key is the origin of the pair) or weak (the

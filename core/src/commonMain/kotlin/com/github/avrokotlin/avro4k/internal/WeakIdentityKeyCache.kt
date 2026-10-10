@@ -28,14 +28,14 @@ public expect class WeakIdentityKeyCache<K : Any, V : Any>() : Cache<K, V> {
     override fun getOrPut(key: K, compute: () -> V): V
 
     /** The value stored for [key], or null. Never allocates. */
-    internal fun getOrNull(key: K): V?
+    public fun getOrNull(key: K): V?
 
     /** Stores [value] for [key] unless [key] is already present. Returns null if it was inserted, the existing value otherwise. */
-    internal fun putIfAbsent(key: K, value: V): V?
+    public fun putIfAbsent(key: K, value: V): V?
 
     /**
      * For tests: on JVM and native, the number of entries including those whose key was collected but not swept yet;
      * on JS, the number of entries ever inserted (a `WeakMap` cannot be counted).
      */
-    internal val size: Int
+    public val size: Int
 }

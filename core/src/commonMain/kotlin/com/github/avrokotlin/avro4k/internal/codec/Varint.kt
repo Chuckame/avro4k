@@ -105,7 +105,7 @@ internal fun encodeZigZagLong(
 /**
  * Checks the length prefix of a STRING or BYTES value before anything is allocated or skipped for it.
  *
- * Replaces the system-limit checks of Apache Avro's decoders: the `org.apache.avro.limits.*` system properties no
+ * Replaces the system-limit checks of Apache Avro's decoders: Apache Avro's `limits` system properties no
  * longer apply.
  */
 internal fun checkBinaryLength(length: Long): Int {

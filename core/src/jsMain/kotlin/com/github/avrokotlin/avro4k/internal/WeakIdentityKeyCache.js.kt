@@ -25,12 +25,12 @@ public actual class WeakIdentityKeyCache<K : Any, V : Any> actual constructor() 
         return putIfAbsent(key, value) ?: value
     }
 
-    internal actual fun getOrNull(key: K): V? {
+    public actual fun getOrNull(key: K): V? {
         val existing = mapFor(key).get(key)
         return if (existing === undefined) null else existing.unsafeCast<V>()
     }
 
-    internal actual fun putIfAbsent(key: K, value: V): V? {
+    public actual fun putIfAbsent(key: K, value: V): V? {
         // Single-threaded: nothing can have inserted the key since the caller's getOrNull, except a re-entrant
         // computation of the same key, whose value then wins as on the other platforms.
         getOrNull(key)?.let { return it }
@@ -39,7 +39,7 @@ public actual class WeakIdentityKeyCache<K : Any, V : Any> actual constructor() 
         return null
     }
 
-    internal actual val size: Int get() = insertions
+    public actual val size: Int get() = insertions
 
     private fun mapFor(key: K): dynamic = if (key.isJsObject()) objectKeys else primitiveKeys
 }

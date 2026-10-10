@@ -5,7 +5,7 @@ import com.github.avrokotlin.avro4k.InternalAvro4kApi
 /**
  * avro4k's own low-level Avro binary writer: the single seam between the kotlinx-serialization encoders and the bytes.
  *
- * The methods mirror the grammar of Apache Avro's `org.apache.avro.io.Encoder` one for one, except that a collection
+ * The methods mirror the grammar of Apache Avro's `Encoder` one for one, except that a collection
  * start carries its item count (Apache's `writeArrayStart()` + `setItemCount(count)`). This lets an Apache `Encoder`
  * handed in from outside — Confluent's serializers, a `DataFileWriter`, a `ValidatingEncoder` — be adapted without
  * changing the sequence of calls it receives.

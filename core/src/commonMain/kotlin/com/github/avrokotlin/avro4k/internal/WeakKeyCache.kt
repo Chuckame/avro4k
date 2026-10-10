@@ -39,14 +39,14 @@ public expect class WeakKeyCache<K : Any, V : Any>() : Cache<K, V> {
      * The value stored for a key equal to [key], or null. Never allocates. Hot call sites write
      * `cache.getOrNull(key) ?: cache.getOrPut(key) { … }` so that a capturing lambda only exists on a miss.
      */
-    internal fun getOrNull(key: K): V?
+    public fun getOrNull(key: K): V?
 
     /**
      * Stores [value] for [key] unless an equal key is already present. Returns null if it was inserted — [key] is then the
      * instance the cache holds, its *canonical* key — or the existing value otherwise.
      */
-    internal fun putIfAbsent(key: K, value: V): V?
+    public fun putIfAbsent(key: K, value: V): V?
 
     /** For tests: the number of entries (on JVM and native, including those whose key was collected but not swept yet). */
-    internal val size: Int
+    public val size: Int
 }

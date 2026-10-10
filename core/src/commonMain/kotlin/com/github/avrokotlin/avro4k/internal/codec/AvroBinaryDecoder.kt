@@ -5,7 +5,7 @@ import com.github.avrokotlin.avro4k.InternalAvro4kApi
 /**
  * avro4k's own low-level Avro binary reader: the single seam between the bytes and the kotlinx-serialization decoders.
  *
- * The methods mirror the grammar of Apache Avro's `org.apache.avro.io.Decoder` one for one, so an Apache `Decoder`
+ * The methods mirror the grammar of Apache Avro's `Decoder` one for one, so an Apache `Decoder`
  * handed in from outside — Confluent's deserializers, a `DataFileReader`, a `ValidatingDecoder` — can be adapted
  * without changing the sequence of calls it receives.
  *
