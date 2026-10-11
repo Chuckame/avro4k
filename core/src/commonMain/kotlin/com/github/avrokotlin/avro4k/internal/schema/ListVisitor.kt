@@ -14,7 +14,7 @@ internal class ListVisitor(
         listDescriptor: SerialDescriptor,
         itemElementIndex: Int,
     ): SerialDescriptorValueVisitor {
-        return ValueVisitor(context) {
+        return ValueVisitor(context.copy(path = context.path.listItem())) {
             itemSchema = it
         }
     }

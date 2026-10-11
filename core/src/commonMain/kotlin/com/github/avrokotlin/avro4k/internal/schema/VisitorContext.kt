@@ -10,7 +10,7 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
+import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.findAnnotation
 import com.github.avrokotlin.avro4k.internal.findAnnotations
 import com.github.avrokotlin.avro4k.internal.findElementAnnotation
@@ -31,6 +31,8 @@ internal data class VisitorContext(
      * ones of the custom serializers, like fixed) when built ([shareNamedSchema]).
      */
     val resolvedSchemas: MutableMap<String, NamedSchema>,
+    /** Where the visited element is, from the root type: the `path` of an [com.github.avrokotlin.avro4k.AvroSchemaGenerationException]. */
+    val path: SchemaPath,
     override val inlinedElements: List<ElementLocation> = emptyList(),
 ) : SchemaSupplierContext {
     override val configuration: AvroConfiguration
@@ -67,7 +69,7 @@ internal data class VisitorContext(
     private fun shareNamedSchema(schema: NamedSchema): NamedSchema {
         val existing = resolvedSchemas.getOrPut(schema.fullName) { schema }
         if (existing === schema || existing.isEqualTo(schema)) return existing
-        throw AvroSchemaGenerationException(
+        throw SchemaGenerationFailure(
             "Can't redefine: ${schema.fullName}. Two different named schemas have this full name: ${existing.toSchemaJsonStringOrName()} and " +
                 "${schema.toSchemaJsonStringOrName()}. A name can only define one type in a schema."
         )
@@ -80,6 +82,57 @@ internal data class VisitorContext(
         } catch (_: IllegalStateException) {
             false
         }
+}
+
+/**
+ * Where an element is in the schema being generated, from the root type, for the `path` of an
+ * [com.github.avrokotlin.avro4k.AvroSchemaGenerationException]: the root serial name, then `.property` for a class
+ * property (its Kotlin name, not the field name a naming strategy writes), `[]` for a list item, `{key}` / `{value}` for
+ * a map key or value, and `<serial name>` for a subclass of a polymorphic type. A value class or a contextual descriptor
+ * adds nothing.
+ *
+ * One small node per visited element, linked to its parent: the generation runs once per descriptor (it is cached), and
+ * the path is rendered to a string only when the generation fails.
+ */
+internal class SchemaPath private constructor(
+    private val parent: SchemaPath?,
+    private val kind: Int,
+    private val name: String?,
+) {
+    fun property(name: String): SchemaPath = SchemaPath(this, PROPERTY, name)
+
+    fun listItem(): SchemaPath = SchemaPath(this, LIST_ITEM, null)
+
+    fun mapKey(): SchemaPath = SchemaPath(this, MAP_KEY, null)
+
+    fun mapValue(): SchemaPath = SchemaPath(this, MAP_VALUE, null)
+
+    fun subclass(serialName: String): SchemaPath = SchemaPath(this, SUBCLASS, serialName)
+
+    override fun toString(): String = StringBuilder().also { appendTo(it) }.toString()
+
+    private fun appendTo(builder: StringBuilder) {
+        parent?.appendTo(builder)
+        when (kind) {
+            ROOT -> builder.append(name)
+            PROPERTY -> builder.append('.').append(name)
+            LIST_ITEM -> builder.append("[]")
+            MAP_KEY -> builder.append("{key}")
+            MAP_VALUE -> builder.append("{value}")
+            else -> builder.append('<').append(name).append('>')
+        }
+    }
+
+    companion object {
+        private const val ROOT = 0
+        private const val PROPERTY = 1
+        private const val LIST_ITEM = 2
+        private const val MAP_KEY = 3
+        private const val MAP_VALUE = 4
+        private const val SUBCLASS = 5
+
+        fun root(serialName: String): SchemaPath = SchemaPath(null, ROOT, serialName)
+    }
 }
 
 /**
@@ -143,7 +196,7 @@ internal data class TypeAnnotations(
 // ---- Names and props, built the way Apache's `Schema` builders did ----
 // The visitors used to build Apache schemas with `Schema.createRecord`, `addProp`, `addAlias`, `Schema.Field`…, which
 // validate names and props. The model does not, or not the same way, so these helpers keep Apache's checks and messages.
-// Only the exception class changes: an AvroSchemaGenerationException (a SerializationException) instead of Apache's
+// Only the exception class changes: an AvroSchemaGenerationException (an AvroSerializationException) instead of Apache's
 // SchemaParseException / AvroRuntimeException.
 
 /** The props reserved by Apache's `Schema` (`SCHEMA_RESERVED`): its `addProp` rejects them. */
@@ -173,13 +226,13 @@ internal fun MutableMap<String, JsonElement>.addProp(
     reserved: Set<String>,
 ) {
     if (name in reserved) {
-        throw AvroSchemaGenerationException("Can't set reserved property: $name")
+        throw SchemaGenerationFailure("Can't set reserved property: $name")
     }
     val old = get(name)
     if (old == null) {
         put(name, value)
     } else if (old != value) {
-        throw AvroSchemaGenerationException("Can't overwrite property: $name")
+        throw SchemaGenerationFailure("Can't overwrite property: $name")
     }
 }
 
@@ -203,16 +256,16 @@ internal fun AvroAlias?.toSchemaAliases(schemaName: Name): Set<Name> {
  */
 internal fun validateAvroName(name: String): String {
     if (name.isEmpty()) {
-        throw AvroSchemaGenerationException("Empty name")
+        throw SchemaGenerationFailure("Empty name")
     }
     val first = name[0]
     if (!(first.isLetter() || first == '_')) {
-        throw AvroSchemaGenerationException("Illegal initial character: $name")
+        throw SchemaGenerationFailure("Illegal initial character: $name")
     }
     for (i in 1 until name.length) {
         val c = name[i]
         if (!(c.isLetterOrDigit() || c == '_')) {
-            throw AvroSchemaGenerationException("Illegal character in: $name")
+            throw SchemaGenerationFailure("Illegal character in: $name")
         }
     }
     return name

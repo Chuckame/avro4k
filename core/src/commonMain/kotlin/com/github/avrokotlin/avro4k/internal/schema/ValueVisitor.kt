@@ -9,10 +9,13 @@ import com.github.avrokotlin.avro4k.AvroSchema.FloatSchema
 import com.github.avrokotlin.avro4k.AvroSchema.IntSchema
 import com.github.avrokotlin.avro4k.AvroSchema.LongSchema
 import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
+import com.github.avrokotlin.avro4k.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.fromJsonString
 import com.github.avrokotlin.avro4k.internal.AvroGenerated
+import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.findAnnotation
+import com.github.avrokotlin.avro4k.internal.nameForMessages
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.isNullable
 import com.github.avrokotlin.avro4k.nullable
@@ -36,10 +39,11 @@ internal class ValueVisitor internal constructor(
     override val serializersModule: SerializersModule
         get() = context.avro.serializersModule
 
-    constructor(avro: Avro, onSchemaBuilt: (AvroSchema) -> Unit) : this(
+    constructor(avro: Avro, rootDescriptor: SerialDescriptor, onSchemaBuilt: (AvroSchema) -> Unit) : this(
         VisitorContext(
             avro,
-            mutableMapOf()
+            mutableMapOf(),
+            SchemaPath.root(rootDescriptor.nonNullSerialName)
         ),
         onSchemaBuilt = onSchemaBuilt
     )
@@ -94,7 +98,25 @@ internal class ValueVisitor internal constructor(
         }
     }
 
+    /**
+     * Every element of the generated schema is visited here, so this is where a failure gets the path of the element:
+     * the innermost visitor wraps it first, and the outer ones pass an [AvroSchemaGenerationException] through as is. The
+     * model's own checks (`require`), custom serializers' `getSchema` and annotation checks are wrapped with their
+     * exception as the cause; the failures avro4k throws itself ([SchemaGenerationFailure]) keep their message, without a cause.
+     */
     override fun visitValue(descriptor: SerialDescriptor) {
+        try {
+            visitValueWithoutPath(descriptor)
+        } catch (e: AvroSchemaGenerationException) {
+            throw e
+        } catch (e: SchemaGenerationFailure) {
+            throw AvroSchemaGenerationException(e.message ?: "", context.path.toString())
+        } catch (e: Exception) {
+            throw AvroSchemaGenerationException(e.message ?: e::class.nameForMessages, context.path.toString(), e)
+        }
+    }
+
+    private fun visitValueWithoutPath(descriptor: SerialDescriptor) {
         val finalDescriptor = SerializerLocatorMiddleware.apply(unwrapNullable(descriptor))
         descriptor.findAnnotation<AvroGenerated>()?.let {
             // Ignore everything and use the provided schema

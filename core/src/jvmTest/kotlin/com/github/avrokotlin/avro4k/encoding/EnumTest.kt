@@ -7,6 +7,7 @@ import com.github.avrokotlin.avro4k.AvroAlias
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.AvroDoc
 import com.github.avrokotlin.avro4k.AvroEnumDefault
+import com.github.avrokotlin.avro4k.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.RecordWithGenericField
 import com.github.avrokotlin.avro4k.SomeEnum
 import com.github.avrokotlin.avro4k.ValueClassWithGenericField
@@ -21,6 +22,7 @@ import com.github.avrokotlin.avro4k.testSerializationTypeCompatibility
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -35,15 +37,16 @@ internal class EnumTest : StringSpec({
     testSerializationTypeCompatibility(Cream.Baker, "Baker", Schema.create(Schema.Type.STRING))
 
     "Only allow 1 @AvroEnumDefault at max" {
-        shouldThrow<UnsupportedOperationException> {
+        // A schema generation failure, the annotation check's exception as its cause
+        shouldThrow<AvroSchemaGenerationException> {
             Avro.apacheSchema<BadEnumWithManyDefaults>()
-        }
-        shouldThrow<UnsupportedOperationException> {
+        }.cause.shouldBeInstanceOf<UnsupportedOperationException>()
+        shouldThrow<AvroSchemaGenerationException> {
             Avro.apacheSchema<RecordWithGenericField<BadEnumWithManyDefaults>>()
-        }
-        shouldThrow<UnsupportedOperationException> {
+        }.cause.shouldBeInstanceOf<UnsupportedOperationException>()
+        shouldThrow<AvroSchemaGenerationException> {
             Avro.apacheSchema<ValueClassWithGenericField<BadEnumWithManyDefaults>>()
-        }
+        }.cause.shouldBeInstanceOf<UnsupportedOperationException>()
     }
 
     "Decoding enum with an unknown symbol uses @AvroEnumDefault value" {

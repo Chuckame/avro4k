@@ -13,9 +13,9 @@ import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
 import com.github.avrokotlin.avro4k.AvroSchema.NullSchema
 import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
 import com.github.avrokotlin.avro4k.ResolvedSchema
+import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.jsonElement
 import com.github.avrokotlin.avro4k.serializer.ElementLocation
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.json.JsonElement
 
@@ -35,7 +35,7 @@ internal class InlineClassVisitor(
             val schema =
                 if (props.isNotEmpty()) {
                     if (generatedSchema.isNamedSchema()) {
-                        throw SerializationException(
+                        throw SchemaGenerationFailure(
                             "The value class property '${inlineClassDescriptor.serialName}.${inlineClassDescriptor.getElementName(0)}' has " +
                                 "forbidden additional properties $props for the named schema ${generatedSchema.fullName}. " +
                                 "Please create your own serializer extending com.github.avrokotlin.avro4k.serializer.AvroSerializer to add properties to a named schema."

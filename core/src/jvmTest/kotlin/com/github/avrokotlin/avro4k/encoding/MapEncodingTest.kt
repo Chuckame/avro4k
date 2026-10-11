@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.encoding
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
+import com.github.avrokotlin.avro4k.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.SomeEnum
 import com.github.avrokotlin.avro4k.WrappedBoolean
 import com.github.avrokotlin.avro4k.WrappedByte
@@ -14,7 +15,6 @@ import com.github.avrokotlin.avro4k.WrappedLong
 import com.github.avrokotlin.avro4k.WrappedShort
 import com.github.avrokotlin.avro4k.WrappedString
 import com.github.avrokotlin.avro4k.apacheSchema
-import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.record
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec

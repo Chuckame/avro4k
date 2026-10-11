@@ -6,6 +6,7 @@ import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.schema.fixedSize
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
@@ -15,7 +16,6 @@ import com.github.avrokotlin.avro4k.trySelectFixedSchemaForSize
 import com.github.avrokotlin.avro4k.trySelectLogicalTypeFromUnion
 import com.github.avrokotlin.avro4k.trySelectTypeNameFromUnion
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
@@ -45,7 +45,7 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>("kotlin.uuid.Uuid") {
                     ?.withLogicalType(LOGICAL_TYPE_NAME)
                     ?.also {
                         if (it.fixedSize != 16) {
-                            throw SerializationException(
+                            throw SchemaGenerationFailure(
                                 "Uuid's @${AvroFixed::class.simpleName} must have bytes size of 16. Got ${it.fixedSize}."
                             )
                         }

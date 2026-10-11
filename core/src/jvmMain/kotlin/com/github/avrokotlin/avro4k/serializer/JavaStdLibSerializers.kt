@@ -6,7 +6,7 @@ import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ResolvedSchema
-import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
+import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.Buffer
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoDecoder
@@ -78,7 +78,7 @@ public object UUIDSerializer : AvroSerializer<UUID>(UUID::class.qualifiedName!!)
                     ?.withLogicalType(LOGICAL_TYPE_NAME)
                     ?.also {
                         if (it.fixedSize != 16) {
-                            throw SerializationException(
+                            throw SchemaGenerationFailure(
                                 "UUID's @${AvroFixed::class.simpleName} must have bytes size of 16. Got ${it.fixedSize}."
                             )
                         }
@@ -221,7 +221,7 @@ public object BigDecimalSerializer : AvroSerializer<BigDecimal>(BigDecimal::clas
         return context.inlinedElements.firstNotNullOfOrNull {
             it.stringable?.createSchema()
                 ?: it.fixed?.createSchema(it)?.withDecimalLogicalType(
-                    decimal ?: throw AvroSchemaGenerationException("BigDecimal requires @${AvroDecimal::class.qualifiedName} to work with FIXED schemas.")
+                    decimal ?: throw SchemaGenerationFailure("BigDecimal requires @${AvroDecimal::class.qualifiedName} to work with FIXED schemas.")
                 )
         } ?: decimal?.let { AvroSchema.BytesSchema().withDecimalLogicalType(it) }
             ?: logicalTypeSchema(AvroSchema.Type.BYTES, BIG_DECIMAL_LOGICAL_TYPE_NAME)

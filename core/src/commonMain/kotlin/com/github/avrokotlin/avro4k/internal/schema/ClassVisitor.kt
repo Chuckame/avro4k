@@ -4,13 +4,12 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.Type
 import com.github.avrokotlin.avro4k.LockableList
-import com.github.avrokotlin.avro4k.internal.AvroSchemaGenerationException
+import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.isValidDefaultFor
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.toFieldDefault
 import com.github.avrokotlin.avro4k.isNullable
 import com.github.avrokotlin.avro4k.serializer.ElementLocation
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -47,7 +46,7 @@ internal class ClassVisitor(
                 )
             }
         schema = resolved as? RecordSchema
-            ?: throw AvroSchemaGenerationException(
+            ?: throw SchemaGenerationFailure(
                 "Can't redefine: ${descriptor.nonNullSerialName}. The record '${descriptor.nonNullSerialName}' has the same full name as another named schema: " +
                     resolved.toSchemaJsonStringOrName()
             )
@@ -59,7 +58,12 @@ internal class ClassVisitor(
         elementIndex: Int,
     ): SerialDescriptorValueVisitor? {
         val fields = fields ?: return null
-        return ValueVisitor(context.copy(inlinedElements = listOf(ElementLocation(descriptor, elementIndex)))) { fieldSchema ->
+        return ValueVisitor(
+            context.copy(
+                path = context.path.property(descriptor.getElementName(elementIndex)),
+                inlinedElements = listOf(ElementLocation(descriptor, elementIndex))
+            )
+        ) { fieldSchema ->
             fields.add(
                 createField(
                     context.avro.configuration.fieldNamingStrategy.resolve(descriptor, elementIndex),
@@ -94,7 +98,7 @@ internal class ClassVisitor(
         val (finalSchema, fieldDefault) = getDefaultAndReorderUnionIfNeeded(annotations, elementSchema)
         if (fieldDefault != null && !fieldDefault.isValidDefaultFor(finalSchema)) {
             // Apache's `Schema.Field` constructor validated the default, with this message (it threw an `AvroTypeException`)
-            throw AvroSchemaGenerationException("Invalid default for field $fieldName: $fieldDefault not a ${finalSchema.toSchemaJsonStringOrName()}")
+            throw SchemaGenerationFailure("Invalid default for field $fieldName: $fieldDefault not a ${finalSchema.toSchemaJsonStringOrName()}")
         }
 
         return RecordSchema.Field(
@@ -130,7 +134,7 @@ internal class ClassVisitor(
 
         val defaultValue = defaultAnnotation.toFieldDefault(elementSchema)
         if (!defaultValue.isValidDefaultFor(elementSchema) && defaultValue.isValidDefaultFor(elementSchema, allowAnyCodePoint = true)) {
-            throw SerializationException(
+            throw SchemaGenerationFailure(
                 "Invalid default value $defaultValue for a bytes or fixed field: the specification only allows the code points 0-255, each one being a byte"
             )
         }

@@ -61,11 +61,15 @@ internal class AvroDefaultSchemaTest : FunSpec({
     }
 
     test("schema for data class with @AvroDefault should throw error when array type does not match default value type") {
-        // Same message as Apache's `Schema.Field` validation, as a SerializationException instead of its AvroTypeException
+        // Same message as Apache's `Schema.Field` validation, as a SerializationException instead of its AvroTypeException,
+        // followed by the path of the field
+        val prefix = AvroDefaultSchemaTest::class.qualifiedName
         shouldThrow<SerializationException> { Avro.apacheSchema(BarInvalidArrayType.serializer()) }.message shouldBe
-            "Invalid default for field defaultFloatArrayWith2Defaults: [\"foo-bar\"] not a {\"type\":\"array\",\"items\":\"float\"}"
+            "Invalid default for field defaultFloatArrayWith2Defaults: [\"foo-bar\"] not a {\"type\":\"array\",\"items\":\"float\"} " +
+            "(at '$prefix.BarInvalidArrayType.defaultFloatArrayWith2Defaults')"
         shouldThrow<SerializationException> { Avro.apacheSchema(BarInvalidNonArrayType.serializer()) }.message shouldBe
-            "Invalid default for field defaultBarArrayWithNonWorkingDefaults: {} not a {\"type\":\"array\",\"items\":\"int\"}"
+            "Invalid default for field defaultBarArrayWithNonWorkingDefaults: {} not a {\"type\":\"array\",\"items\":\"int\"} " +
+            "(at '$prefix.BarInvalidNonArrayType.defaultBarArrayWithNonWorkingDefaults')"
     }
 }) {
     @Serializable

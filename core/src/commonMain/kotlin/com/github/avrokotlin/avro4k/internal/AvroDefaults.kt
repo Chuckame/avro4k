@@ -6,12 +6,12 @@ import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
 import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.LockableList
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import com.github.avrokotlin.avro4k.isNullable
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -53,7 +53,7 @@ private fun AvroDefault.toFieldDefault(
             if (json is JsonPrimitive && json.isString && json.content.length == 1) {
                 JsonPrimitive(json.content.single().code)
             } else {
-                throw SerializationException("Default value for Char must be a single character string. Invalid value: $value")
+                throw SchemaGenerationFailure("Default value for Char must be a single character string. Invalid value: $value")
             }
 
         else -> json
@@ -199,7 +199,7 @@ internal fun AvroSchema.resolveDefaultBranch(value: JsonElement): ResolvedSchema
 private fun noCompatibleBranchError(
     unionJson: String,
     value: JsonElement,
-) = SerializationException("No branch of the union $unionJson is compatible with the default value '$value'")
+) = AvroSchemaMismatchException("No branch of the union $unionJson is compatible with the default value '$value'")
 
 /**
  * The bytes of a bytes or fixed default: each code point 0-255 of the json string is one byte, as the specification says.
@@ -208,7 +208,7 @@ internal fun String.defaultValueBytes(): ByteArray =
     ByteArray(length) { index ->
         val code = this[index].code
         if (code > 0xFF) {
-            throw SerializationException(
+            throw AvroSchemaMismatchException(
                 "A bytes or fixed default value can only contain the code points 0-255, but '$this' contains '${this[index]}' at index $index"
             )
         }

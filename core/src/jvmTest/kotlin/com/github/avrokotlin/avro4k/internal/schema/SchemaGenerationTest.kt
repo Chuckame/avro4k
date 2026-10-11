@@ -85,10 +85,15 @@ internal class SchemaGenerationTest : StringSpec({
     }
 
     "names and props are validated like Apache's schema builders did" {
-        shouldThrow<SerializationException> { Avro.apacheSchema<InvalidRecordName>() }.message shouldBe "Illegal character in: invalid-name"
-        shouldThrow<SerializationException> { Avro.apacheSchema<InvalidFieldName>() }.message shouldBe "Illegal initial character: 1field"
-        shouldThrow<SerializationException> { Avro.apacheSchema<ReservedFieldProp>() }.message shouldBe "Can't set reserved property: order"
-        shouldThrow<SerializationException> { Avro.apacheSchema<OverwrittenProp>() }.message shouldBe "Can't overwrite property: key"
+        // Apache's messages, followed by the path of the element that failed
+        val prefix = SchemaGenerationTest::class.qualifiedName
+        shouldThrow<SerializationException> { Avro.apacheSchema<InvalidRecordName>() }.message shouldBe "Illegal character in: invalid-name (at 'invalid-name')"
+        shouldThrow<SerializationException> { Avro.apacheSchema<InvalidFieldName>() }.message shouldBe
+            "Illegal initial character: 1field (at '$prefix.InvalidFieldName.1field')"
+        shouldThrow<SerializationException> { Avro.apacheSchema<ReservedFieldProp>() }.message shouldBe
+            "Can't set reserved property: order (at '$prefix.ReservedFieldProp.a')"
+        shouldThrow<SerializationException> { Avro.apacheSchema<OverwrittenProp>() }.message shouldBe
+            "Can't overwrite property: key (at '$prefix.OverwrittenProp')"
         Avro.apacheSchema<SameProp>().getProp("key") shouldBe "value"
     }
 

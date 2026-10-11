@@ -19,8 +19,6 @@ import kotlinx.serialization.descriptors.SerialKind
 import kotlinx.serialization.encoding.Decoder
 import kotlin.reflect.KClass
 
-internal class AvroSchemaGenerationException(message: String) : AvroSerializationException(message)
-
 /**
  * A schema generation failure thrown where the element's path is not at hand: the visitor of the element turns it into an
  * [com.github.avrokotlin.avro4k.AvroSchemaGenerationException] with the element's path and the same message, without a cause.
