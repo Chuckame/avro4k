@@ -160,7 +160,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5 decomposition (`Plan` agent) | todo | — | — | C1 first |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
-| M5 · C5 string/bytes fast paths | todo | — | — | — |
+| M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
 | M5 · C6 polymorphic decode allocations | todo | — | — | — |
 | M5 · C8 `ReorderingCompositeEncoder` without closures | todo | — | — | — |
 

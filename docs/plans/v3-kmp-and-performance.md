@@ -521,6 +521,11 @@ descriptor.
 - `decodeBytes` on a STRING writer schema goes `binaryDecoder.readString(null).bytes` — a `Utf8`
   allocation purely to reach its backing array.
 
+- **Added 2026-10-11 (user request):** `fixed`/`bytes` logical types (decimal, uuid, duration, big-decimal) still copy
+  the value into a `ByteArray` that is converted then dropped. Proposal — internal direct reads (two `readLong()` for
+  uuid, three `readUIntLe()` for duration, `BigInteger` on the head segment for decimal) and a scoped public
+  `decodeFixed { source, size -> … }` (needs approval) — in [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md).
+
 > **Correctness note found while reading:** the private `Decoder.readBytes()` helper at the bottom of
 > `AbstractAvroDirectDecoder.kt` does `if (buffer.hasArray()) return buffer.array()` — it returns the
 > **whole backing array**, ignoring `arrayOffset()`/`position()`/`limit()`. It happens to be safe with
