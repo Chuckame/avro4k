@@ -16,11 +16,32 @@ import org.apache.avro.specific.SpecificData
 import org.apache.avro.specific.SpecificDatumReader
 import org.apache.avro.specific.SpecificDatumWriter
 import org.apache.avro.specific.SpecificRecord
+import org.apache.avro.util.ClassSecurityValidator
 import java.lang.reflect.Type
 
 internal object ApacheAvro {
     private const val MODEL_NAMESPACE = "com.github.avrokotlin.benchmark.internal.apache"
     private const val CANONICAL_NAMESPACE = "com.github.avrokotlin.benchmark.internal"
+
+    /**
+     * Since Apache 1.12.2, Avro loads a class named by a schema only if it is trusted, and an
+     * application's own classes are not trusted by default: without this, the equivalence gate fails in
+     * `@Setup` with `Forbidden ...Clients!`, both for the `ReflectData` models of this package and for the
+     * generated specific classes, and with `Forbidden java.util.List!` for the `java-class` hint
+     * `ReflectData` puts on the schema of every `List` property. Avro users trust their own classes the
+     * same way, through this API or the `org.apache.avro.SERIALIZABLE_PACKAGES`/`SERIALIZABLE_CLASSES`
+     * system properties. The API is used so that it holds under any runner and whatever JVM arguments
+     * a fork is given.
+     */
+    init {
+        val benchmarkModels = "$CANONICAL_NAMESPACE."
+        ClassSecurityValidator.setGlobal(
+            ClassSecurityValidator.composite(
+                ClassSecurityValidator.getGlobal(),
+                ClassSecurityValidator.ClassSecurityPredicate { it.name.startsWith(benchmarkModels) || it == List::class.java },
+            )
+        )
+    }
 
     /**
      * Declares, for [com.github.avrokotlin.benchmark.internal.SchemaEquivalence], the one package in
