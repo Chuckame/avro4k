@@ -629,6 +629,80 @@ Apache `Schema` itself (no `toAvro4k()`, which base's core did not need), `parse
 - **Watch list:** `complex` read @1 no longer regresses (8/9 fast forks); the polymorphic EA-on rows are flat against this
   base except `writeConcrete` @1000; `simple` write @25 joins the list.
 
+### M3-22: decoding hardening (`32551dd0` before, `a082b9db` after)
+
+2026-10-12, same machine (Apple M2 Pro), JBR 21.0.11, JMH 1.37, AC power, Low Power Mode off. What changed on the read
+path: a range check per union and enum index, one `try` per decoded value (malformed input → `AvroMalformedDataException`),
+a checked total count per collection, and **blocks above 1,024 items decoded item by item** (`decodeSequentially() = false`,
+so kotlinx grows the collection instead of reserving the claimed count up front). "After" is `a082b9db`: M3-22's code plus
+the benchmark fix below; core is identical to `681603e8`. Write paths are untouched, so only read rows were measured.
+
+**Benchmark fix first.** Since the Apache 1.12.2 bump reached this branch (merge `90d44254`, 2026-10-09), every `complex`,
+`lists` and `simple` row failed in `@Setup` with `SecurityException: Forbidden ...Clients!`. 1.12.2 loads a class named by
+a schema only if it is trusted, which the benchmark's `ReflectData` models, its generated specific classes and the
+`java.util.List` hint `ReflectData` adds are not. `a082b9db` trusts them through `ClassSecurityValidator`, as Avro users
+of their own classes must (`ApacheAvro.kt`). No published number is affected: every result above predates the merge. The
+base worktree ran with the same patch, uncommitted, so the `@Benchmark` code is identical on both sides.
+
+**How it was run.** `benchmarkAlloc` (`-prof gc` on both sides), 3 forks × 5 warmup × 5 measurement iterations of 1 s:
+
+```bash
+./gradlew :benchmark:benchmarkAlloc \
+  -Pbench='(complex\.Avro4kBenchmark\.read|lists\.Avro4kListsBenchmark\.read|micro\.CollectionMicroBenchmark\.readLongs|micro\.StringFieldMicroBenchmark\.read)' \
+  -Pparams='size=100000' -PallocForks=3 -PallocWarmups=5 -PallocIterations=5 -PallocTime=1s -PallocJmhArgs='-rf json -rff <file>'
+# EA-off: -PallocJmhArgs='-jvmArgsAppend -XX:-DoEscapeAnalysis -rf json -rff <file>'
+```
+
+Under `caffeinate -i`, nothing else running, **3 EA-on and 3 EA-off invocations per side**, alternated (base first in
+rounds 1 and 3, head first in round 2). Then **2 more EA-off invocations per side** for `complex` @15, `lists` @10000 and
+`readLongs`, also alternated, to settle them (5 invocations per side for those three). About 1 h of benchmarking. "sep" =
+every "after" invocation above (or below) every "before" one.
+
+| | EA-on ops/s, before → after (3 inv.) | Δ | sep | EA-off ops/s, before → after | Δ | sep | B/op EA-off, before → after |
+|---|---|---:|:-:|---|---:|:-:|---|
+| `complex` read @1 | 310,199 → 340,429 | +9.7% | n | 296,694 → 295,471 | −0.4% | n | 5,968 → 5,888 (−80) |
+| `complex` read @15 | 25,354 → 25,616 | +1.0% | n | 25,037 → 23,309 (5 inv.) | **−6.9%** | n | 129,840 → 129,024 (−816) |
+| `complex` read @200 | 1,906 → 1,899 | −0.4% | n | 1,837 → 1,815 | −1.2% | n | 1,739,852 → 1,729,100 (−10,752) |
+| `lists` read @100 | 7,606 → 7,563 | −0.6% | n | 7,577 → 7,471 | −1.4% | n | 303,401 → 301,769 (−1,632) |
+| `lists` read @10000 (one block of 10,000) | 74.5 → 76.6 | +2.8% | n | 76.2 → 75.3 (5 inv.) | −1.2% | n | 30,280,706 → 30,249,589 (−31,117) |
+| `Collection.readLongs` @100k (one block of 100,000) | 529.5 → 518.0 | −2.2% | **Y** | 528.3 → 500.9 (5 inv.) | **−5.2%** | n | 2,800,365 → **3,681,246 (+31%)** |
+| `StringField.readNonNull` | 2.773M → 2.802M | +1.1% | n | 1.850M → 1.916M | +3.5% | n | 1,480 → 1,480 |
+| `StringField.readNullable` | 1.960M → 1.989M | +1.5% | n | 1.275M → 1.264M | −0.8% | n | 1,480 → 1,480 |
+
+EA-on B/op moves exactly as EA-off does (e.g. `complex` @1 5,808 → 5,728).
+
+**Allocation: −16 B per collection, plus growth on blocks above 1,024 items, nothing else.** The arithmetic matches every
+row, though it was not confirmed with a profiler:
+
+- the decoder that begins a collection no longer creates a size callback per collection (a 16-byte closure): `lists` @100
+  decodes 102 collections, −1,632 B = 102 × 16; `complex` @1 −80 B = 5 × 16 (the client list, `emails`, `phones`, `tags`,
+  `map`). `complex` @15 / @200 are −51 × 16 / −672 × 16 B; their data is random, so the collections were not counted;
+- a block above 1,024 items is no longer presized, so its `ArrayList` grows by 1.5× steps. For 100,000 boxed longs that is
+  about +880 kB of intermediate and slack capacity (`readLongs` +880,881 B). For `lists` @10000 the 10,000-entry outer list
+  costs about +129 kB, against −160 kB from its 10,002 collections: net −31 kB.
+
+**Throughput: nothing at or above 10%, no row separated beyond `readLongs` EA-on.**
+
+- **`complex` read @15, EA-off −6.9% over 5 invocations, not separated; EA-on +1.0%.** Per fork, head's median is 3.9%
+  lower (24,114 vs 25,103), and 4 of 15 head forks fall below the slowest base fork (17,463 / 17,598 / 21,535 / 23,022 vs
+  23,172), 3 of them in a single invocation. That is a slow JIT mode head sometimes settles into, on top of a small cost.
+  @1 and @200 do not show it (−0.4% / −1.2% EA-off). Recorded for the M3-17 watch list; plausibly the per-value `try` or
+  the index checks changing an inlining decision (not confirmed with JIT logs).
+- **`readLongs` @100k (the item-by-item path), −2.2% EA-on (separated), −5.2% EA-off (5 inv., not separated).** 6 of 15 head
+  forks fall below the slowest base fork, 4 of them at 447–455 ops/s; the rest overlap base. It is the expected price of
+  guard 2 (one `decodeElementIndex` call per item, and list growth), which was chosen knowing that.
+- **`lists` read @10000 is neutral** (+2.8% EA-on, −1.2% EA-off) although its 10,000-entry block crosses the threshold: the
+  1,024 threshold (`MAX_PRESIZED_BLOCK_ITEMS`) costs nothing measurable on an end-to-end read and needs no tuning.
+- `complex` @1 EA-on +9.7% is that row's known bimodality (fast forks: 8 of 9 after vs 3 of 9 before), not a speedup:
+  EA-off it is −0.4%. The `StringField` reads are within ±3.5%.
+
+#### Verdict
+
+The hardening is affordable on the read path: within ±3% on every end-to-end row except `complex` @15 EA-off, whose −6.9%
+(not separated, ~4% per fork plus an occasional slow JIT mode) joins the M3-17 watch list. Allocation goes down by 16 B
+per collection, except blocks above 1,024 items, which pay for list growth (+31% on one block of 100,000 longs, −0.1% net
+on `lists` @10000). The 1,024 threshold stays as it is.
+
 ## Results — cumulative: M0 baseline vs M3 so far (4508a13 vs bd99294)
 
 The per-unit A/Bs above each compare one step with the step before it. This section answers the
