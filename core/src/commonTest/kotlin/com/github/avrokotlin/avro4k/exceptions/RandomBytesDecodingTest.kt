@@ -34,10 +34,20 @@ import kotlin.uuid.Uuid
  * decoded with and without validation.
  */
 class RandomBytesDecodingTest {
+    // 2,000 decodes in four tests of their own seed: on Kotlin/JS, mocha fails a test that takes more than two seconds
     @Test
-    fun `random and corrupted bytes only fail with an AvroSerializationException`() {
-        RandomBytesDecoding.run(COMMON_TARGETS, seed = 20261010, iterations = 2_000)
-    }
+    fun `random and corrupted bytes only fail with an AvroSerializationException - first seed`() = run(seed = 20261010)
+
+    @Test
+    fun `random and corrupted bytes only fail with an AvroSerializationException - second seed`() = run(seed = 20261011)
+
+    @Test
+    fun `random and corrupted bytes only fail with an AvroSerializationException - third seed`() = run(seed = 20261012)
+
+    @Test
+    fun `random and corrupted bytes only fail with an AvroSerializationException - fourth seed`() = run(seed = 20261013)
+
+    private fun run(seed: Int) = RandomBytesDecoding.run(COMMON_TARGETS, seed, iterations = 500)
 }
 
 /**
