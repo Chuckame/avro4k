@@ -11,10 +11,68 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-11): M3-14 done — core has no Apache dependency; next is M3-22 (design, then user approval)
+### Resume here (2026-10-11, handoff for a fresh session): M3-14, M3-22, M3-25, M3-26 done — next is M3-22's A/B, then M3-16, M3-17
 
-M3-14 merged (ledger row below). Last measured: core 961, apache-interop 571, Confluent 80, kotlin-generator 154 (1
-skipped), gradle-plugin 3; js 157, macos/iOS-sim 160. **M3-22 done** (`da9a8a0c`), except its **A/B** (`complex` read, `lists` read; ask the user before starting — hours, AC power, serialized). Then M3-16 → M3-17. Last measured: core 998, apache-interop 574, Confluent 80, generator 154 (1 skipped), gradle-plugin 3; js 189, macos/iOS-sim 192.
+**Branch** `v3/m2-foundation` at `681603e8` + this commit, clean, no worktrees left, nothing pushed. Units done since the
+last handoff (ledger rows below): M3-25 (`val avro: Avro` on `AvroDecoder`/`AvroEncoder`), M3-26 (opt-ins and annotations
+on generated files), M3-14 (**core has no Apache Avro or Jackson dependency**; `AvroObjectContainer` and the converter live
+in `apache-interop`), M3-22 (exception hierarchy + #269 decoding hardening + collection guards 1–2). Last measured:
+`:core:jvmTest` 998, apache-interop 574, Confluent 80, kotlin-generator 154 (1 skipped), gradle-plugin 3; jsNode/jsBrowser
+189, macosArm64/iosSimulatorArm64 192; the 10 no-runner native test binaries link.
+
+**Next, in order:**
+1. **M3-22's A/B — ask the user before starting** (they asked to be asked: hours of machine time). What changed on the hot
+   path (`notes/m3-22.md`, "Step 2"): a range check per union and enum index (`AbstractAvroDirectDecoder.decodeAndResolveUnion`,
+   `readEnumSymbol`, the polymorphic decoder's union read), one `try` per decoded value (`decodeWithValidation`),
+   `checkBlockSize` per collection block, blocks above 1,024 items decoded item by item (`decodeSequentially() = false`),
+   one field store per map key (`MapBlockDirectDecoder.beginElement`). **Base `32551dd0`** (last commit before M3-22's code;
+   code identical to its design base `7b9ea931`) vs **head `681603e8`**. Rows: `complex` read (all sizes), `lists` read
+   (entryCount 10000 crosses the 1,024 threshold), `CollectionMicroBenchmark.readLongs` at `size=100000` (one block of
+   100,000 → item-by-item path), `StringFieldMicroBenchmark` reads; EA-off `benchmarkAlloc` for B/op. Method: as the
+   M3-11+12 A/B (`benchmark/README.md` → "Results — M3", "How it was run"): base in a second worktree, **3 alternating
+   invocations per side**, `caffeinate -i`, AC power + Low Power Mode off (`:benchmark:checkBenchmarkPower` guards head
+   *and* base, both are after the guard), nothing else running, one agent, results into `benchmark/README.md` (new
+   subsection under "Results — M3") **in the same commit** as the ledger update. Remember: a sub-10% delta from one
+   invocation means nothing (JMH error bars understate cross-invocation variance ~10x). If `lists` read @10000 regresses,
+   the lever is the 1,024 threshold (`MAX_PRESIZED_BLOCK_ITEMS`, `CollectionsDirectDecoder.kt`) — report, do not tune
+   without the user (the user chose guards 1–2 knowing the item-by-item path grows the list).
+2. **M3-16** · cross-platform golden fixtures (spec: `notes/m3-decomposition.md` §3). Not api. `ACC+KMP`.
+3. **M3-17** · re-baseline (orchestrator benchmarks, serialized) + `feature-dev:code-reviewer` over all of M3.
+Then M4 (B5/B7/B8), M5 (decomposition first). Containers / single-object in common: when the user schedules them.
+Before briefing any unit: `gh issue list -R avro-kotlin/avro4k --milestone V3 --state open` — open now: #267, #269 (fixed
+by M3-22), #318/#319/#320/#429 (all done on this branch): they close when the branch reaches `main`; **#365** (GenericData
+without a schema registry, a question) — likely answered by M3-24's undeprecation of `encodeToGenericData`/
+`decodeFromGenericData`, confirm with the user before replying/closing.
+
+**Open user decisions (vetoable defaults already applied unless noted):**
+- M3-25: the two `avro` members are **stable**, unlike the experimental `currentWriterSchema` (one annotation each to change).
+- M3-26: one `@file:OptIn` per generated file, **sorted by simple name** → the two avro4k markers swap in every generated file
+  (98 goldens); alternative: avro4k's markers first. The `Uuid` → `ExperimentalUuidApi` opt-in is attached to the class
+  (also applies to `java-class`/user mappings to `Uuid`).
+- Deferred by the user: decoding guards 3 (bytes-left check) and 4 (zero-byte item cap) →
+  [`notes/backlog-decoding-hardening.md`](notes/backlog-decoding-hardening.md); C5 input (internal direct reads for
+  uuid/duration/decimal; **public scoped `decodeFixed { source, size -> … }` needs approval**) →
+  [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md).
+- Older, still open: a public fingerprint function (M3-10 row); vetoable defaults of the fixed-naming follow-up, M3-11,
+  M3-12, M3-13 (decision log).
+
+**Process lessons from this session** (add to the earlier lists):
+- Two **api** units can run in parallel worktrees if every Gradle invocation containing `apiDump`/`apiCheck`/
+  `actionsBeforeCommit` is wrapped in a shared lock: `lockf -t 3600 <scratchpad>/avro4k-api.lock ./gradlew …` (macOS
+  `/usr/bin/lockf`). Plain test runs need no lock. After merging the second unit, re-run ACC on the merged tree.
+- An agent stopped by a **usage limit** keeps its worktree and its context: check `git status` in the worktree, then
+  **resume the same agent with `SendMessage`** (it continues from its transcript) rather than re-briefing; review the whole
+  diff carefully afterwards, part of it was written before the interruption.
+- A branch based on the current head merges by `git merge --ff-only`; otherwise cherry-pick, then
+  `git diff --stat <agent-branch> HEAD -- . ':!docs'` must be empty (or re-run ACC on the merged tree).
+- Facts about Apache Avro or kotlinx(-io) behaviour: read the **sources jars** in `~/.gradle/caches/modules-2` (avro
+  1.12.2, kotlinx-serialization-core 1.11.0, kotlinx-io 0.9.1) before asserting them to the user — the user asks precise
+  follow-up questions.
+- Kotlin/JS mocha has a 2 s per-test timeout that native linking running alongside can blow: split long seeded tests.
+
+### Earlier (2026-10-11): M3-14 done, M3-22 designed
+
+Superseded by the handoff above.
 
 ### Earlier (2026-10-10, later): M3-25 and M3-26 done
 
