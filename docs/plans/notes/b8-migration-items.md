@@ -329,13 +329,49 @@ One line each, with where the details are. Not rewritten here.
 - **The decimal serializers throw `kotlinx.serialization.SerializationException` instead of Apache's
   `AvroTypeException`** when a `BigDecimal` does not fit the schema's scale (without rounding) or precision, with the
   same message as before (Apache's `DecimalConversion`'s). Who: code catching `org.apache.avro.AvroTypeException` (or
-  `AvroRuntimeException`) around encoding decimals. What to do: catch `SerializationException`. The exception hierarchy
-  for avro4k's failures is designed in a later unit and may narrow this to a subclass.
+  `AvroRuntimeException`) around encoding decimals. What to do: catch `SerializationException`, or its subclass
+  `AvroSchemaMismatchException` (the exception hierarchy, below).
 - `AvroSingleObject`'s fingerprints are computed by core itself, byte for byte Apache's
   `SchemaNormalization.parsingFingerprint("CRC-64-AVRO", …)`: no change in the bytes. Its KDoc no longer links Apache's
   `SchemaNormalization`; computing the registry's fingerprints on the JVM still can use it (with Apache Avro on the
   classpath). A public fingerprint function for the other platforms would be a new API (open, see the `PROGRESS.md`
   decision log of 2026-09-24).
+
+## The exception hierarchy (from [`m3-22.md`](m3-22.md), GitHub #267 and #269)
+
+- **New: every avro4k failure is an `AvroSerializationException`** (stable, `open`, a kotlinx `SerializationException`,
+  so an `IllegalArgumentException` too). Its families are `@ExperimentalAvro4kApi`: `AvroSchemaGenerationException`
+  (now public, with `path`), `AvroSchemaParseException`, `AvroSchemaMismatchException`, `AvroMalformedDataException`,
+  `AvroValidationException` (with `path`). What to do: nothing for code catching `SerializationException` or
+  `IllegalArgumentException`, which keeps catching everything it did, and more; catch a family to tell failures apart.
+- **Re-parented, not renamed**: `MissingFieldsEncodingException` now extends `AvroSchemaMismatchException`,
+  `AvroDurationParseException` extends `AvroSerializationException`. Binary compatible (superclasses only added).
+- **Schema generation messages end with ` (at '<path>')`**, the element that failed from the root type
+  (`com.example.Order.lines[].product<com.example.Digital>.price`). Code comparing generation messages exactly must
+  append it, or compare with `startsWith`.
+- **Truncated input, on every input including `decodeFromSource`, throws `AvroMalformedDataException`** (the
+  `EOFException` as its cause) instead of kotlinx-io's/Java's `EOFException`. Who: code that reads datums back to back
+  from a `Source` until an `EOFException`. What to do: check `source.exhausted()` before each decode.
+- **Exception classes that changed** (each now an `AvroSerializationException` subclass, the original as `cause` where
+  one existed). Code catching the old class stops catching:
+  - `IllegalStateException`: `AvroSingleObject`'s bad magic/version byte, two Kotlin properties matching one writer field
+    through aliases, the "Unreachable" of a long read at the end of the input;
+  - `UnsupportedOperationException`: several `@AvroEnumDefault` (during schema generation), apache-interop's
+    `PolymorphicEncoder` null value and an Apache schema default of an unsupported type;
+  - `IndexOutOfBoundsException` (a union or enum index out of range), `EOFException`/`IOException`,
+    `DateTimeException`, `ArithmeticException`, `NoSuchElementException`, `NumberFormatException`: from decoding bad
+    bytes, or a decoded value that does not fit the Kotlin type (a string that is not a number, a UUID, a date out of
+    range, a NaN to `BigInteger`);
+  - `NullPointerException` of an empty `big-decimal` unscaled value; the JVM-only `MalformedURLException` (a checked
+    exception) of a decoded `URL`, now unchecked;
+  - apache-interop: Apache's `AvroRuntimeException` (`Malformed data. Length is negative`, `SystemLimitException`) and
+    `InvalidNumberEncodingException` from `decodeWithApacheDecoder` (Confluent, object containers);
+  - `AvroSchema.fromJsonString`/`fromJsonElement`: `AvroSchemaParseException`, still an `IllegalArgumentException`.
+- **A collection count above `Int.MAX_VALUE - 8`** (summed over its blocks) is malformed data; it used to be silently
+  truncated by `toInt()`. Valid data never has one.
+- **Known limitation, documented:** decoding untrusted input whose collections hold items of zero bytes (`null`, a
+  record without fields, `fixed(0)`) can allocate in proportion to the claimed count, as in Apache Avro without its
+  `maxAllocation` limit ([`backlog-decoding-hardening.md`](backlog-decoding-hardening.md)).
 
 ## Platform differences (from [`m3-13.md`](m3-13.md), core moving to `commonMain`) — document prominently
 
