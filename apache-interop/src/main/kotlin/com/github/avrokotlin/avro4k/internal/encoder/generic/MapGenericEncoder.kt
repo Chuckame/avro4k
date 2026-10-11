@@ -2,8 +2,8 @@ package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.internal.valueType
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 
 private val STRING_SCHEMA = AvroSchema.StringSchema()
@@ -54,7 +54,7 @@ internal class MapGenericEncoder(
     }
 
     override fun encodeNullUnchecked() {
-        val key = currentKey ?: throw SerializationException("Map key cannot be null")
+        val key = currentKey ?: throw AvroSchemaMismatchException("Map key cannot be null")
         entries[key] = null
     }
 }

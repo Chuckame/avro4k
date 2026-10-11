@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.decoder.generic
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
@@ -115,6 +116,6 @@ private fun AvroDecoder.decodeGenericDefaultValue(): Any {
         // an Apache fixed carrying its schema, as a writer record holds it
         AvroSchema.Type.FIXED -> GenericData.Fixed(schema.toApacheSchema(), decodeFixed())
 
-        else -> throw UnsupportedOperationException("A default value of type ${schema.type} cannot be decoded as a generic value")
+        else -> throw AvroSerializationException("A default value of type ${schema.type} cannot be decoded as a generic value")
     }
 }

@@ -2,6 +2,7 @@ package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -32,7 +33,7 @@ internal class PolymorphicEncoder(
     ) {
         // Here we don't need to resolve the union, as it is already resolved inside AvroTaggedEncoder.beginStructure
         AvroValueGenericEncoder(avro, schema) {
-            onEncoded(it ?: throw UnsupportedOperationException("Polymorphic types cannot encode null values"))
+            onEncoded(it ?: throw AvroSchemaMismatchException("Polymorphic types cannot encode null values"))
         }.encodeSerializableValue(serializer, value)
     }
 }

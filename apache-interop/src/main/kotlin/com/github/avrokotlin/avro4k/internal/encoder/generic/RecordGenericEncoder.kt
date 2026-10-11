@@ -2,11 +2,11 @@ package com.github.avrokotlin.avro4k.internal.encoder.generic
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
 import com.github.avrokotlin.avro4k.internal.fields
 import com.github.avrokotlin.avro4k.internal.resolveRecordFields
 import com.github.avrokotlin.avro4k.toApacheSchema
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
 import org.apache.avro.generic.GenericData
@@ -26,7 +26,7 @@ internal fun RecordGenericEncoder(
 
         is EncodingWorkflow.NonContiguous -> RecordNonContiguousEncoder(encodingWorkflow.descriptorToWriterFieldIndex, schema, avro, onEncoded)
 
-        is EncodingWorkflow.MissingWriterFields -> throw SerializationException(
+        is EncodingWorkflow.MissingWriterFields -> throw AvroSchemaMismatchException(
             "Missing writer fields ${encodingWorkflow.missingWriterFields.map { schema.fields[it].name }} from the descriptor $descriptor"
         )
     }

@@ -3,6 +3,8 @@ package com.github.avrokotlin.avro4k.internal.decoder.generic
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
 import com.github.avrokotlin.avro4k.internal.enumDefaultIndex
@@ -17,7 +19,6 @@ import com.github.avrokotlin.avro4k.toAvro4k
 import com.github.avrokotlin.avro4k.toJsonElement
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PolymorphicKind
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -141,7 +142,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                     else -> PolymorphicGenericDecoder(avro, descriptor, currentAvroSchema, value)
                 }
 
-            else -> throw SerializationException("Unsupported descriptor for structure decoding: $descriptor")
+            else -> throw AvroSerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
     }
 
@@ -241,7 +242,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             is GenericEnumSymbol<*>, is CharSequence -> {
                 enumDescriptor.getElementIndex(value.toString()).takeIf { it >= 0 }
                     ?: avro.enumDefaultIndex(enumDescriptor)
-                    ?: throw SerializationException("Unknown enum symbol '$value' for Enum '${enumDescriptor.serialName}'")
+                    ?: throw AvroSchemaMismatchException("Unknown enum symbol '$value' for Enum '${enumDescriptor.serialName}'")
             }
 
             else -> throw BadDecodedValueError(value, SerialKind.ENUM, GenericEnumSymbol::class, CharSequence::class)
@@ -326,7 +327,7 @@ private fun AvroSchema.UnionSchema.onlyNonNullBranch(): ResolvedSchema? {
 private fun noUnionBranchError(
     value: Any?,
     union: AvroSchema.UnionSchema,
-): SerializationException =
-    SerializationException(
+): AvroSchemaMismatchException =
+    AvroSchemaMismatchException(
         "The generic value '$value' of type ${value?.let { it::class.qualifiedName }} matches no branch of the union ${union.toJsonElement()}"
     )

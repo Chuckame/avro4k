@@ -1,6 +1,9 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
+import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
+import org.apache.avro.AvroRuntimeException
+import org.apache.avro.InvalidNumberEncodingException
 import org.apache.avro.util.Utf8
 import java.nio.ByteBuffer
 
@@ -94,30 +97,30 @@ public class ApacheDecoderAdapter(
     private val decoder: org.apache.avro.io.Decoder,
 ) : AvroBinaryDecoder() {
     override fun readNull() {
-        decoder.readNull()
+        reading { decoder.readNull() }
     }
 
-    override fun readBoolean(): Boolean = decoder.readBoolean()
+    override fun readBoolean(): Boolean = reading { decoder.readBoolean() }
 
-    override fun readInt(): Int = decoder.readInt()
+    override fun readInt(): Int = reading { decoder.readInt() }
 
-    override fun readLong(): Long = decoder.readLong()
+    override fun readLong(): Long = reading { decoder.readLong() }
 
-    override fun readFloat(): Float = decoder.readFloat()
+    override fun readFloat(): Float = reading { decoder.readFloat() }
 
-    override fun readDouble(): Double = decoder.readDouble()
+    override fun readDouble(): Double = reading { decoder.readDouble() }
 
-    override fun readString(): String = decoder.readString()
+    override fun readString(): String = reading { decoder.readString() }
 
     override fun readStringBytes(): ByteArray {
-        val utf8 = decoder.readString(null)
+        val utf8 = reading { decoder.readString(null) }
         val bytes = utf8.bytes
         // Only the first getByteLength() bytes are the value, and a decoder given no Utf8 to reuse allocates a fresh one
         return if (bytes.size == utf8.byteLength) bytes else bytes.copyOf(utf8.byteLength)
     }
 
     override fun skipString() {
-        decoder.skipString()
+        reading { decoder.skipString() }
     }
 
     /**
@@ -127,34 +130,51 @@ public class ApacheDecoderAdapter(
      * back the caller's own buffer), so the bytes are always copied out.
      */
     override fun readBytes(): ByteArray {
-        val buffer = decoder.readBytes(null)
+        val buffer = reading { decoder.readBytes(null) }
         return ByteArray(buffer.remaining())
             .apply { buffer.get(this) }
     }
 
     override fun skipBytes() {
-        decoder.skipBytes()
+        reading { decoder.skipBytes() }
     }
 
-    override fun readFixed(size: Int): ByteArray = ByteArray(size).also { decoder.readFixed(it) }
+    override fun readFixed(size: Int): ByteArray = ByteArray(size).also { reading { decoder.readFixed(it) } }
 
     override fun skipFixed(size: Int) {
-        decoder.skipFixed(size)
+        reading { decoder.skipFixed(size) }
     }
 
-    override fun readEnum(): Int = decoder.readEnum()
+    override fun readEnum(): Int = reading { decoder.readEnum() }
 
-    override fun readIndex(): Int = decoder.readIndex()
+    override fun readIndex(): Int = reading { decoder.readIndex() }
 
-    override fun readArrayStart(): Long = decoder.readArrayStart()
+    override fun readArrayStart(): Long = reading { decoder.readArrayStart() }
 
-    override fun arrayNext(): Long = decoder.arrayNext()
+    override fun arrayNext(): Long = reading { decoder.arrayNext() }
 
-    override fun skipArray(): Long = decoder.skipArray()
+    override fun skipArray(): Long = reading { decoder.skipArray() }
 
-    override fun readMapStart(): Long = decoder.readMapStart()
+    override fun readMapStart(): Long = reading { decoder.readMapStart() }
 
-    override fun mapNext(): Long = decoder.mapNext()
+    override fun mapNext(): Long = reading { decoder.mapNext() }
 
-    override fun skipMap(): Long = decoder.skipMap()
+    override fun skipMap(): Long = reading { decoder.skipMap() }
+
+    /**
+     * Runs one read of the Apache decoder, reporting the malformed input it detects as an [AvroMalformedDataException],
+     * the original as the cause: an [AvroRuntimeException] (`Malformed data. Length is negative`, a
+     * `SystemLimitException`, …) or an [InvalidNumberEncodingException]. Per read rather than around the whole decode,
+     * so that an [AvroRuntimeException] thrown by a custom serializer is not mislabelled. The end of the input
+     * (`EOFException`) is reported by the core decode entry point, as for any other input.
+     */
+    private inline fun <T> reading(read: () -> T): T {
+        try {
+            return read()
+        } catch (e: AvroRuntimeException) {
+            throw AvroMalformedDataException(e.message, e)
+        } catch (e: InvalidNumberEncodingException) {
+            throw AvroMalformedDataException(e.message, e)
+        }
+    }
 }

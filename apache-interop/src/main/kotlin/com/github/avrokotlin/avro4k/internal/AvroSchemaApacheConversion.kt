@@ -16,6 +16,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.NullSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
+import com.github.avrokotlin.avro4k.AvroSchemaParseException
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.LockableList
 import com.github.avrokotlin.avro4k.Name
@@ -438,7 +439,7 @@ private fun toJsonElement(value: Any?): JsonElement =
         is ByteArray -> JsonPrimitive(String(value, StandardCharsets.ISO_8859_1))
         is List<*> -> JsonArray(value.map { toJsonElement(it) })
         is Map<*, *> -> JsonObject(value.entries.associate { it.key as String to toJsonElement(it.value) })
-        else -> throw UnsupportedOperationException("unsupported value of type ${value::class}: $value")
+        else -> throw AvroSchemaParseException("unsupported value of type ${value::class}: $value")
     }
 
 /**
@@ -485,7 +486,7 @@ private fun JsonNode.toJsonElement(schema: Schema?): JsonElement {
                 }
             )
 
-        else -> throw UnsupportedOperationException("Unsupported default value json node ${this::class}: $this")
+        else -> throw AvroSchemaParseException("Unsupported default value json node ${this::class}: $this")
     }
 }
 

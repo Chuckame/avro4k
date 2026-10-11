@@ -7,9 +7,10 @@ import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
 import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.toJsonElement
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.SerialKind
 import kotlinx.serialization.encoding.Decoder
@@ -128,7 +129,7 @@ internal fun BigDecimal.toFloatExact(): Float {
 }
 
 private inline fun <reified T> Any.invalidTypeError(): T {
-    throw SerializationException("Value $this is not a valid ${T::class.simpleName}")
+    throw AvroSchemaMismatchException("Value $this is not a valid ${T::class.simpleName}")
 }
 
 // ---- decoding errors ----
@@ -136,12 +137,12 @@ private inline fun <reified T> Any.invalidTypeError(): T {
 internal val KClass<*>.nameForMessages: String
     get() = qualifiedName.toString()
 
-internal fun DecodedNullError() = SerializationException("Unexpected null value, Decoder.decodeTaggedNotNullMark should be called first")
+internal fun DecodedNullError() = AvroSerializationException("Unexpected null value, Decoder.decodeTaggedNotNullMark should be called first")
 
 internal fun DecodedNullError(
     descriptor: SerialDescriptor,
     elementIndex: Int,
-) = SerializationException(
+) = AvroSerializationException(
     "Unexpected null value for field '${descriptor.getElementName(elementIndex)}' for type '${descriptor.serialName}', Decoder.decodeTaggedNotNullMark should be called first"
 )
 
@@ -151,28 +152,28 @@ internal inline fun <reified ExpectedType> BadDecodedValueError(
     value: Any?,
     firstExpectedType: KClass<*>,
     vararg expectedTypes: KClass<*>,
-): SerializationException = badDecodedValueError(value, ExpectedType::class.nameForMessages, firstExpectedType, expectedTypes)
+): AvroSchemaMismatchException = badDecodedValueError(value, ExpectedType::class.nameForMessages, firstExpectedType, expectedTypes)
 
 internal fun BadDecodedValueError(
     value: Any?,
     expectedKind: SerialKind,
     firstExpectedType: KClass<*>,
     vararg expectedTypes: KClass<*>,
-): SerializationException = badDecodedValueError(value, expectedKind.toString(), firstExpectedType, expectedTypes)
+): AvroSchemaMismatchException = badDecodedValueError(value, expectedKind.toString(), firstExpectedType, expectedTypes)
 
 internal fun badDecodedValueError(
     value: Any?,
     expected: String,
     firstExpectedType: KClass<*>,
     expectedTypes: Array<out KClass<*>>,
-): SerializationException {
+): AvroSchemaMismatchException {
     val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
     return if (value == null) {
-        SerializationException(
+        AvroSchemaMismatchException(
             "Decoded null value for $expected kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
         )
     } else {
-        SerializationException(
+        AvroSchemaMismatchException(
             "Decoded value '$value' of type ${value::class.nameForMessages} for $expected kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
         )
     }
