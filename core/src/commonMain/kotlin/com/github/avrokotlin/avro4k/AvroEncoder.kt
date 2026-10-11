@@ -11,7 +11,6 @@ import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
 import com.github.avrokotlin.avro4k.internal.schema.nonFailingAliases
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import com.github.avrokotlin.avro4k.internal.schema.types
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Encoder
 
@@ -91,7 +90,7 @@ private fun AvroEncoder.namedSchemaNotFoundInUnionError(
 ): Throwable {
     val aliasesStr = if (possibleAliases.isNotEmpty()) " (with aliases ${possibleAliases.joinToString()})" else ""
     val fallbacksStr = if (fallbackTypes.isNotEmpty()) " Also no compatible type found (one of $fallbackTypes)." else ""
-    return SerializationException("Named schema $expectedName$aliasesStr not found in union.$fallbacksStr Actual schema: ${currentWriterSchema.toSchemaJsonString()}")
+    return AvroSchemaMismatchException("Named schema $expectedName$aliasesStr not found in union.$fallbacksStr Actual schema: ${currentWriterSchema.toSchemaJsonString()}")
 }
 
 internal fun AvroEncoder.unsupportedWriterTypeError(
@@ -100,7 +99,7 @@ internal fun AvroEncoder.unsupportedWriterTypeError(
 ): Throwable {
     val fallbacksStr = if (fallbackTypes.isNotEmpty()) ", and also not matching to any compatible type (one of ${fallbackTypes.joinToString()})." else ""
     val schema = currentWriterSchema
-    return SerializationException(
+    return AvroSchemaMismatchException(
         "Unsupported schema '${schema.fullNameForMessages}' for encoded type of ${mainType.getName()}$fallbacksStr. Actual schema: ${schema.toSchemaJsonString()}"
     )
 }
@@ -108,7 +107,7 @@ internal fun AvroEncoder.unsupportedWriterTypeError(
 internal fun AvroEncoder.ensureFixedSize(byteArray: ByteArray): ByteArray {
     val schema = currentWriterSchema
     if (schema.fixedSize != byteArray.size) {
-        throw SerializationException("Fixed size mismatch for actual size of ${byteArray.size}. Actual schema: ${schema.toSchemaJsonString()}")
+        throw AvroSchemaMismatchException("Fixed size mismatch for actual size of ${byteArray.size}. Actual schema: ${schema.toSchemaJsonString()}")
     }
     return byteArray
 }
@@ -118,14 +117,14 @@ internal fun AvroEncoder.fullNameOrAliasMismatchError(
     aliases: Set<String>,
 ): Throwable {
     val aliasesStr = if (aliases.isNotEmpty()) " (with aliases ${aliases.joinToString()})" else ""
-    return SerializationException("The descriptor $fullName$aliasesStr doesn't match the schema ${currentWriterSchema.toSchemaJsonString()}")
+    return AvroSchemaMismatchException("The descriptor $fullName$aliasesStr doesn't match the schema ${currentWriterSchema.toSchemaJsonString()}")
 }
 
 internal fun AvroEncoder.logicalTypeMismatchError(
     logicalType: String,
     type: AvroSchema.Type,
 ): Throwable {
-    return SerializationException(
+    return AvroSchemaMismatchException(
         "Expected schema type of ${type.getName()} with logical type $logicalType but had schema ${currentWriterSchema.toSchemaJsonString()}"
     )
 }
@@ -248,7 +247,7 @@ private fun AvroSchema.getIndexValidlyLogicallyTyped(
 }
 
 @ExperimentalAvro4kApi
-public class MissingFieldsEncodingException(message: String) : SerializationException(message) {
+public class MissingFieldsEncodingException(message: String) : AvroSchemaMismatchException(message) {
     public constructor(
         missingFields: List<AvroSchema.RecordSchema.Field>,
         writerSchema: AvroSchema,

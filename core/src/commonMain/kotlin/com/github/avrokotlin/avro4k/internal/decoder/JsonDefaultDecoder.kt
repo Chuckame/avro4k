@@ -3,6 +3,8 @@ package com.github.avrokotlin.avro4k.internal.decoder
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.DecodedNullError
 import com.github.avrokotlin.avro4k.internal.DecodingStep
@@ -26,7 +28,6 @@ import com.github.avrokotlin.avro4k.internal.toShortExact
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PolymorphicKind
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.StructureKind
@@ -116,7 +117,7 @@ internal class JsonDefaultDecoder(
 
             is PolymorphicKind -> PolymorphicJsonDefaultDecoder(avro, descriptor, currentAvroSchema, value)
 
-            else -> throw SerializationException("Unsupported descriptor for structure decoding: $descriptor")
+            else -> throw AvroSerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
     }
 
@@ -128,8 +129,35 @@ internal class JsonDefaultDecoder(
             when (value) {
                 is JsonNull -> throw DecodedNullError()
                 is JsonPrimitive -> value
-                else -> throw SerializationException("Not a valid primitive value for schema ${currentAvroSchema.toSchemaJsonString()}: $value")
+                else -> throw AvroSchemaMismatchException("Not a valid primitive value for schema ${currentAvroSchema.toSchemaJsonString()}: $value")
             }
+
+    /**
+     * Converts the json default to the Kotlin type: json that does not fit it (a string that is not a number, a number out
+     * of range, …) is a mismatch between the default and the type, the conversion's exception as the cause.
+     */
+    private inline fun <R> convertingDefault(
+        kotlinType: String,
+        convert: () -> R,
+    ): R {
+        try {
+            return convert()
+        } catch (e: AvroSerializationException) {
+            throw e
+        } catch (e: IllegalArgumentException) {
+            throw defaultConversionError(kotlinType, e)
+        } catch (e: NoSuchElementException) {
+            throw defaultConversionError(kotlinType, e)
+        }
+    }
+
+    private fun defaultConversionError(
+        kotlinType: String,
+        cause: Throwable,
+    ) = AvroSchemaMismatchException(
+        "Cannot convert the default value $value of schema ${currentAvroSchema.toSchemaJsonString()} to $kotlinType: ${cause.message}",
+        cause
+    )
 
     /**
      * A char's default is its code (see [com.github.avrokotlin.avro4k.internal.toFieldDefault]), or, nested in a structure, still
@@ -154,75 +182,83 @@ internal class JsonDefaultDecoder(
             else -> primitive.content.encodeToByteArray()
         }
 
-    override fun decodeBoolean(): Boolean {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.BOOLEAN -> primitive.boolean
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toBoolean()
-            else -> throw unsupportedWriterTypeError(AvroSchema.Type.BOOLEAN, AvroSchema.Type.STRING)
+    override fun decodeBoolean(): Boolean =
+        convertingDefault("Boolean") {
+            when (currentAvroSchema.type) {
+                AvroSchema.Type.BOOLEAN -> primitive.boolean
+                AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toBoolean()
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.BOOLEAN, AvroSchema.Type.STRING)
+            }
         }
-    }
 
-    override fun decodeByte(): Byte {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.INT -> intValue().toByteExact()
-            AvroSchema.Type.LONG -> primitive.long.toByteExact()
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toByte()
-            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
+    override fun decodeByte(): Byte =
+        convertingDefault("Byte") {
+            when (currentAvroSchema.type) {
+                AvroSchema.Type.INT -> intValue().toByteExact()
+                AvroSchema.Type.LONG -> primitive.long.toByteExact()
+                AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toByte()
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
+            }
         }
-    }
 
-    override fun decodeShort(): Short {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.INT -> intValue().toShortExact()
-            AvroSchema.Type.LONG -> primitive.long.toShortExact()
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toShort()
-            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
+    override fun decodeShort(): Short =
+        convertingDefault("Short") {
+            when (currentAvroSchema.type) {
+                AvroSchema.Type.INT -> intValue().toShortExact()
+                AvroSchema.Type.LONG -> primitive.long.toShortExact()
+                AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toShort()
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
+            }
         }
-    }
 
-    override fun decodeInt(): Int {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.INT -> intValue()
-            AvroSchema.Type.LONG -> primitive.long.toIntExact()
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toInt()
-            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
+    override fun decodeInt(): Int =
+        convertingDefault("Int") {
+            when (currentAvroSchema.type) {
+                AvroSchema.Type.INT -> intValue()
+                AvroSchema.Type.LONG -> primitive.long.toIntExact()
+                AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toInt()
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
+            }
         }
-    }
 
-    override fun decodeLong(): Long {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.LONG -> primitive.long
-            AvroSchema.Type.INT -> intValue().toLong()
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toLong()
-            else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.INT, AvroSchema.Type.STRING)
+    override fun decodeLong(): Long =
+        convertingDefault("Long") {
+            when (currentAvroSchema.type) {
+                AvroSchema.Type.LONG -> primitive.long
+                AvroSchema.Type.INT -> intValue().toLong()
+                AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toLong()
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.INT, AvroSchema.Type.STRING)
+            }
         }
-    }
 
-    override fun decodeFloat(): Float {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.FLOAT -> primitive.float
-            AvroSchema.Type.DOUBLE -> primitive.double.toFloatExact()
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toFloat()
-            else -> throw unsupportedWriterTypeError(AvroSchema.Type.FLOAT, AvroSchema.Type.DOUBLE, AvroSchema.Type.STRING)
+    override fun decodeFloat(): Float =
+        convertingDefault("Float") {
+            when (currentAvroSchema.type) {
+                AvroSchema.Type.FLOAT -> primitive.float
+                AvroSchema.Type.DOUBLE -> primitive.double.toFloatExact()
+                AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toFloat()
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.FLOAT, AvroSchema.Type.DOUBLE, AvroSchema.Type.STRING)
+            }
         }
-    }
 
-    override fun decodeDouble(): Double {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.DOUBLE -> primitive.double
-            AvroSchema.Type.FLOAT -> primitive.float.toDouble()
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toDouble()
-            else -> throw unsupportedWriterTypeError(AvroSchema.Type.DOUBLE, AvroSchema.Type.FLOAT, AvroSchema.Type.STRING)
+    override fun decodeDouble(): Double =
+        convertingDefault("Double") {
+            when (currentAvroSchema.type) {
+                AvroSchema.Type.DOUBLE -> primitive.double
+                AvroSchema.Type.FLOAT -> primitive.float.toDouble()
+                AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.toDouble()
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.DOUBLE, AvroSchema.Type.FLOAT, AvroSchema.Type.STRING)
+            }
         }
-    }
 
-    override fun decodeChar(): Char {
-        return when (currentAvroSchema.type) {
-            AvroSchema.Type.INT -> intValue().toChar()
-            AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.single()
-            else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
+    override fun decodeChar(): Char =
+        convertingDefault("Char") {
+            when (currentAvroSchema.type) {
+                AvroSchema.Type.INT -> intValue().toChar()
+                AvroSchema.Type.STRING, AvroSchema.Type.ENUM -> primitive.content.single()
+                else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
+            }
         }
-    }
 
     override fun decodeString(): String {
         return when (currentAvroSchema.type) {
@@ -238,7 +274,7 @@ internal class JsonDefaultDecoder(
                 val symbol = primitive.content
                 enumDescriptor.getElementIndex(symbol).takeIf { it >= 0 }
                     ?: avro.enumResolver.getDefaultValueIndex(enumDescriptor)
-                    ?: throw SerializationException("Unknown enum symbol '$symbol' for Enum '${enumDescriptor.serialName}'")
+                    ?: throw AvroSchemaMismatchException("Unknown enum symbol '$symbol' for Enum '${enumDescriptor.serialName}'")
             }
 
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.ENUM, AvroSchema.Type.STRING)
@@ -390,7 +426,7 @@ private class RecordJsonDefaultDecoder(
                 is DecodingStep.IgnoreOptionalElement, is DecodingStep.SkipWriterField -> {}
 
                 is DecodingStep.MissingElementValueFailure ->
-                    throw SerializationException(
+                    throw AvroSchemaMismatchException(
                         "Field '${descriptor.getElementName(step.elementIndex)}' is missing from the default value $record of " +
                             "'${descriptor.nonNullSerialName}', and has no default value of its own"
                     )

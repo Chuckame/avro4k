@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal
 import com.github.avrokotlin.avro4k.AvroAlias
 import com.github.avrokotlin.avro4k.AvroProp
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.schema.isFullNameOrAliasMatch
 import kotlinx.io.Buffer
@@ -81,9 +82,9 @@ internal fun SerialDescriptor.possibleSerializationSubclasses(serializersModule:
  */
 @OptIn(ExperimentalSerializationApi::class, InternalSerializationApi::class)
 internal fun SerialDescriptor.getNonNullContextualDescriptor(serializersModule: SerializersModule) =
-    requireNotNull(serializersModule.getContextualDescriptor(this) ?: this.capturedKClass?.serializerOrNull()?.descriptor) {
-        "No descriptor found in serialization context for $this"
-    }
+    serializersModule.getContextualDescriptor(this)
+        ?: this.capturedKClass?.serializerOrNull()?.descriptor
+        ?: throw AvroSerializationException("No descriptor found in serialization context for $this")
 
 /**
  * Returns true if the given content is starting with `"`, {`, `[`, a digit or equals to `null`.

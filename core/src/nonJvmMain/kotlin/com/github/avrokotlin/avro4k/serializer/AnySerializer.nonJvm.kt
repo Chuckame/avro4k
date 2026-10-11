@@ -1,6 +1,7 @@
 package com.github.avrokotlin.avro4k.serializer
 
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.InternalSerializationApi
@@ -75,7 +76,7 @@ public actual open class AnySerializer actual constructor() : AbstractAnySeriali
         if (value is Collection<*>) return ListSerializer(this@AnySerializer.nullable) as KSerializer<Any>
         if (value is Map<*, *>) return MapSerializer(this@AnySerializer.nullable, this@AnySerializer.nullable) as KSerializer<Any>
         return inferSerializationStrategyFromNonSerializableType(type) as SerializationStrategy<Any>?
-            ?: throw SerializationException("Cannot find serializer for type $type. Please register a serializer for this type in the serializers module.")
+            ?: throw AvroSerializationException("Cannot find serializer for type $type. Please register a serializer for this type in the serializers module.")
     }
 
     /**

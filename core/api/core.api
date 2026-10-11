@@ -140,6 +140,11 @@ public final class com/github/avrokotlin/avro4k/AvroKt {
 	public static final fun schema (Lcom/github/avrokotlin/avro4k/Avro;Lkotlinx/serialization/KSerializer;)Lcom/github/avrokotlin/avro4k/AvroSchema;
 }
 
+public class com/github/avrokotlin/avro4k/AvroMalformedDataException : com/github/avrokotlin/avro4k/AvroSerializationException {
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+}
+
 public abstract interface annotation class com/github/avrokotlin/avro4k/AvroProp : java/lang/annotation/Annotation {
 	public abstract fun key ()Ljava/lang/String;
 	public abstract fun value ()Ljava/lang/String;
@@ -445,6 +450,12 @@ public final class com/github/avrokotlin/avro4k/AvroSchema$UnionSchema : com/git
 	public fun toString ()Ljava/lang/String;
 }
 
+public class com/github/avrokotlin/avro4k/AvroSchemaGenerationException : com/github/avrokotlin/avro4k/AvroSerializationException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+	public final fun getPath ()Ljava/lang/String;
+}
+
 public final class com/github/avrokotlin/avro4k/AvroSchemaJsonDeserializerKt {
 	public static final fun fromJsonElement (Lcom/github/avrokotlin/avro4k/AvroSchema$Companion;Lkotlinx/serialization/json/JsonElement;Ljava/util/Map;)Lcom/github/avrokotlin/avro4k/AvroSchema;
 	public static synthetic fun fromJsonElement$default (Lcom/github/avrokotlin/avro4k/AvroSchema$Companion;Lkotlinx/serialization/json/JsonElement;Ljava/util/Map;ILjava/lang/Object;)Lcom/github/avrokotlin/avro4k/AvroSchema;
@@ -460,6 +471,21 @@ public final class com/github/avrokotlin/avro4k/AvroSchemaJsonSerializerKt {
 public final class com/github/avrokotlin/avro4k/AvroSchemaKt {
 	public static final fun getNullable (Lcom/github/avrokotlin/avro4k/AvroSchema;)Lcom/github/avrokotlin/avro4k/AvroSchema;
 	public static final fun isNullable (Lcom/github/avrokotlin/avro4k/AvroSchema;)Z
+}
+
+public class com/github/avrokotlin/avro4k/AvroSchemaMismatchException : com/github/avrokotlin/avro4k/AvroSerializationException {
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+}
+
+public class com/github/avrokotlin/avro4k/AvroSchemaParseException : com/github/avrokotlin/avro4k/AvroSerializationException {
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+}
+
+public class com/github/avrokotlin/avro4k/AvroSerializationException : kotlinx/serialization/SerializationException {
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
 }
 
 public final class com/github/avrokotlin/avro4k/AvroSingleObject : kotlinx/serialization/BinaryFormat {
@@ -482,6 +508,11 @@ public abstract interface annotation class com/github/avrokotlin/avro4k/AvroStri
 
 public final synthetic class com/github/avrokotlin/avro4k/AvroStringable$Impl : com/github/avrokotlin/avro4k/AvroStringable {
 	public fun <init> ()V
+}
+
+public class com/github/avrokotlin/avro4k/AvroValidationException : com/github/avrokotlin/avro4k/AvroSerializationException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getPath ()Ljava/lang/String;
 }
 
 public abstract interface annotation class com/github/avrokotlin/avro4k/ExperimentalAvro4kApi : java/lang/annotation/Annotation {
@@ -513,7 +544,7 @@ public final class com/github/avrokotlin/avro4k/FieldNamingStrategy$Builtins$Sna
 public abstract interface annotation class com/github/avrokotlin/avro4k/InternalAvro4kApi : java/lang/annotation/Annotation {
 }
 
-public final class com/github/avrokotlin/avro4k/MissingFieldsEncodingException : kotlinx/serialization/SerializationException {
+public final class com/github/avrokotlin/avro4k/MissingFieldsEncodingException : com/github/avrokotlin/avro4k/AvroSchemaMismatchException {
 	public fun <init> (Ljava/lang/String;)V
 	public fun <init> (Ljava/util/List;Lcom/github/avrokotlin/avro4k/AvroSchema;)V
 	public fun <init> (Ljava/util/List;Lcom/github/avrokotlin/avro4k/AvroSchema;Lkotlinx/serialization/descriptors/SerialDescriptor;)V
@@ -581,7 +612,7 @@ public final class com/github/avrokotlin/avro4k/serializer/AvroDuration$Companio
 	public final fun tryParse (Ljava/lang/String;)Lcom/github/avrokotlin/avro4k/serializer/AvroDuration;
 }
 
-public final class com/github/avrokotlin/avro4k/serializer/AvroDurationParseException : kotlinx/serialization/SerializationException {
+public final class com/github/avrokotlin/avro4k/serializer/AvroDurationParseException : com/github/avrokotlin/avro4k/AvroSerializationException {
 	public fun <init> (Ljava/lang/String;)V
 }
 

@@ -2,11 +2,11 @@ package com.github.avrokotlin.avro4k.internal.encoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.encoder.AbstractAvroEncoder
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractEncoder
@@ -97,7 +97,7 @@ internal sealed class AbstractAvroDirectEncoder(
         val enumSchema = currentAvroSchema as AvroSchema.EnumSchema
         val index =
             enumSchema.getSymbolIndexOrNull(symbol)
-                ?: throw SerializationException("Enum symbol $symbol not found in schema ${enumSchema.toSchemaJsonString()}")
+                ?: throw AvroSchemaMismatchException("Enum symbol $symbol not found in schema ${enumSchema.toSchemaJsonString()}")
         binaryEncoder.writeEnum(index)
     }
 

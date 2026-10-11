@@ -3,6 +3,8 @@ package com.github.avrokotlin.avro4k.serializer
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.Name
@@ -21,7 +23,6 @@ import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
 import kotlinx.io.readIntLe
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonPrimitive
@@ -120,7 +121,7 @@ public data class AvroDuration(
 }
 
 @ExperimentalAvro4kApi
-public class AvroDurationParseException(value: String) : SerializationException("Unable to parse duration: $value")
+public class AvroDurationParseException(value: String) : AvroSerializationException("Unable to parse duration: $value")
 
 @InternalAvro4kApi
 // A literal rather than `AvroDuration::class.qualifiedName`: that property does not exist on Kotlin/JS, and a serial
@@ -186,7 +187,7 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>("com.github.
 
                 AvroSchema.Type.STRING -> AvroDuration.parse(decodeString())
 
-                else -> throw SerializationException("Expected the duration logical type to be of type fixed or string, but had ${schema.type}")
+                else -> throw AvroSchemaMismatchException("Expected the duration logical type to be of type fixed or string, but had ${schema.type}")
             }
         }
     }

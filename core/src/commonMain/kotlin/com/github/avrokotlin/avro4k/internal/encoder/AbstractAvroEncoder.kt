@@ -2,11 +2,14 @@ package com.github.avrokotlin.avro4k.internal.encoder
 
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.ensureFixedSize
 import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.aliases
+import com.github.avrokotlin.avro4k.internal.convertForEncoding
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
@@ -21,7 +24,6 @@ import com.github.avrokotlin.avro4k.trySelectNamedSchema
 import com.github.avrokotlin.avro4k.trySelectTypeNameFromUnion
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.PolymorphicKind
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -125,7 +127,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
 
             is PolymorphicKind -> getPolymorphicEncoder(descriptor)
 
-            else -> throw SerializationException("Unsupported structure kind: $descriptor")
+            else -> throw AvroSerializationException("Unsupported structure kind: $descriptor")
         }
     }
 
@@ -154,13 +156,13 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
                 }
             }
 
-            else -> throw SerializationException("Unsupported collection kind: $descriptor")
+            else -> throw AvroSerializationException("Unsupported collection kind: $descriptor")
         }
     }
 
     override fun encodeUnionIndex(index: Int) {
         if (selectedUnionIndex != -1) {
-            throw SerializationException("Already selected union index: $selectedUnionIndex, got $index, for selected schema ${currentAvroSchema.toSchemaJsonString()}")
+            throw AvroSerializationException("Already selected union index: $selectedUnionIndex, got $index, for selected schema ${currentAvroSchema.toSchemaJsonString()}")
         }
         currentAvroSchema = currentAvroSchema.types[index]
         encodeUnionIndexUnchecked(index)
@@ -178,9 +180,9 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     override fun encodeNull() {
         if (currentAvroSchema.isUnion) {
             trySelectTypeNameFromUnion(AvroSchema.Type.NULL) ||
-                throw SerializationException("Cannot encode null value for non-nullable schema: ${currentAvroSchema.toSchemaJsonString()}")
+                throw AvroSchemaMismatchException("Cannot encode null value for non-nullable schema: ${currentAvroSchema.toSchemaJsonString()}")
         } else if (currentAvroSchema.type != AvroSchema.Type.NULL) {
-            throw SerializationException("Cannot encode null value for non-null schema: ${currentAvroSchema.toSchemaJsonString()}")
+            throw AvroSchemaMismatchException("Cannot encode null value for non-null schema: ${currentAvroSchema.toSchemaJsonString()}")
         }
         encodeNullUnchecked()
     }
@@ -364,15 +366,15 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
                 )
         }
         when (currentAvroSchema.type) {
-            AvroSchema.Type.BOOLEAN -> encodeBooleanUnchecked(value.toBooleanStrict())
+            AvroSchema.Type.BOOLEAN -> encodeBooleanUnchecked(value.convertForEncoding("String", AvroSchema.Type.BOOLEAN) { it.toBooleanStrict() })
 
-            AvroSchema.Type.INT -> encodeIntUnchecked(value.toInt())
+            AvroSchema.Type.INT -> encodeIntUnchecked(value.convertForEncoding("String", AvroSchema.Type.INT) { it.toInt() })
 
-            AvroSchema.Type.LONG -> encodeLongUnchecked(value.toLong())
+            AvroSchema.Type.LONG -> encodeLongUnchecked(value.convertForEncoding("String", AvroSchema.Type.LONG) { it.toLong() })
 
-            AvroSchema.Type.FLOAT -> encodeFloatUnchecked(value.toFloat())
+            AvroSchema.Type.FLOAT -> encodeFloatUnchecked(value.convertForEncoding("String", AvroSchema.Type.FLOAT) { it.toFloat() })
 
-            AvroSchema.Type.DOUBLE -> encodeDoubleUnchecked(value.toDouble())
+            AvroSchema.Type.DOUBLE -> encodeDoubleUnchecked(value.convertForEncoding("String", AvroSchema.Type.DOUBLE) { it.toDouble() })
 
             AvroSchema.Type.STRING -> encodeStringUnchecked(value)
 

@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
+import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
 import com.github.avrokotlin.avro4k.AvroSchema.EnumSchema
@@ -8,9 +9,10 @@ import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.Type
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
+import com.github.avrokotlin.avro4k.AvroSerializationException
+import com.github.avrokotlin.avro4k.AvroValidationException
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
 import com.github.avrokotlin.avro4k.internal.schema.getName
-import kotlinx.serialization.SerializationException
 
 /**
  * Checks the codec calls made to write or read **one datum** against its writer schema, one call at a time: the state
@@ -36,7 +38,10 @@ import kotlinx.serialization.SerializationException
  * - collections count items, not only `startItem()` calls: an item without its `startItem()`, a `startItem()` without
  *   an item, and on the decoder side a block not read to its end, are rejected.
  *
- * A mismatch throws a [SerializationException] naming the call, what was expected instead, and where in the datum.
+ * A mismatch throws an [AvroValidationException] naming the call, what was expected instead, and where in the datum.
+ * On the decoder side, a value read from the input that the writer schema rules out (an enum or union index out of
+ * range, a negative item count) throws an [AvroMalformedDataException] instead, with the same message: the input is
+ * corrupted, whatever the serializer does.
  *
  * Per-operation state, so not thread-safe: a new instance is created for each encoded or decoded value.
  */
@@ -97,7 +102,7 @@ internal class WriterSchemaCallValidator(
     ) {
         val schema = schemas[size - 1] as EnumSchema
         if (index < 0 || index >= schema.symbols.size) {
-            throw mismatch(call, "an index of enum '${schema.fullName}' in [0, ${schema.symbols.size}), but got $index")
+            throw readValueMismatch(call, "an index of enum '${schema.fullName}' in [0, ${schema.symbols.size}), but got $index")
         }
         pop()
     }
@@ -115,7 +120,7 @@ internal class WriterSchemaCallValidator(
         val top = size - 1
         val schema = schemas[top] as UnionSchema
         if (index < 0 || index >= schema.types.size) {
-            throw mismatch(call, "a branch index of ${schema.fullNameForMessages} in [0, ${schema.types.size}), but got $index")
+            throw readValueMismatch(call, "a branch index of ${schema.fullNameForMessages} in [0, ${schema.types.size}), but got $index")
         }
         schemas[top] = schema.types[index]
     }
@@ -135,7 +140,7 @@ internal class WriterSchemaCallValidator(
         count: Long,
         call: String,
     ) {
-        if (count < 0) throw mismatch(call, "a non-negative item count, but got $count")
+        if (count < 0) throw readValueMismatch(call, "a non-negative item count, but got $count")
         val top = size - 1
         kinds[top] = if (schemas[top]!!.type === Type.ARRAY) ARRAY_ITEMS else MAP_ITEMS
         remaining[top] = count
@@ -173,7 +178,7 @@ internal class WriterSchemaCallValidator(
         skipped: Boolean,
         call: String,
     ) {
-        if (count < 0) throw mismatch(call, "a non-negative item count, but got $count")
+        if (count < 0) throw readValueMismatch(call, "a non-negative item count, but got $count")
         val top = size - 1
         if (count == 0L) {
             pop()
@@ -219,7 +224,7 @@ internal class WriterSchemaCallValidator(
         count: Long,
         call: String,
     ) {
-        if (count < 0) throw mismatch(call, "a non-negative item count, but got $count")
+        if (count < 0) throw readValueMismatch(call, "a non-negative item count, but got $count")
         val top = size - 1
         if (count == 0L) pop() else setBlock(top, count)
     }
@@ -230,7 +235,8 @@ internal class WriterSchemaCallValidator(
     fun checkDatumComplete() {
         normalize()
         if (size != 0) {
-            throw SerializationException("Incomplete datum: expected ${describeTop()} at ${path()}, but no more calls were made")
+            val path = rawPath()
+            throw AvroValidationException("Incomplete datum: expected ${describeTop()} at ${quoted(path)}, but no more calls were made", path)
         }
     }
 
@@ -349,10 +355,34 @@ internal class WriterSchemaCallValidator(
     private fun mismatch(
         call: String,
         expected: String = describeTop(),
-    ): SerializationException {
-        val where = if (size == 0) "after the end of the datum" else "at ${path()}"
-        return SerializationException("Invalid call $call $where for the writer schema: expected $expected")
+    ): AvroValidationException {
+        val path = if (size == 0) "" else rawPath()
+        return AvroValidationException(mismatchMessage(call, path, expected), path)
     }
+
+    /**
+     * A value written or read that the writer schema rules out: for the encoder, a serializer's mistake like any other
+     * [mismatch]; for the decoder, a value read from the input, so the input is malformed.
+     */
+    private fun readValueMismatch(
+        call: String,
+        expected: String,
+    ): AvroSerializationException {
+        if (!decoding) return mismatch(call, expected)
+        val path = if (size == 0) "" else rawPath()
+        return AvroMalformedDataException(mismatchMessage(call, path, expected))
+    }
+
+    private fun mismatchMessage(
+        call: String,
+        path: String,
+        expected: String,
+    ): String {
+        val where = if (size == 0) "after the end of the datum" else "at ${quoted(path)}"
+        return "Invalid call $call $where for the writer schema: expected $expected"
+    }
+
+    private fun quoted(path: String) = if (path.isEmpty()) "the root" else "'$path'"
 
     /** What the top of the stack expects, for messages. */
     private fun describeTop(): String {
@@ -410,7 +440,7 @@ internal class WriterSchemaCallValidator(
      * Where the top of the stack is in the datum, like `inner.list[2].name`: the records and collections in progress,
      * from the root, then the field name of the expected value.
      */
-    private fun path(): String {
+    private fun rawPath(): String {
         val path = StringBuilder()
         val top = size - 1
         for (i in 0..top) {
@@ -425,7 +455,7 @@ internal class WriterSchemaCallValidator(
                 }
             }
         }
-        return if (path.isEmpty()) "the root" else "'$path'"
+        return path.toString()
     }
 
     private fun StringBuilder.appendSegment(label: String?) {

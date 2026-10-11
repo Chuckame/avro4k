@@ -6,7 +6,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.Type
 /**
  * An encoder that checks every call against the writer schema of one datum before forwarding it to [encoder], for
  * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization]: see [WriterSchemaCallValidator] for what is
- * checked. A call that does not match throws a [kotlinx.serialization.SerializationException] and is not forwarded.
+ * checked. A call that does not match throws a [com.github.avrokotlin.avro4k.AvroValidationException] and is not forwarded.
  *
  * Created for each encoded value; call [checkDatumComplete] once the value is encoded.
  */

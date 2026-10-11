@@ -3,7 +3,6 @@ package com.github.avrokotlin.avro4k
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.Decoder
 
 /**
@@ -34,7 +33,7 @@ import kotlinx.serialization.encoding.Decoder
  * when (schema.type) {
  *     AvroSchema.Type.LONG -> Instant.ofEpochMilli(decoder.decodeLong())
  *     AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
- *     else -> throw SerializationException("Unsupported writer schema $schema")
+ *     else -> throw AvroSchemaMismatchException("Unsupported writer schema $schema")
  * }
  * ```
  *
@@ -83,7 +82,7 @@ internal fun AvroDecoder.unsupportedWriterTypeError(
     val fallbacksStr = if (fallbackTypes.isNotEmpty()) ", and also not matching to any compatible type (one of ${fallbackTypes.joinToString()})." else ""
     // the binary decoder's own schema: building the message must not resolve a union by reading its index
     val schema = (this as? AbstractAvroDirectDecoder)?.currentAvroSchema ?: currentWriterSchema
-    return SerializationException(
+    return AvroSchemaMismatchException(
         "Unsupported schema named '${schema.fullNameForMessages}' for decoded type of $mainType$fallbacksStr. Actual schema: ${schema.toSchemaJsonString()}"
     )
 }

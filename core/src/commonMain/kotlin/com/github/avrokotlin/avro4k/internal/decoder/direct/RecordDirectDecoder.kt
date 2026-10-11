@@ -2,6 +2,8 @@ package com.github.avrokotlin.avro4k.internal.decoder.direct
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
@@ -9,7 +11,6 @@ import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.schema.skip
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonNull
@@ -42,7 +43,7 @@ internal class RecordDirectDecoder(
                 is DecodingStep.SkipWriterField -> binaryDecoder.skip(field.schema)
 
                 is DecodingStep.MissingElementValueFailure -> {
-                    throw SerializationException(
+                    throw AvroSchemaMismatchException(
                         "Reader field '${descriptor.nonNullSerialName}.${descriptor.getElementName(
                             field.elementIndex
                         )}' has no corresponding field in writer schema ${writerRecordSchema.toSchemaJsonString()}"
@@ -80,7 +81,7 @@ internal class RecordDirectDecoder(
             is DecodingStep.GetDefaultValue -> {
                 if (element.defaultValue !is JsonNull) {
                     // Should not occur as decodeNotNullMark() should be called first
-                    throw SerializationException("Trying to decode a null value for a missing field while the default value is not null")
+                    throw AvroSerializationException("Trying to decode a null value for a missing field while the default value is not null")
                 }
                 null
             }

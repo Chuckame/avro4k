@@ -1,6 +1,6 @@
 package com.github.avrokotlin.avro4k.internal
 
-import kotlinx.serialization.SerializationException
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 
 internal fun Int.toByteExact(): Byte {
     if (this.toByte().toInt() != this) {
@@ -45,5 +45,5 @@ internal fun Double.toFloatExact(): Float {
 }
 
 internal inline fun <reified T> Any.invalidTypeError(): T {
-    throw SerializationException("Value $this is not a valid ${T::class.simpleName}")
+    throw AvroSchemaMismatchException("Value $this is not a valid ${T::class.simpleName}")
 }

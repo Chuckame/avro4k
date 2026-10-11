@@ -6,8 +6,9 @@ import com.github.avrokotlin.avro4k.AvroSchema.Type
 /**
  * A decoder that checks every call against the writer schema of one datum before forwarding it to [decoder], for
  * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization]: see [WriterSchemaCallValidator] for what is
- * checked. A call that does not match throws a [kotlinx.serialization.SerializationException] and is not forwarded;
- * a read enum or union index, or a block's item count, is checked once read.
+ * checked. A call that does not match throws a [com.github.avrokotlin.avro4k.AvroValidationException] and is not
+ * forwarded; a read enum or union index, or a block's item count, is checked once read, and throws a
+ * [com.github.avrokotlin.avro4k.AvroMalformedDataException] when the writer schema rules it out.
  *
  * Collections follow the block protocol of [AvroBinaryDecoder]: `readArrayStart()` then `arrayNext()` once each
  * block's items are read, until a block of 0 items; or, to skip one, `skipArray()` until it returns 0, the items of each

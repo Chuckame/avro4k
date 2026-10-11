@@ -39,8 +39,10 @@ public data class AvroConfiguration(
      * When enabled, on every platform, each low-level write or read of a value is checked against the writer schema
      * before it is done: the record fields in order, the union branch index and then the chosen branch, the item count
      * of each array and map, the enum index and the fixed size, and the exact primitive type (no promotion). The value
-     * must also be complete once encoded or decoded. A mismatch throws a [kotlinx.serialization.SerializationException]
-     * naming what was expected and where in the value. Slower, so not for production use.
+     * must also be complete once encoded or decoded. A mismatch throws an [AvroValidationException] naming what was
+     * expected and where in the value (its [AvroValidationException.path]); when decoding, an enum index, union index
+     * or item count read from the input that the writer schema rules out throws an [AvroMalformedDataException]
+     * instead. Slower, so not for production use.
      */
     @ExperimentalAvro4kApi
     val validateSerialization: Boolean = false,

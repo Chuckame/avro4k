@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.decoder
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
@@ -10,7 +11,6 @@ import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractDecoder
 import kotlinx.serialization.encoding.Decoder
@@ -36,7 +36,7 @@ public abstract class AbstractPolymorphicDecoder(
 
     final override fun decodeString(): String {
         return tryFindSerialName()?.also { chosenSchema = it.second }?.first
-            ?: throw SerializationException(
+            ?: throw AvroSchemaMismatchException(
                 "Unknown schema name '${schema.fullNameForMessages}' for polymorphic type ${descriptor.serialName}. Full schema: ${schema.toSchemaJsonString()}"
             )
     }

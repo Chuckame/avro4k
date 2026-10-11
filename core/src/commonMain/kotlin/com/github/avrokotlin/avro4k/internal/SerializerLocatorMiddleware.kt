@@ -5,6 +5,7 @@ package com.github.avrokotlin.avro4k.internal
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
 import com.github.avrokotlin.avro4k.serializer.AvroDurationSerializer
 import com.github.avrokotlin.avro4k.serializer.AvroSerializer
@@ -17,7 +18,6 @@ import com.github.avrokotlin.avro4k.serializer.fixed
 import com.github.avrokotlin.avro4k.serializer.stringable
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.builtins.ByteArraySerializer
 import kotlinx.serialization.builtins.serializer
@@ -142,14 +142,14 @@ private object KotlinDurationSerializer : AvroSerializer<Duration>("kotlin.time.
             return Duration.INFINITE
         }
         if (months != 0u) {
-            throw SerializationException("java.time.Duration cannot contains months")
+            throw AvroSchemaMismatchException("java.time.Duration cannot contains months")
         }
         return days.toLong().days + millis.toLong().milliseconds
     }
 
     private fun Duration.toAvroDuration(): AvroDuration {
         if (isNegative()) {
-            throw SerializationException("kotlin.time.Duration cannot be converted to com.github.avrokotlin.avro4k.serializer.AvroDuration as it cannot be negative")
+            throw AvroSchemaMismatchException("kotlin.time.Duration cannot be converted to com.github.avrokotlin.avro4k.serializer.AvroDuration as it cannot be negative")
         }
         if (isInfinite()) {
             return AvroDuration(

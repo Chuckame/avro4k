@@ -4,6 +4,7 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDefault
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
 import com.github.avrokotlin.avro4k.internal.schema.asSchemaList
@@ -149,7 +150,7 @@ internal class RecordResolver(
         classDescriptor: SerialDescriptor,
         writerSchema: AvroSchema,
     ): SerializationWorkflow {
-        val writerRecordSchema = writerSchema as? RecordSchema ?: throw SerializationException("Expected a record writer schema, but had $writerSchema")
+        val writerRecordSchema = writerSchema as? RecordSchema ?: throw AvroSchemaMismatchException("Expected a record writer schema, but had $writerSchema")
         return SerializationWorkflow(
             computeDecodingSteps(classDescriptor, writerRecordSchema),
             computeEncodingWorkflow(classDescriptor, writerRecordSchema),
@@ -183,7 +184,7 @@ internal class RecordResolver(
             if (writerFieldIndex < 0) continue
 
             if (writerFieldIndexToElementIndex[writerFieldIndex] >= 0) {
-                throw IllegalStateException(
+                throw AvroSchemaMismatchException(
                     "The descriptor $classDescriptor has multiple elements matching to the same writer field '${writerFields[writerFieldIndex].name}'. " +
                         "This is not allowed as it would lead to ambiguous decoding."
                 )
@@ -287,7 +288,7 @@ internal class RecordResolver(
             if (writerFieldIndex < 0) continue
 
             if (visitedWriterFields[writerFieldIndex]) {
-                throw IllegalStateException(
+                throw AvroSchemaMismatchException(
                     "The descriptor $classDescriptor has multiple elements matching to the same writer field '${writerSchema.fields[writerFieldIndex].name}'. " +
                         "This is not allowed as it would lead to ambiguous encoding."
                 )

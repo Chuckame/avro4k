@@ -39,12 +39,13 @@ import kotlinx.serialization.json.longOrNull
  *
  * @param knownNamedTypes the named types already known, by full name, that can be referenced by name from [json].
  * The named types defined in [json] are added to it, so it can be reused to parse schemas referencing each other.
+ * @throws AvroSchemaParseException if [json] is not valid json, or not a valid Avro schema.
  */
 public fun AvroSchema.Companion.fromJsonString(
     json: String,
     knownNamedTypes: MutableMap<String, AvroSchema> = mutableMapOf(),
 ): AvroSchema {
-    return fromJsonElement(Json.parseToJsonElement(json), null, knownNamedTypes)
+    return parsingSchema { fromJsonElement(Json.parseToJsonElement(json), null, knownNamedTypes) }
 }
 
 /**
@@ -52,12 +53,28 @@ public fun AvroSchema.Companion.fromJsonString(
  *
  * @param knownNamedTypes the named types already known, by full name, that can be referenced by name from [element].
  * The named types defined in [element] are added to it, so it can be reused to parse schemas referencing each other.
+ * @throws AvroSchemaParseException if [element] is not a valid Avro schema.
  */
 public fun AvroSchema.Companion.fromJsonElement(
     element: JsonElement,
     knownNamedTypes: MutableMap<String, AvroSchema> = mutableMapOf(),
 ): AvroSchema {
-    return fromJsonElement(element, null, knownNamedTypes)
+    return parsingSchema { fromJsonElement(element, null, knownNamedTypes) }
+}
+
+/**
+ * Reports every failure of a schema parsing as an [AvroSchemaParseException], the original as its cause: the invalid
+ * json ([kotlinx.serialization.SerializationException]), the json accessors (`jsonObject`, `int`, …) and the model's
+ * own checks all throw an [IllegalArgumentException].
+ */
+private inline fun parsingSchema(parse: () -> AvroSchema): AvroSchema {
+    try {
+        return parse()
+    } catch (e: AvroSchemaParseException) {
+        throw e
+    } catch (e: IllegalArgumentException) {
+        throw AvroSchemaParseException(e.message, e)
+    }
 }
 
 private fun fromJsonElement(
@@ -85,13 +102,13 @@ private fun fromJsonElement(
 
                 "string" -> StringSchema()
 
-                null -> throw IllegalArgumentException("type cannot be null json literal")
+                null -> throw AvroSchemaParseException("type cannot be null json literal")
 
                 else ->
                     // Like Apache Avro, a short name is first resolved in the current namespace, then in the null namespace
                     knownNamedTypes[Name(type, currentSpace).fullName]
                         ?: knownNamedTypes[type]
-                        ?: throw IllegalArgumentException("Unknown named type: $type")
+                        ?: throw AvroSchemaParseException("Unknown named type: $type")
             }
         }
 
@@ -101,7 +118,7 @@ private fun fromJsonElement(
                 element.map {
                     val type = fromJsonElement(it, currentSpace, knownNamedTypes)
                     if (type !is ResolvedSchema) {
-                        throw IllegalArgumentException("Unions cannot contain nested unions")
+                        throw AvroSchemaParseException("Unions cannot contain nested unions")
                     }
                     type
                 }
@@ -190,7 +207,7 @@ private fun fromJsonElement(
                     schema
                 }
 
-                else -> throw IllegalArgumentException("Unknown schema type: $type")
+                else -> throw AvroSchemaParseException("Unknown schema type: $type")
             }
         }
     }
@@ -201,7 +218,7 @@ private fun MutableMap<String, JsonElement>.removeAliases(
 ): Set<Name>? = remove("aliases")?.jsonArray?.map { Name(it.stringPrimitive, namespace) }?.toSet()
 
 private fun <K : Any, V : Any> MutableMap<K, V>.removeMandatory(key: K): V {
-    return this.remove(key) ?: throw IllegalArgumentException("Missing '$key' key")
+    return this.remove(key) ?: throw AvroSchemaParseException("Missing '$key' key")
 }
 
 private fun MutableMap<String, JsonElement>.removeName(defaultSpace: String?): Name {
@@ -212,7 +229,7 @@ private fun MutableMap<String, JsonElement>.removeName(defaultSpace: String?): N
 
 private val JsonElement.stringPrimitive: String
     get() {
-        if (this !is JsonPrimitive || !isString) throw IllegalArgumentException("Not a string: $this")
+        if (this !is JsonPrimitive || !isString) throw AvroSchemaParseException("Not a string: $this")
         return content
     }
 

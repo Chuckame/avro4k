@@ -2,7 +2,7 @@
 
 package com.github.avrokotlin.avro4k.serializer
 
-import kotlinx.serialization.SerializationException
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import kotlin.math.abs
 import kotlin.time.Instant
 
@@ -36,7 +36,7 @@ private fun Instant.toEpochUnits(
         val units = multiplyExact(epochSeconds, unitsPerSecond)
         return addExact(units, nanosecondsOfSecond / nanosPerUnit)
     } catch (e: ArithmeticException) {
-        throw SerializationException("$this is out of range for Avro $logicalType", e)
+        throw AvroSchemaMismatchException("$this is out of range for Avro $logicalType", e)
     }
 }
 
