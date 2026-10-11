@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.schema
 
+import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
 import com.github.avrokotlin.avro4k.AvroSchema.BooleanSchema
@@ -319,7 +320,8 @@ class AvroSchemaSkipTest {
     fun `a union branch index out of range fails`() {
         val buffer = Buffer()
         KotlinxIoEncoder(buffer).writeIndex(2)
-        shouldThrow<IndexOutOfBoundsException> { KotlinxIoDecoder(buffer).skip(UnionSchema(NullSchema(), IntSchema())) }
+        shouldThrow<AvroMalformedDataException> { KotlinxIoDecoder(buffer).skip(UnionSchema(NullSchema(), IntSchema())) }
+            .message shouldBe "Malformed data: union index 2 out of range [0, 2) for union[null, int]"
     }
 
     private companion object {

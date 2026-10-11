@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
+import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import kotlinx.io.InternalIoApi
 import kotlinx.io.Source
 import kotlinx.io.UnsafeIoApi
@@ -9,7 +10,6 @@ import kotlinx.io.readFloatLe
 import kotlinx.io.readString
 import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlinx.io.unsafe.withData
-import kotlinx.serialization.SerializationException
 
 /**
  * Reads Avro binary from a kotlinx-io [Source].
@@ -119,7 +119,11 @@ internal class KotlinxIoDecoder(
     private fun doSkipItems(): Long {
         var result = readLong()
         while (result < 0L) {
-            source.skip(readLong())
+            val blockBytes = readLong()
+            if (blockBytes < 0L) {
+                throw AvroMalformedDataException("Malformed data: negative byte size $blockBytes for an array or map block")
+            }
+            source.skip(blockBytes)
             result = readLong()
         }
         return result
@@ -155,7 +159,9 @@ private fun Source.readVarInt(): Int {
 
 @OptIn(InternalIoApi::class, UnsafeIoApi::class)
 private fun Source.readVarLong(): Long {
-    request(1.toLong())
+    // Ensures at least one byte is available, as readVarInt does: at the end of the input it throws an EOFException,
+    // where `request` would return false and leave the segment loop below with nothing to read
+    require(1.toLong())
     // We do not really iterate, we just want to peek the first segment
     UnsafeBufferOperations.forEachSegment(buffer) { ctx, segment ->
         if (segment.size < MAX_VARINT_LONG_BYTES) {
@@ -187,7 +193,7 @@ private inline fun decodeVarInt(readByte: () -> Byte): Int {
                 if (b < 0) {
                     b = readByte().toInt()
                     if (b < 0) {
-                        throw SerializationException("Invalid varint encoding: more bytes than expected")
+                        throw AvroMalformedDataException("Invalid varint encoding: more bytes than expected")
                     }
                     varint += (b shl 28)
                 }
@@ -241,7 +247,7 @@ private inline fun decodeVarLong2(lo: Long, readByte: () -> Byte): Long {
                     if (b < 0) {
                         b = readByte().toInt()
                         if (b < 0) {
-                            throw SerializationException("Invalid varlong encoding: more bytes than expected")
+                            throw AvroMalformedDataException("Invalid varlong encoding: more bytes than expected")
                         }
                         i = i or (b shl 7)
                     }

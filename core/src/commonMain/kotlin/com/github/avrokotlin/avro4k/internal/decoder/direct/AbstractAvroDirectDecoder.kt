@@ -3,10 +3,16 @@ package com.github.avrokotlin.avro4k.internal.decoder.direct
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
+import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
+import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
+import com.github.avrokotlin.avro4k.internal.collectionCountError
+import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
+import com.github.avrokotlin.avro4k.internal.enumIndexOutOfRangeError
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.internal.schema.enumSymbols
 import com.github.avrokotlin.avro4k.internal.schema.fixedSize
@@ -16,11 +22,11 @@ import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toFloatExact
 import com.github.avrokotlin.avro4k.internal.toIntExact
 import com.github.avrokotlin.avro4k.internal.toShortExact
+import com.github.avrokotlin.avro4k.internal.unionIndexOutOfRangeError
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PolymorphicKind
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.StructureKind
@@ -47,7 +53,11 @@ internal abstract class AbstractAvroDirectDecoder(
             return currentAvroSchema as ResolvedSchema
         }
 
+    /** -1 until the first block of the collection being decoded is read, then the item count of its last block read. */
     private var decodedCollectionSize = -1
+
+    /** The items of the collection being decoded, summed over its blocks read so far. */
+    private var decodedCollectionTotal = 0
 
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
@@ -86,28 +96,22 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (descriptor.kind) {
             StructureKind.LIST ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.ARRAY ->
-                        ArrayBlockDirectDecoder(
-                            currentAvroSchema,
-                            decodeFirstBlock = decodedCollectionSize == -1,
-                            { decodedCollectionSize = it },
-                            avro,
-                            binaryDecoder
-                        )
+                    AvroSchema.Type.ARRAY -> {
+                        val firstBlock = decodedCollectionSize == -1
+                        val blockSize = checkBlockSize(if (firstBlock) binaryDecoder.readArrayStart() else binaryDecoder.arrayNext(), firstBlock)
+                        ArrayBlockDirectDecoder(currentAvroSchema, blockSize, avro, binaryDecoder)
+                    }
 
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
 
             StructureKind.MAP ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.MAP ->
-                        MapBlockDirectDecoder(
-                            currentAvroSchema,
-                            decodeFirstBlock = decodedCollectionSize == -1,
-                            { decodedCollectionSize = it },
-                            avro,
-                            binaryDecoder
-                        )
+                    AvroSchema.Type.MAP -> {
+                        val firstBlock = decodedCollectionSize == -1
+                        val blockSize = checkBlockSize(if (firstBlock) binaryDecoder.readMapStart() else binaryDecoder.mapNext(), firstBlock)
+                        MapBlockDirectDecoder(currentAvroSchema, blockSize, avro, binaryDecoder)
+                    }
 
                     AvroSchema.Type.RECORD ->
                         RecordAsMapDirectDecoder(
@@ -127,14 +131,45 @@ internal abstract class AbstractAvroDirectDecoder(
 
             is PolymorphicKind -> PolymorphicDecoder(avro, descriptor, currentAvroSchema, binaryDecoder)
 
-            else -> throw SerializationException("Unsupported descriptor for structure decoding: $descriptor")
+            else -> throw AvroSerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
+    }
+
+    /**
+     * The item count of a collection block read from the input, checked before anything is allocated for it: the
+     * collection's total count, summed over its blocks, must stay within [MAX_BINARY_LENGTH] (the bound of strings and
+     * bytes), so that a negative, overflowing or larger-than-[Int] count fails as malformed data instead of being
+     * truncated to an [Int]. How much is allocated for a large block is bounded by [MAX_PRESIZED_BLOCK_ITEMS].
+     */
+    private fun checkBlockSize(
+        count: Long,
+        firstBlock: Boolean,
+    ): Int {
+        val previousTotal = if (firstBlock) 0 else decodedCollectionTotal
+        if (count < 0L || count > MAX_BINARY_LENGTH - previousTotal) {
+            throw collectionCountError(count, previousTotal)
+        }
+        val blockSize = count.toInt()
+        decodedCollectionTotal = previousTotal + blockSize
+        decodedCollectionSize = blockSize
+        return blockSize
     }
 
     private fun decodeAndResolveUnion() {
         if (currentAvroSchema.type == AvroSchema.Type.UNION) {
-            currentAvroSchema = currentAvroSchema.types[binaryDecoder.readIndex()]
+            val branches = currentAvroSchema.types
+            val index = binaryDecoder.readIndex()
+            if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, currentAvroSchema)
+            currentAvroSchema = branches[index]
         }
+    }
+
+    /** The symbol of the enum index read from the input, checked against the writer schema's symbols. */
+    private fun readEnumSymbol(): String {
+        val symbols = currentAvroSchema.enumSymbols
+        val index = binaryDecoder.readEnum()
+        if (index < 0 || index >= symbols.size) throw enumIndexOutOfRangeError(index, currentAvroSchema)
+        return symbols[index]
     }
 
     override fun decodeNotNullMark(): Boolean {
@@ -154,7 +189,7 @@ internal abstract class AbstractAvroDirectDecoder(
     override fun decodeBoolean(): Boolean {
         return when (currentAvroSchema.type) {
             AvroSchema.Type.BOOLEAN -> binaryDecoder.readBoolean()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().toBooleanStrict()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Boolean") { it.toBooleanStrict() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.BOOLEAN, AvroSchema.Type.STRING)
         }
     }
@@ -171,7 +206,7 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (currentAvroSchema.type) {
             AvroSchema.Type.INT -> binaryDecoder.readInt()
             AvroSchema.Type.LONG -> binaryDecoder.readLong().toIntExact()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().toInt()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Int") { it.toInt() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
         }
     }
@@ -180,7 +215,7 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (currentAvroSchema.type) {
             AvroSchema.Type.LONG -> binaryDecoder.readLong()
             AvroSchema.Type.INT -> binaryDecoder.readInt().toLong()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().toLong()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Long") { it.toLong() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
@@ -189,7 +224,7 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (currentAvroSchema.type) {
             AvroSchema.Type.FLOAT -> binaryDecoder.readFloat()
             AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble().toFloatExact()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().toFloat()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Float") { it.toFloat() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.FLOAT, AvroSchema.Type.DOUBLE, AvroSchema.Type.STRING)
         }
     }
@@ -198,7 +233,7 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (currentAvroSchema.type) {
             AvroSchema.Type.FLOAT -> binaryDecoder.readFloat().toDouble()
             AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().toDouble()
+            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Double") { it.toDouble() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.DOUBLE, AvroSchema.Type.FLOAT, AvroSchema.Type.STRING)
         }
     }
@@ -206,7 +241,7 @@ internal abstract class AbstractAvroDirectDecoder(
     override fun decodeChar(): Char {
         return when (currentAvroSchema.type) {
             AvroSchema.Type.INT -> binaryDecoder.readInt().toChar()
-            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes().decodeToString().single()
+            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes().decodeToString().convertDecoded(AvroSchema.Type.STRING, "Char") { it.single() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
@@ -229,7 +264,7 @@ internal abstract class AbstractAvroDirectDecoder(
 
             AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble().toString()
 
-            AvroSchema.Type.ENUM -> currentAvroSchema.enumSymbols[binaryDecoder.readEnum()]
+            AvroSchema.Type.ENUM -> readEnumSymbol()
 
             else -> throw unsupportedWriterTypeError(
                 AvroSchema.Type.STRING,
@@ -249,8 +284,7 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (currentAvroSchema.type) {
             AvroSchema.Type.ENUM -> {
                 if (currentAvroSchema.isFullNameOrAliasMatch(enumDescriptor)) {
-                    val enumSymbol = currentAvroSchema.enumSymbols[binaryDecoder.readEnum()]
-                    enumDescriptor.getEnumIndex(enumSymbol)
+                    enumDescriptor.getEnumIndex(readEnumSymbol())
                 } else {
                     throw unsupportedWriterTypeError(AvroSchema.Type.ENUM, AvroSchema.Type.STRING)
                 }
@@ -271,7 +305,9 @@ internal abstract class AbstractAvroDirectDecoder(
             idx
         } else {
             avro.enumResolver.getDefaultValueIndex(this)
-                ?: throw SerializationException("Unknown enum symbol name '$enumName' for Enum '${this.serialName}' for writer schema ${currentAvroSchema.toSchemaJsonString()}")
+                ?: throw AvroSchemaMismatchException(
+                    "Unknown enum symbol name '$enumName' for Enum '${this.serialName}' for writer schema ${currentAvroSchema.toSchemaJsonString()}"
+                )
         }
     }
 
@@ -304,7 +340,10 @@ private class PolymorphicDecoder(
         namesAndAliasesToSerialName: Map<String, String>,
         schema: AvroSchema,
     ): Pair<String, AvroSchema>? {
-        return tryFindSerialName(namesAndAliasesToSerialName, schema.types[binaryDecoder.readIndex()])
+        val branches = schema.types
+        val index = binaryDecoder.readIndex()
+        if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, schema)
+        return tryFindSerialName(namesAndAliasesToSerialName, branches[index])
     }
 
     override fun newDecoder(chosenSchema: AvroSchema): Decoder {

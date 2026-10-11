@@ -11,6 +11,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.Type
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
+import com.github.avrokotlin.avro4k.internal.unionIndexOutOfRangeError
 import com.github.avrokotlin.avro4k.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -422,7 +423,14 @@ internal fun AvroSchema.isNonNullScalarType(): Boolean =
  * Allocation-free: indexed loops over the record fields, no iterator.
  */
 internal fun AvroBinaryDecoder.skip(schema: AvroSchema) {
-    val resolved = if (schema is UnionSchema) schema.types[readIndex()] else schema
+    val resolved =
+        if (schema is UnionSchema) {
+            val index = readIndex()
+            if (index < 0 || index >= schema.types.size) throw unionIndexOutOfRangeError(index, schema)
+            schema.types[index]
+        } else {
+            schema
+        }
     when (resolved.type) {
         Type.BOOLEAN -> readBoolean()
 

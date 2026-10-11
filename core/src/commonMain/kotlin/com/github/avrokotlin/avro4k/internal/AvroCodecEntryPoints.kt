@@ -9,6 +9,7 @@ import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AvroValueDirectDecoder
 import com.github.avrokotlin.avro4k.internal.encoder.direct.AvroValueDirectEncoder
+import kotlinx.io.EOFException
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 
@@ -38,6 +39,10 @@ public fun <T> Avro.encodeWithValidation(
 /**
  * Decodes a value with [binaryDecoder], every call checked against [writerSchema] when
  * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled, as [encodeWithValidation] does.
+ *
+ * The single entry point of every decode, so this is where the end of the input in the middle of a value becomes an
+ * [com.github.avrokotlin.avro4k.AvroMalformedDataException], whatever the input: one `try` per decoded value, nothing per
+ * read. On the JVM, an Apache decoder's `java.io.EOFException` is the same class.
  */
 @InternalAvro4kApi
 public fun <T> Avro.decodeWithValidation(
@@ -45,13 +50,17 @@ public fun <T> Avro.decodeWithValidation(
     deserializer: DeserializationStrategy<T>,
     binaryDecoder: AvroBinaryDecoder,
 ): T {
-    if (configuration.validateSerialization) {
-        val validatingDecoder = ValidatingAvroBinaryDecoder(binaryDecoder, writerSchema)
-        val value = decodeWithBinaryDecoder(writerSchema, deserializer, validatingDecoder)
-        validatingDecoder.checkDatumComplete()
-        return value
+    try {
+        if (configuration.validateSerialization) {
+            val validatingDecoder = ValidatingAvroBinaryDecoder(binaryDecoder, writerSchema)
+            val value = decodeWithBinaryDecoder(writerSchema, deserializer, validatingDecoder)
+            validatingDecoder.checkDatumComplete()
+            return value
+        }
+        return decodeWithBinaryDecoder(writerSchema, deserializer, binaryDecoder)
+    } catch (e: EOFException) {
+        throw endOfInputError(e)
     }
-    return decodeWithBinaryDecoder(writerSchema, deserializer, binaryDecoder)
 }
 
 internal fun <T> Avro.encodeWithBinaryEncoder(

@@ -164,7 +164,7 @@ public sealed class Avro(
         val source = Buffer(bytes)
         val result = decodeFromSource(writerSchema, deserializer, source)
         if (!source.exhausted()) {
-            throw SerializationException("Not all bytes were consumed during deserialization")
+            throw AvroMalformedDataException("Not all bytes were consumed during deserialization")
         }
         return result
     }

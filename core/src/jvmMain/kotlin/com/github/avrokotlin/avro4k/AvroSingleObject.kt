@@ -2,15 +2,16 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.Buffer
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
+import com.github.avrokotlin.avro4k.internal.endOfInputError
 import com.github.avrokotlin.avro4k.internal.parsingFingerprintCrc64AvroBytes
 import kotlinx.io.Buffer
+import kotlinx.io.EOFException
 import kotlinx.io.Sink
 import kotlinx.io.Source
 import kotlinx.io.readByteArray
 import kotlinx.io.readLongLe
 import kotlinx.serialization.BinaryFormat
 import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
@@ -71,11 +72,20 @@ public class AvroSingleObject(
         deserializer: DeserializationStrategy<T>,
         source: Source,
     ): T {
-        check(source.readByte() == MAGIC_BYTE) { "Not a valid single-object avro format, bad magic byte" }
-        check(source.readByte() == FORMAT_VERSION) { "Not a valid single-object avro format, bad version byte" }
-        val fingerprint = source.readLongLe()
+        val fingerprint =
+            try {
+                if (source.readByte() != MAGIC_BYTE) {
+                    throw AvroMalformedDataException("Not a valid single-object avro format, bad magic byte")
+                }
+                if (source.readByte() != FORMAT_VERSION) {
+                    throw AvroMalformedDataException("Not a valid single-object avro format, bad version byte")
+                }
+                source.readLongLe()
+            } catch (e: EOFException) {
+                throw endOfInputError(e)
+            }
         val writerSchema =
-            schemaRegistry(fingerprint) ?: throw SerializationException("schema not found for the given object's schema fingerprint 0x${fingerprint.toString(16)}")
+            schemaRegistry(fingerprint) ?: throw AvroSerializationException("schema not found for the given object's schema fingerprint 0x${fingerprint.toString(16)}")
 
         return avro.decodeFromSource(writerSchema, deserializer, source)
     }

@@ -1,6 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
-import kotlinx.serialization.SerializationException
+import com.github.avrokotlin.avro4k.AvroMalformedDataException
 
 /** The largest zig-zag varint encoding of an `int`: 32 bits, 7 per byte. */
 internal const val MAX_VARINT_INT_BYTES = 5
@@ -110,10 +110,10 @@ internal fun encodeZigZagLong(
  */
 internal fun checkBinaryLength(length: Long): Int {
     if (length < 0L) {
-        throw SerializationException("Malformed data: negative length $length")
+        throw AvroMalformedDataException("Malformed data: negative length $length")
     }
     if (length > MAX_BINARY_LENGTH) {
-        throw SerializationException("Cannot read $length bytes: the maximum length is $MAX_BINARY_LENGTH")
+        throw AvroMalformedDataException("Cannot read $length bytes: the maximum length is $MAX_BINARY_LENGTH")
     }
     return length.toInt()
 }

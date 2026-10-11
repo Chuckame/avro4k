@@ -8,6 +8,7 @@ import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
+import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.schema.fixedSize
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
@@ -82,7 +83,7 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>("kotlin.uuid.Uuid") {
     override fun deserializeAvro(decoder: AvroDecoder): Uuid {
         val schema = decoder.currentWriterSchema
         return when {
-            schema.type == AvroSchema.Type.STRING -> Uuid.parse(decoder.decodeString())
+            schema.type == AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "Uuid") { Uuid.parse(it) }
             schema.type == AvroSchema.Type.FIXED && schema.fixedSize == 16 -> Uuid.fromByteArray(decoder.decodeBytes())
             else -> throw decoder.UnexpectedDecodeSchemaError("Uuid", AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
         }
@@ -160,7 +161,7 @@ public object KotlinInstantSerializer : AvroSerializer<Instant>("kotlin.time.Ins
                     else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
                 }
 
-            AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
+            AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "Instant") { Instant.parse(it) }
 
             else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
         }

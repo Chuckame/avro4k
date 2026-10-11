@@ -3,13 +3,14 @@ package com.github.avrokotlin.avro4k.serializer
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
+import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
 import com.github.avrokotlin.avro4k.logicalTypeMismatchError
 import com.github.avrokotlin.avro4k.trySelectTypeNameFromUnion
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
@@ -76,17 +77,17 @@ public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.q
         return when (schema.type) {
             AvroSchema.Type.INT ->
                 when (schema.knownLogicalTypeName) {
-                    LOGICAL_TYPE_NAME_DATE, null -> LocalDate.ofEpochDay(decoder.decodeInt().toLong())
+                    LOGICAL_TYPE_NAME_DATE, null -> decoder.decodeInt().convertDecoded(AvroSchema.Type.INT, "LocalDate") { LocalDate.ofEpochDay(it.toLong()) }
                     else -> throw decoder.localDateSchemaError()
                 }
 
             AvroSchema.Type.LONG ->
                 when (schema.knownLogicalTypeName) {
-                    null -> LocalDate.ofEpochDay(decoder.decodeLong())
+                    null -> decoder.decodeLong().convertDecoded(AvroSchema.Type.LONG, "LocalDate") { LocalDate.ofEpochDay(it) }
                     else -> throw decoder.localDateSchemaError()
                 }
 
-            AvroSchema.Type.STRING -> LocalDate.parse(decoder.decodeString())
+            AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "LocalDate") { LocalDate.parse(it) }
 
             else -> throw decoder.localDateSchemaError()
         }
@@ -156,18 +157,21 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
         return when (schema.type) {
             AvroSchema.Type.INT ->
                 when (schema.knownLogicalTypeName) {
-                    LOGICAL_TYPE_NAME_TIME_MILLIS, null -> LocalTime.ofNanoOfDay(decoder.decodeInt() * NANOS_PER_MILLISECOND)
+                    LOGICAL_TYPE_NAME_TIME_MILLIS, null -> decoder.decodeInt().convertDecoded(AvroSchema.Type.INT, "LocalTime") {
+                        LocalTime.ofNanoOfDay(it * NANOS_PER_MILLISECOND)
+                    }
+
                     else -> throw decoder.localTimeSchemaError()
                 }
 
             AvroSchema.Type.LONG ->
                 when (schema.knownLogicalTypeName) {
-                    null -> LocalTime.ofNanoOfDay(decoder.decodeLong() * NANOS_PER_MILLISECOND)
-                    LOGICAL_TYPE_NAME_TIME_MICROS -> LocalTime.ofNanoOfDay(decoder.decodeLong() * NANOS_PER_MICROSECOND)
+                    null -> decoder.decodeLong().convertDecoded(AvroSchema.Type.LONG, "LocalTime") { LocalTime.ofNanoOfDay(it * NANOS_PER_MILLISECOND) }
+                    LOGICAL_TYPE_NAME_TIME_MICROS -> decoder.decodeLong().convertDecoded(AvroSchema.Type.LONG, "LocalTime") { LocalTime.ofNanoOfDay(it * NANOS_PER_MICROSECOND) }
                     else -> throw decoder.localTimeSchemaError()
                 }
 
-            AvroSchema.Type.STRING -> LocalTime.parse(decoder.decodeString())
+            AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "LocalTime") { LocalTime.parse(it) }
 
             else -> throw decoder.localTimeSchemaError()
         }
@@ -225,12 +229,18 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
         return when (schema.type) {
             AvroSchema.Type.LONG ->
                 when (schema.knownLogicalTypeName) {
-                    LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> LocalDateTime.ofInstant(Instant.ofEpochMilli(decoder.decodeLong()), ZoneOffset.UTC)
-                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> LocalDateTime.ofInstant(Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS), ZoneOffset.UTC)
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> decoder.decodeLong().convertDecoded(AvroSchema.Type.LONG, "LocalDateTime") {
+                        LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
+                    }
+
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> decoder.decodeLong().convertDecoded(AvroSchema.Type.LONG, "LocalDateTime") {
+                        LocalDateTime.ofInstant(Instant.EPOCH.plus(it, ChronoUnit.MICROS), ZoneOffset.UTC)
+                    }
+
                     else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
                 }
 
-            AvroSchema.Type.STRING -> LocalDateTime.parse(decoder.decodeString())
+            AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "LocalDateTime") { LocalDateTime.parse(it) }
 
             else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
         }
@@ -286,11 +296,11 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
             AvroSchema.Type.LONG ->
                 when (schema.knownLogicalTypeName) {
                     LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> Instant.ofEpochMilli(decoder.decodeLong())
-                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS)
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> decoder.decodeLong().convertDecoded(AvroSchema.Type.LONG, "Instant") { Instant.EPOCH.plus(it, ChronoUnit.MICROS) }
                     else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
                 }
 
-            AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
+            AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "Instant") { Instant.parse(it) }
 
             else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
         }
@@ -345,12 +355,12 @@ public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.
         return when (schema.type) {
             AvroSchema.Type.LONG ->
                 when (schema.knownLogicalTypeName) {
-                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS, null -> Instant.EPOCH.plus(decoder.decodeLong(), ChronoUnit.MICROS)
+                    LOGICAL_TYPE_NAME_TIMESTAMP_MICROS, null -> decoder.decodeLong().convertDecoded(AvroSchema.Type.LONG, "Instant") { Instant.EPOCH.plus(it, ChronoUnit.MICROS) }
                     LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS -> Instant.ofEpochMilli(decoder.decodeLong())
                     else -> throw decoder.instantToMicroSchemaError()
                 }
 
-            AvroSchema.Type.STRING -> Instant.parse(decoder.decodeString())
+            AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "Instant") { Instant.parse(it) }
 
             else -> throw decoder.instantToMicroSchemaError()
         }
@@ -401,14 +411,14 @@ public object JavaDurationSerializer : AvroSerializer<Duration>(Duration::class.
 
     private fun AvroDuration.toJavaDuration(): Duration {
         if (months != 0u) {
-            throw SerializationException("java.time.Duration cannot contains months")
+            throw AvroSchemaMismatchException("java.time.Duration cannot contains months")
         }
         return Duration.ofMillis(days.toLong() * MILLIS_PER_DAY + millis.toLong())
     }
 
     private fun Duration.toAvroDuration(): AvroDuration {
         if (isNegative) {
-            throw SerializationException("${Duration::class.qualifiedName} cannot be converted to ${AvroDuration::class.qualifiedName} as it cannot be negative")
+            throw AvroSchemaMismatchException("${Duration::class.qualifiedName} cannot be converted to ${AvroDuration::class.qualifiedName} as it cannot be negative")
         }
         val millis = this.toMillis()
         return AvroDuration(
@@ -461,7 +471,7 @@ public object JavaPeriodSerializer : AvroSerializer<Period>(Period::class.qualif
 
         return Period.of(years, months, days).also {
             if (it.isNegative) {
-                throw SerializationException("java.time.Period overflow from $this")
+                throw AvroSchemaMismatchException("java.time.Period overflow from $this")
             }
         }
     }

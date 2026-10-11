@@ -4,13 +4,17 @@ import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
+import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.ResolvedSchema
-import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.Buffer
+import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoDecoder
 import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
+import com.github.avrokotlin.avro4k.internal.convertDecoded
+import com.github.avrokotlin.avro4k.internal.convertForEncoding
 import com.github.avrokotlin.avro4k.internal.schema.fixedSize
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
@@ -19,9 +23,9 @@ import com.github.avrokotlin.avro4k.trySelectLogicalTypeFromUnion
 import com.github.avrokotlin.avro4k.trySelectTypeNameFromUnion
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
 import kotlinx.io.Buffer
+import kotlinx.io.EOFException
 import kotlinx.io.readByteArray
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -60,7 +64,7 @@ public object URLSerializer : KSerializer<URL> {
         encoder.encodeString(value.toString())
     }
 
-    override fun deserialize(decoder: Decoder): URL = URL(decoder.decodeString())
+    override fun deserialize(decoder: Decoder): URL = decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "URL") { URL(it) }
 }
 
 /**
@@ -121,7 +125,7 @@ public object UUIDSerializer : AvroSerializer<UUID>(UUID::class.qualifiedName!!)
     override fun deserializeAvro(decoder: AvroDecoder): UUID {
         val schema = decoder.currentWriterSchema
         return when {
-            schema.type == AvroSchema.Type.STRING -> UUID.fromString(decoder.decodeString())
+            schema.type == AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "UUID") { UUID.fromString(it) }
             schema.type == AvroSchema.Type.FIXED && schema.fixedSize == 16 -> parseUuid(decoder.decodeBytes())
             else -> throw decoder.UnexpectedDecodeSchemaError("UUID", AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
         }
@@ -161,8 +165,8 @@ public object BigIntegerSerializer : AvroSerializer<BigInteger>(BigInteger::clas
             }
             when (currentWriterSchema.type) {
                 AvroSchema.Type.STRING -> encodeString(value.toString())
-                AvroSchema.Type.INT -> encodeInt(value.intValueExact())
-                AvroSchema.Type.LONG -> encodeLong(value.longValueExact())
+                AvroSchema.Type.INT -> encodeInt(value.convertForEncoding("BigInteger", AvroSchema.Type.INT) { it.intValueExact() })
+                AvroSchema.Type.LONG -> encodeLong(value.convertForEncoding("BigInteger", AvroSchema.Type.LONG) { it.longValueExact() })
                 AvroSchema.Type.FLOAT -> encodeFloat(value.toFloat())
                 AvroSchema.Type.DOUBLE -> encodeDouble(value.toDouble())
                 else -> throw unsupportedWriterTypeError(AvroSchema.Type.STRING, AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.FLOAT, AvroSchema.Type.DOUBLE)
@@ -179,15 +183,15 @@ public object BigIntegerSerializer : AvroSerializer<BigInteger>(BigInteger::clas
 
     override fun deserializeAvro(decoder: AvroDecoder): BigInteger {
         return when (decoder.currentWriterSchema.type) {
-            AvroSchema.Type.STRING -> decoder.decodeString().toBigInteger()
+            AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "BigInteger") { it.toBigInteger() }
 
             AvroSchema.Type.INT -> decoder.decodeInt().toBigInteger()
 
             AvroSchema.Type.LONG -> decoder.decodeLong().toBigInteger()
 
-            AvroSchema.Type.FLOAT -> decoder.decodeFloat().toBigDecimal().toBigIntegerExact()
+            AvroSchema.Type.FLOAT -> decoder.decodeFloat().convertDecoded(AvroSchema.Type.FLOAT, "BigInteger") { it.toBigDecimal().toBigIntegerExact() }
 
-            AvroSchema.Type.DOUBLE -> decoder.decodeDouble().toBigDecimal().toBigIntegerExact()
+            AvroSchema.Type.DOUBLE -> decoder.decodeDouble().convertDecoded(AvroSchema.Type.DOUBLE, "BigInteger") { it.toBigDecimal().toBigIntegerExact() }
 
             else -> throw decoder.UnexpectedDecodeSchemaError(
                 "BigInteger",
@@ -287,9 +291,9 @@ public object BigDecimalSerializer : AvroSerializer<BigDecimal>(BigDecimal::clas
 
                 AvroSchema.Type.STRING -> encodeString(value.toString())
 
-                AvroSchema.Type.INT -> encodeInt(value.intValueExact())
+                AvroSchema.Type.INT -> encodeInt(value.convertForEncoding("BigDecimal", AvroSchema.Type.INT) { it.intValueExact() })
 
-                AvroSchema.Type.LONG -> encodeLong(value.longValueExact())
+                AvroSchema.Type.LONG -> encodeLong(value.convertForEncoding("BigDecimal", AvroSchema.Type.LONG) { it.longValueExact() })
 
                 AvroSchema.Type.FLOAT -> encodeFloat(value.toFloat())
 
@@ -321,7 +325,7 @@ public object BigDecimalSerializer : AvroSerializer<BigDecimal>(BigDecimal::clas
     override fun deserializeAvro(decoder: AvroDecoder): BigDecimal {
         val schema = decoder.currentWriterSchema
         return when (schema.type) {
-            AvroSchema.Type.STRING -> decoder.decodeString().toBigDecimal()
+            AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "BigDecimal") { it.toBigDecimal() }
 
             AvroSchema.Type.BYTES ->
                 when (schema.knownLogicalTypeName) {
@@ -375,11 +379,19 @@ private fun BigDecimal.toDecimalFixed(schema: AvroSchema): ByteArray {
     return bytes
 }
 
-/** `DecimalConversion.fromBytes` and `fromFixed`. */
+/**
+ * `DecimalConversion.fromBytes` and `fromFixed`. An empty unscaled value is malformed data: `BigInteger` rejects it
+ * (Apache's message is kept).
+ */
 private fun decimalFromBytes(
     bytes: ByteArray,
     schema: AvroSchema,
-): BigDecimal = BigDecimal(BigInteger(bytes), schema.decimalScale)
+): BigDecimal {
+    if (bytes.isEmpty()) {
+        throw AvroMalformedDataException("Malformed data: the unscaled value of a decimal is empty (Zero length BigInteger)")
+    }
+    return BigDecimal(BigInteger(bytes), schema.decimalScale)
+}
 
 /** `DecimalConversion.validate`: the value at the schema's scale (without rounding), within its precision. */
 private fun BigDecimal.validateDecimal(schema: AvroSchema): BigDecimal {
@@ -392,18 +404,18 @@ private fun BigDecimal.validateDecimal(schema: AvroSchema): BigDecimal {
             value = setScale(scale, RoundingMode.UNNECESSARY)
             scaleAdjusted = true
         } catch (_: ArithmeticException) {
-            throw SerializationException("Cannot encode decimal with scale $valueScale as scale $scale without rounding")
+            throw AvroSchemaMismatchException("Cannot encode decimal with scale $valueScale as scale $scale without rounding")
         }
     }
     val precision = schema.decimalPrecision
     val valuePrecision = value.precision()
     if (valuePrecision > precision) {
         if (scaleAdjusted) {
-            throw SerializationException(
+            throw AvroSchemaMismatchException(
                 "Cannot encode decimal with precision $valuePrecision as max precision $precision. This is after safely adjusting scale from $valueScale to required $scale"
             )
         } else {
-            throw SerializationException("Cannot encode decimal with precision $valuePrecision as max precision $precision")
+            throw AvroSchemaMismatchException("Cannot encode decimal with precision $valuePrecision as max precision $precision")
         }
     }
     return value
@@ -418,11 +430,26 @@ private fun BigDecimal.toBigDecimalBytes(): ByteArray {
     return buffer.readByteArray()
 }
 
-/** `BigDecimalConversion.fromBytes`: an empty unscaled value is `BigDecimal(null, …)`, which throws, as in Apache. */
+/**
+ * `BigDecimalConversion.fromBytes`. Malformed data when the unscaled value is empty (Apache's `BigDecimal(null, …)`
+ * throws a `NullPointerException`), when the bytes end before the scale, or when bytes are left after it.
+ */
 private fun bigDecimalFromBytes(bytes: ByteArray): BigDecimal {
-    val decoder = KotlinxIoDecoder(Buffer(bytes))
-    val unscaled = decoder.readBytes()
-    val unscaledValue: BigInteger? = if (unscaled.isNotEmpty()) BigInteger(unscaled) else null
-    val scale = decoder.readInt()
-    return BigDecimal(unscaledValue, scale)
+    val source = Buffer(bytes)
+    val decoder = KotlinxIoDecoder(source)
+    val unscaled: ByteArray
+    val scale: Int
+    try {
+        unscaled = decoder.readBytes()
+        scale = decoder.readInt()
+    } catch (e: EOFException) {
+        throw AvroMalformedDataException("Malformed data: a big-decimal ends before its scale", e)
+    }
+    if (unscaled.isEmpty()) {
+        throw AvroMalformedDataException("Malformed data: the unscaled value of a big-decimal is empty")
+    }
+    if (!source.exhausted()) {
+        throw AvroMalformedDataException("Malformed data: bytes are left after the scale of a big-decimal")
+    }
+    return BigDecimal(BigInteger(unscaled), scale)
 }
