@@ -1,3 +1,5 @@
+import org.gradle.accessors.dm.LibrariesForLibs
+
 plugins {
     kotlin("multiplatform")
     // HTML only: `dokka-javadoc` is JVM-only, so it stays in `library-module-conventions`.
@@ -6,12 +8,15 @@ plugins {
     id("com.diffplug.spotless")
 }
 
+val libs = the<LibrariesForLibs>()
+
 apiValidation {
     nonPublicMarkers += "com.github.avrokotlin.avro4k.InternalAvro4kApi"
 }
 
 kotlin {
     explicitApi()
+    jvmToolchain(11)
 
     compilerOptions {
         optIn = listOf(
@@ -20,8 +25,6 @@ kotlin {
         )
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
-
-    jvmToolchain(11)
 }
 
 tasks.withType<Test>().configureEach {
@@ -29,7 +32,7 @@ tasks.withType<Test>().configureEach {
 }
 
 spotless {
-    val ktlintVersion = versionCatalogs.named("libs").findVersion("ktlint").get().toString()
+    val ktlintVersion = libs.versions.ktlint.get()
     kotlin {
         // Spotless only infers the Kotlin sources of JVM projects: under multiplatform its default target is empty.
         target("src/**/*.kt")
