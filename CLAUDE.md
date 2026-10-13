@@ -18,6 +18,10 @@ cherry-pick, not a base to merge.
 
 ## Working rules
 
+- **Bugs that predate the migration are not fixed during it** (incorrect spec implementation included), unless the
+  pure Kotlin code written for multiplatform support fixes them as a side effect. Reproduce on `main` first; if it
+  reproduces, write it in `docs/plans/notes/backlog-pre-existing-bugs.md` (repro, cause, fix sketch, issue text) for the
+  user to handle apart. New cross-platform divergences are migration scope.
 - **Never write plan step codes (M1, M3-09, B6, C2, A5, …) in source code** — comments, KDoc, test
   names, strings, build scripts. They live only in `docs/plans/`; explain the *why* in plain words instead.
 - Benchmarks are strictly serialized — never run two benchmark tasks concurrently, on any machine.
