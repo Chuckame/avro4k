@@ -17,7 +17,7 @@ batches, and its §1 rules in every brief. The current state is in the newest "R
 1. ~~Pre-existing candidates~~ **done:** all five reproduced on `main` → `backlog-pre-existing-bugs.md` §7–11 (NaN as
    `float`, fixed-union branch by char count, generic `ByteBuffer` slice, `ListSerializer` delegation, `$` in
    `@AvroGenerated`), not fixed by rule; the user opens the issues.
-2. Time the M3-16 fixtures on jsNode and macosArm64 (recorded, not gated).
+2. ~~Fixture timings~~ **done:** `benchmark/README.md` → "M3-17: first timing off the JVM" (warm pass: JVM ~7 ms, JS ~8.5 ms, native debug ~17 ms).
 3. The re-baseline, protocol chosen by the user (M0 `4508a13` vs final M3, ~4 h, nothing else running), into
    `benchmark/README.md` as the final "Results — M3" cumulative section; watch list below.
 4. Open user decision: the model's own JSON parser rejects an alias equal to the schema's name (Apache accepts it);

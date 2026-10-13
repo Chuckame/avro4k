@@ -703,6 +703,24 @@ The hardening is affordable on the read path: within ±3% on every end-to-end ro
 per collection, except blocks above 1,024 items, which pay for list growth (+31% on one block of 100,000 longs, −0.1% net
 on `lists` @10000). The 1,024 threshold stays as it is.
 
+### M3-17: first timing off the JVM — the golden fixtures (recorded, not gated)
+
+The first non-JVM timing: the 46 cross-platform golden fixtures (`core/src/commonTest/.../fixtures/`), each of their 8
+tests run in-process from a throwaway common test with `TimeSource.Monotonic` — once cold, then the mean of 20 warm
+passes — 3 Gradle runs per platform, at `d021e9c1` (2026-10-14, Apple M2 Pro, macOS 26.6.2, AC power). A pass encodes,
+decodes and compares every fixture, its alternative encodings and its `Any` rendering: test code, not a benchmark.
+
+| Platform | Cold, ms (3 runs) | Warm pass, ms (3 runs) |
+|---|---|---|
+| JVM (`jvmTest`) | 169 / 178 / 159 | 6.8 / 7.0 / 5.9 |
+| JS (`jsNodeTest`, Node.js) | 83 / 74 / 71 | 8.9 / 8.5 / 8.2 |
+| Native (`macosArm64Test`) | 24 / 23 / 22 | 16.7 / 17.0 / 16.5 |
+
+Read with care: the JVM's cold time is class loading and interpretation, and native test binaries are **debug builds**
+(no optimisation), so native's warm pass is not what a release binary does. The order of magnitude is the point: no
+platform is pathologically slow on the same work. Real non-JVM numbers need the multiplatform common benchmarks the
+plan calls for, which do not exist yet.
+
 ## Results — cumulative: M0 baseline vs M3 so far (4508a13 vs bd99294)
 
 The per-unit A/Bs above each compare one step with the step before it. This section answers the
