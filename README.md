@@ -1116,6 +1116,13 @@ value class StringifiedPrice(
 > [!NOTE]
 > This impacts the schema generation, the serialization and the deserialization.
 
+> [!NOTE]
+> A `Float` or `Double` is written with the platform's `toString()`, like kotlinx-serialization-json does, so Kotlin/JS writes a
+> different text than the JVM and native platforms for most values: `1.0` becomes `"1"`, `1.0E21` becomes `"1e+21"`, and a
+> `Float` read from Avro data is written with all the digits of its 32-bit value (`"0.10000000149011612"` for `0.1`).
+> Every platform reads all these forms back to the same value, except `-0.0`, which Kotlin/JS writes as `"0"`.
+> The same applies to `Float` and `Double` map keys.
+
 # Nullable fields, optional fields and compatibility
 
 With avro, you can have nullable fields and optional fields, that are taken into account for compatibility checking when using the schema registry.

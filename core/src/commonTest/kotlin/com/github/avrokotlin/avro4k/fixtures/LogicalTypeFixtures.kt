@@ -90,8 +90,71 @@ internal val logicalTypeFixtures: List<GoldenFixture<*>> =
             generic =
                 "{\"int\"=\"-12\", \"long\"=\"-9223372036854775808\", \"double\"=\"2.5\", \"boolean\"=\"false\", \"instant\"=\"2023-11-14T22:13:20.005Z\", " +
                     "\"uuid\"=\"123e4567-e89b-12d3-a456-426614174000\"}"
-        )
+        ),
+        floatingPointStringsFixture()
     )
+
+/**
+ * Floating-point numbers written as strings, and as map keys, which are strings too. Their text is the platform's
+ * `toString()`, as in kotlinx-serialization-json, so Kotlin/JS writes other bytes than the JVM and native for most of
+ * them; every platform reads both forms. Known and documented on [AvroStringable].
+ */
+private fun floatingPointStringsFixture(): GoldenFixture<StringableFloatingPoints> {
+    val texts =
+        listOf(
+            "one" to jvmAndNativeOrJs("1.0", js = "1"),
+            "negativeZero" to jvmAndNativeOrJs("-0.0", js = "0"),
+            "large" to jvmAndNativeOrJs("1.0E7", js = "10000000"),
+            "small" to jvmAndNativeOrJs("1.0E-4", js = "0.0001"),
+            "huge" to jvmAndNativeOrJs("1.0E21", js = "1e+21"),
+            "minValue" to jvmAndNativeOrJs("4.9E-324", js = "5e-324"),
+            "notANumber" to "NaN",
+            "infinity" to "-Infinity",
+            "inexact" to "0.1",
+            "floatOne" to jvmAndNativeOrJs("1.0", js = "1"),
+            "floatMax" to jvmAndNativeOrJs("3.4028235E38", js = "3.4028235e+38"),
+            // a Float holding a 32-bit value, as when read from bytes: Kotlin/JS writes all the digits of that value
+            "floatInexact" to jvmAndNativeOrJs("0.1", js = "0.10000000149011612")
+        )
+    val key = jvmAndNativeOrJs("2.0", js = "2")
+    return GoldenFixture(
+        name = "floating-point numbers written as strings",
+        serializer = StringableFloatingPoints.serializer(),
+        value =
+            StringableFloatingPoints(
+                one = 1.0,
+                negativeZero = -0.0,
+                large = 1.0E7,
+                small = 1.0E-4,
+                huge = 1.0E21,
+                minValue = Double.MIN_VALUE,
+                notANumber = Double.NaN,
+                infinity = Double.NEGATIVE_INFINITY,
+                inexact = 0.1,
+                floatOne = 1.0f,
+                floatMax = Float.MAX_VALUE,
+                floatInexact = Float.fromBits(0x3dcccccd),
+                byKey = mapOf(2.0 to 3)
+            ),
+        schema =
+            "{\"type\":\"record\",\"name\":\"StringableFloatingPoints\",\"namespace\":\"com.github.avrokotlin.avro4k.fixtures\",\"fields\":[" +
+                texts.joinToString("") { (name, _) -> "{\"name\":\"$name\",\"type\":\"string\"}," } +
+                "{\"name\":\"byKey\",\"type\":{\"type\":\"map\",\"values\":\"int\"},\"default\":{}}]}",
+        // the map: one block of 1 entry, the key, the value 3, the end of the map
+        hex = texts.joinToString("") { (_, text) -> avroString(text) } + "02" + avroString(key) + "06" + "00",
+        // Kotlin/JS reads "0" back as 0.0, not -0.0
+        structuralEquals = jvmAndNativeOrJs(true, js = false),
+        generic =
+            texts.joinToString(", ", prefix = "{") { (name, text) -> "\"$name\"=\"$text\"" } +
+                ", \"byKey\"={\"$key\"=3}}"
+    )
+}
+
+/** A string shorter than 64 bytes: its length (one zig-zag byte), then its UTF-8 bytes. */
+private fun avroString(text: String): String {
+    val bytes = text.encodeToByteArray()
+    return byteArrayOf((bytes.size * 2).toByte()).toHexString() + bytes.toHexString()
+}
 
 @Serializable
 private data class LogicalTypes(
@@ -108,8 +171,7 @@ private data class InstantHolder(
     val instant: Instant,
 )
 
-// No whole Double such as 1.0: a stringable Double is written with the platform's toString, "1.0" on the JVM but "1"
-// on JS, so its bytes are not the same on every platform yet.
+// No whole Double such as 1.0: its text is not the same on Kotlin/JS (see the floating-point fixture below)
 @Serializable
 @OptIn(ExperimentalAvro4kApi::class)
 private data class Stringables(
@@ -119,4 +181,22 @@ private data class Stringables(
     @AvroStringable val boolean: Boolean,
     @AvroStringable val instant: Instant,
     @AvroStringable val uuid: Uuid,
+)
+
+@Serializable
+@OptIn(ExperimentalAvro4kApi::class)
+private data class StringableFloatingPoints(
+    @AvroStringable val one: Double,
+    @AvroStringable val negativeZero: Double,
+    @AvroStringable val large: Double,
+    @AvroStringable val small: Double,
+    @AvroStringable val huge: Double,
+    @AvroStringable val minValue: Double,
+    @AvroStringable val notANumber: Double,
+    @AvroStringable val infinity: Double,
+    @AvroStringable val inexact: Double,
+    @AvroStringable val floatOne: Float,
+    @AvroStringable val floatMax: Float,
+    @AvroStringable val floatInexact: Float,
+    val byKey: Map<Double, Int>,
 )

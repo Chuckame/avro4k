@@ -114,3 +114,10 @@ already does it), cached per descriptor. Tests for enum (and fixed).
 
 **Issue:** *Relative @AvroAlias on an enum does not match at decoding* — `@AvroAlias("Old")` on an enum in namespace `x`
 does not match a writer enum `x.Old`, although the generated schema resolves the alias to `x.Old`.
+
+## 6. The README calls `@AvroStringable` by an old name
+
+**Found 2026-10-13** while documenting the Kotlin/JS floating-point text (on `main` `56dc7da8` too): the README's section
+"Force a field to be a `string` type" names the annotation `@AvroString` 5 times (text and examples), which does not
+exist; the annotation is `@AvroStringable` (`@ExperimentalAvro4kApi`). **Fix:** rename in the README, mention the opt-in.
+Docs only, no issue needed.

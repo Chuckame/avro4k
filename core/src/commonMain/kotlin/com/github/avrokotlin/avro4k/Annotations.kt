@@ -67,6 +67,12 @@ public annotation class AvroAlias(vararg val value: String)
  * - `bytes` & `fixed` (will take the fixed bytes as UTF-8 string, or custom toString/parse for logical types)
  * - works also for all the nullable types of the above
  * The rest will fail, except if your custom serializers handle the string type.
+ *
+ * A `float` or `double` is written with the platform's `toString()`, as kotlinx-serialization-json does, so Kotlin/JS
+ * writes another text than the JVM and native platforms for most values: `1.0` is written `"1"`, `1.0E21` `"1e+21"`, and a
+ * `Float` read from Avro data with all the digits of its 32-bit value (`"0.10000000149011612"` for `0.1`). Every platform
+ * reads all these forms, to the same value, except `-0.0`, written `"0"` by Kotlin/JS. The same applies to map keys of
+ * type `Float` or `Double`.
  */
 @SerialInfo
 @ExperimentalAvro4kApi
