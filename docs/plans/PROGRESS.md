@@ -14,11 +14,9 @@ batches, and its §1 rules in every brief. The current state is in the newest "R
 ### Resume here (2026-10-14): M3-17's review done, six fixes — next its pre-existing repros, fixture timings, re-baseline
 
 **Branch** `v3/m2-foundation` at this commit. M3-17's review is done (row below, `notes/m3-17.md`). **Next, in order:**
-1. Reproduce on `main` (throwaway tests) the reviewers' pre-existing candidates, then add the confirmed ones to
-   `backlog-pre-existing-bugs.md`: `Double.toFloatExact` rejects NaN (`Double.NaN` → `float` writer); a `String` picks a
-   union's fixed branch by its char count, not its UTF-8 byte count (`trySelectFixedSchemaForSize(value.length)`);
-   the generic decoder's `ByteBuffer.array()` ignores position/limit/offset; KotlinPoet `%P` does not escape `$` in
-   `@AvroGenerated`'s JSON; a custom serializer calling `ListSerializer(...).deserialize` directly bypasses block merging.
+1. ~~Pre-existing candidates~~ **done:** all five reproduced on `main` → `backlog-pre-existing-bugs.md` §7–11 (NaN as
+   `float`, fixed-union branch by char count, generic `ByteBuffer` slice, `ListSerializer` delegation, `$` in
+   `@AvroGenerated`), not fixed by rule; the user opens the issues.
 2. Time the M3-16 fixtures on jsNode and macosArm64 (recorded, not gated).
 3. The re-baseline, protocol chosen by the user (M0 `4508a13` vs final M3, ~4 h, nothing else running), into
    `benchmark/README.md` as the final "Results — M3" cumulative section; watch list below.

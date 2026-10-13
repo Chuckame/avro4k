@@ -121,3 +121,79 @@ does not match a writer enum `x.Old`, although the generated schema resolves the
 "Force a field to be a `string` type" names the annotation `@AvroString` 5 times (text and examples), which does not
 exist; the annotation is `@AvroStringable` (`@ExperimentalAvro4kApi`). **Fix:** rename in the README, mention the opt-in.
 Docs only, no issue needed.
+
+---
+
+Entries 7–11 were reported by M3-17's review (`notes/m3-17.md`) as code older than the migration, and reproduced on
+`main` (`6ad6c1c6`) with throwaway tests on 2026-10-14 (deleted afterwards). "v3" = the same code is on
+`v3/m2-foundation`, checked by reading it.
+
+## 7. `NaN` cannot be written to or read from a `float`
+
+**Repro (main, v3):** `Avro.encodeToByteArray(Schema.create(FLOAT), Double.serializer(), Double.NaN)` →
+`SerializationException: Value NaN is not a valid Float`; same when decoding a `double` NaN into a `Float` property.
+`Double.POSITIVE_INFINITY` and finite values that fit work.
+
+**Cause:** `Double.toFloatExact()` (`NumberUtils.kt`) checks `toFloat().toDouble() != this`, which is always true for
+NaN (`NaN != NaN`).
+
+**Fix sketch:** `if (isNaN()) return Float.NaN` before the check (also in apache-interop's copy). Tests both ways.
+
+**Issue:** *Double.NaN is rejected when the schema is float* — writing `Double.NaN` with a `float` writer schema, or
+reading a `double` NaN into a `Float`, fails with "Value NaN is not a valid Float".
+
+## 8. A `String` written to a union of fixed types picks the branch by its char count
+
+**Repro (main, v3):** union `[{"type":"fixed","name":"F1","size":1},{"type":"fixed","name":"F2","size":2}]`, value
+`"é"` (1 char, 2 UTF-8 bytes) → `Fixed size mismatch for actual size of 2. Actual schema: …"F1"…`; `F2` fits.
+
+**Cause:** `AbstractAvroEncoder.encodeString` calls `trySelectFixedSchemaForSize(value.length)` (UTF-16 chars), while
+the value is then written as its UTF-8 bytes.
+
+**Fix sketch:** select with the UTF-8 byte count (computed once, reused for the write). Only non-ASCII strings change.
+
+**Issue:** *Non-ASCII string written to a union of fixed types picks the wrong branch*.
+
+## 9. Decoding generic data reads a whole `ByteBuffer`'s array, ignoring its position and limit
+
+**Repro (main; v3 in apache-interop):** `Avro.decodeFromGenericData(Schema.create(BYTES), ByteArraySerializer(),
+ByteBuffer.wrap(byteArrayOf(9, 1, 2, 9), 1, 2))` → `[9, 1, 2, 9]` instead of `[1, 2]`. A direct or read-only buffer
+throws instead. Apache's own readers hand exact heap buffers, so decoding straight from them is not affected; a buffer
+built or sliced by the caller is.
+
+**Cause:** `AbstractAvroGenericDecoder.decodeBytes`: `is ByteBuffer -> value.array()`.
+
+**Fix sketch:** copy `remaining()` bytes from a `duplicate()` (leaves the caller's position alone). Same for fixed
+values given as a `ByteBuffer`, if accepted there.
+
+**Issue:** *decodeFromGenericData ignores a ByteBuffer's position and limit*.
+
+## 10. A custom serializer that delegates to `ListSerializer` fails on the next field
+
+**Repro (main, v3):** record `{a: array<int>, b: array<int>}` written from `Lists(listOf(1, 2), listOf(3))`, read with
+two properties using `object WrapperSerializer : KSerializer<Wrapper> { deserialize = Wrapper(ListSerializer(Int.serializer()).deserialize(decoder)) }`
+→ `SerializationException: Not all bytes were consumed during deserialization`.
+
+**Cause:** collection blocks are read by avro4k's collection decoding, entered through `decodeSerializableValue` on a
+list serializer; a serializer calling the list serializer's `deserialize` directly reaches the decoder's
+`beginStructure` without it, so the block terminator is not consumed and the next field starts out of step.
+
+**Fix sketch:** handle the blocks in `beginStructure`/`endStructure` for list and map descriptors whatever the entry
+point, and test a delegating
+serializer for list and map, in one and several blocks.
+
+**Issue:** *Custom serializer delegating to ListSerializer.deserialize corrupts decoding* — a common pattern for
+wrapper types.
+
+## 11. kotlin-generator writes a `$` of the schema into a Kotlin string template
+
+**Repro (main, v3):** `.avsc` record with `"doc":"costs $price"` → generated `@AvroGenerated("""{…"doc":"costs $price",…}""")`;
+`$price` is a string template, so the generated file does not compile (or silently embeds a variable's value). The KDoc
+and `@AvroDoc("costs ${'$'}price")` are escaped correctly. Any doc, default or prop containing `$` triggers it.
+
+**Cause:** `AnnotationsHelper.buildAvroGeneratedAnnotation` adds the schema JSON with KotlinPoet's `%P` (string
+template format), which does not escape `$`.
+
+**Fix sketch:** `%S`, or escape `$` as `${'$'}` before `%P`; golden test with a `$` in a doc, a default and a prop.
+
+**Issue:** *Generated code does not compile when the schema contains a dollar sign*.
