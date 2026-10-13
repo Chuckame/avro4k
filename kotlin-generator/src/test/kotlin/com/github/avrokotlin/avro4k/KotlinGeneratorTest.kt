@@ -64,6 +64,19 @@ class KotlinGeneratorTest {
         exception.message shouldContain "fileOptIns"
     }
 
+    @Test
+    fun `a schema equal to one generated before but for its doc generates its own doc`() {
+        fun generated(doc: String): String {
+            val schema = Schema.Parser().parse("""{"type":"record","name":"DocChanged","doc":"$doc","fields":[{"name":"a","type":"int"}]}""")
+            return KotlinGenerator().generateKotlinClasses(schema, rootAnonymousSchemaName = "DocChanged").single().toString()
+        }
+        // Apache's equality ignores docs: the first schema must not stand in for the second
+        val first = Schema.Parser().parse("""{"type":"record","name":"DocChanged","doc":"first","fields":[{"name":"a","type":"int"}]}""")
+        first.toAvro4k()
+
+        generated("second") shouldContain "second"
+    }
+
     companion object {
         @OptIn(ExperimentalPathApi::class)
         @JvmStatic

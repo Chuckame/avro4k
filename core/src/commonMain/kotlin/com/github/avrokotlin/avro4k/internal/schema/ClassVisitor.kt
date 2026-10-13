@@ -106,7 +106,8 @@ internal class ClassVisitor(
             schema = finalSchema,
             defaultValue = fieldDefault,
             doc = annotations.doc?.value,
-            aliases = annotations.aliases?.value?.toCollection(LinkedHashSet()) ?: emptySet(),
+            // an alias equal to the field's own name is a no-op that Apache accepts and the model rejects
+            aliases = annotations.aliases?.value?.filterTo(LinkedHashSet()) { it != fieldName } ?: emptySet(),
             props = annotations.props.toSchemaProps(FIELD_RESERVED_PROPS)
         )
     }

@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
+import com.github.avrokotlin.avro4k.internal.encodeToUtf8
 import kotlinx.io.DelicateIoApi
 import kotlinx.io.Sink
 import kotlinx.io.UnsafeIoApi
@@ -55,7 +56,7 @@ internal class KotlinxIoEncoder(
             return
         }
         // TODO: encode straight into the sink instead of allocating the intermediate array
-        writeBytes(value.encodeToByteArray())
+        writeBytes(value.encodeToUtf8())
     }
 
     override fun writeString(utf8: ByteArray) {

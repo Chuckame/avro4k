@@ -5,6 +5,7 @@ import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.ExperimentalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
+import com.github.avrokotlin.avro4k.internal.schema.configuredLogicalTypeName
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
@@ -92,7 +93,7 @@ public abstract class AbstractAnySerializer internal constructor() : KSerializer
     ): DeserializationStrategy<Any> {
         preResolveDeserializationStrategy(writerSchema)?.let { return it }
         // Let's try to use the logical type's serializer if any
-        writerSchema.logicalTypeName?.let { configuration.logicalTypes[it] }?.let { return it }
+        writerSchema.configuredLogicalTypeName?.let { configuration.logicalTypes[it] }?.let { return it }
         // Else infer the serializer from the schema type
         return when (writerSchema.type) {
             AvroSchema.Type.BOOLEAN -> Boolean.serializer()

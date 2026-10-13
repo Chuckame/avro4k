@@ -12,6 +12,7 @@ import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
 import com.github.avrokotlin.avro4k.internal.SerializationWorkflow
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.defaultValueBytes
+import com.github.avrokotlin.avro4k.internal.encodeToUtf8
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.resolveDefaultBranch
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
@@ -179,7 +180,7 @@ internal class JsonDefaultDecoder(
         when (currentAvroSchema.type) {
             AvroSchema.Type.BYTES -> primitive.content.defaultValueBytes()
             AvroSchema.Type.FIXED -> primitive.content.defaultValueBytes().copyOf(currentAvroSchema.fixedSize)
-            else -> primitive.content.encodeToByteArray()
+            else -> primitive.content.encodeToUtf8()
         }
 
     override fun decodeBoolean(): Boolean =
@@ -420,7 +421,7 @@ private class RecordJsonDefaultDecoder(
         while (nextDecodingStepIndex < workflow.decoding.size) {
             var step = workflow.decoding[nextDecodingStepIndex++]
             if (step is DecodingStep.DeserializeWriterField && recordSchema.fields[step.writerFieldIndex].name !in record) {
-                step = workflow.missingElements[step.elementIndex]
+                step = avro.recordResolver.missingElements(workflow, descriptor)[step.elementIndex]
             }
             when (step) {
                 is DecodingStep.IgnoreOptionalElement, is DecodingStep.SkipWriterField -> {}

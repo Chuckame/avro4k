@@ -9,7 +9,10 @@ import io.kotest.matchers.types.shouldBeSameInstanceAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.descriptors.element
 import org.apache.avro.Schema
+import java.lang.ref.WeakReference
 import java.util.concurrent.Callable
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
@@ -84,6 +87,34 @@ internal class RecordResolverTest : StringSpec({
                 workflow.decoding.count { it is DecodingStep.SkipWriterField } shouldBe leading
             }
         }
+    }
+
+    "a resolved workflow does not keep its class descriptor alive, missing elements computed or not" {
+        val avro = Avro {}
+        val resolver = RecordResolver(avro)
+        val writerSchema = recordSchema("FreshRecord", """{"name":"a","type":"int"},{"name":"b","type":"string"}""")
+
+        fun resolveWithFreshDescriptor(computeMissingElements: Boolean): WeakReference<SerialDescriptor> {
+            val descriptor =
+                buildClassSerialDescriptor("FreshRecord") {
+                    element<Int>("a")
+                    element<String>("b")
+                }
+            val workflow = resolver.resolveFields(writerSchema, descriptor)
+            if (computeMissingElements) resolver.missingElements(workflow, descriptor).size shouldBe 2
+            return WeakReference(descriptor)
+        }
+
+        val references = listOf(resolveWithFreshDescriptor(false), resolveWithFreshDescriptor(true))
+        // the inline cache holds its last pairs strongly, by design: push them out
+        (0 until 64).forEach { resolver.resolveFields(evolvedSchema(it), exactDescriptor) }
+
+        repeat(50) {
+            if (references.all { it.get() == null }) return@repeat
+            System.gc()
+            Thread.sleep(20)
+        }
+        references.map { it.get() == null } shouldBe listOf(true, true)
     }
 
     "is safe under concurrent use of a single resolver" {

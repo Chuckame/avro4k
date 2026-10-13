@@ -287,6 +287,15 @@ private val SPECIFICATION_LOGICAL_TYPES =
     )
 
 /**
+ * The name [com.github.avrokotlin.avro4k.AvroConfiguration.logicalTypes] is looked up with for this schema: a logical
+ * type of the specification only when it is valid ([knownLogicalTypeName]), as the specification says to ignore an
+ * invalid one (a `uuid` on a fixed of 8 bytes, a `decimal` without precision), and any other name as it is (avro4k's
+ * own `char`, a user's custom one).
+ */
+internal val AvroSchema.configuredLogicalTypeName: String?
+    get() = logicalTypeName?.let { if (it in SPECIFICATION_LOGICAL_TYPES) knownLogicalTypeName else it }
+
+/**
  * The name of this schema's logical type when it is one of the specification's and valid ([hasValidLogicalType]), or
  * null: what Apache's `getLogicalType()?.name` returns for a schema it parsed, so that the serializers, which compare it
  * with the specification's names and read a missing one as "no logical type", keep Apache's semantics. Another name

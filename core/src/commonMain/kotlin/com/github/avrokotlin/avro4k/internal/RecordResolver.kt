@@ -153,16 +153,23 @@ internal class RecordResolver(
         val writerRecordSchema = writerSchema as? RecordSchema ?: throw AvroSchemaMismatchException("Expected a record writer schema, but had $writerSchema")
         return SerializationWorkflow(
             computeDecodingSteps(classDescriptor, writerRecordSchema),
-            computeEncodingWorkflow(classDescriptor, writerRecordSchema),
-            // computed at most a few times on a race, and then only read: no lock
-            lazy(LazyThreadSafetyMode.PUBLICATION) { computeMissingElementSteps(classDescriptor) }
+            computeEncodingWorkflow(classDescriptor, writerRecordSchema)
         )
     }
 
     /**
-     * The step of every element of [classDescriptor] when its value is missing, whatever the writer schema: see
-     * [SerializationWorkflow.missingElements].
+     * The step of every element of [classDescriptor] when its value is missing, whatever the writer schema, memoized in
+     * [workflow], the one [resolveFields] returned for [classDescriptor]: see [SerializationWorkflow.missingElements].
+     *
+     * Computed on first use, as only default values need it, at most a few times on a race, and then only read: no lock.
+     * Not a `lazy` built with the workflow: its initializer would capture [classDescriptor], which keys the workflow
+     * weakly in [fieldCache], so the workflow would keep its own key alive.
      */
+    fun missingElements(
+        workflow: SerializationWorkflow,
+        classDescriptor: SerialDescriptor,
+    ): Array<DecodingStep> = workflow.missingElements ?: computeMissingElementSteps(classDescriptor).also { workflow.missingElements = it }
+
     private fun computeMissingElementSteps(classDescriptor: SerialDescriptor): Array<DecodingStep> {
         val readerFields = avro.avroSchema(classDescriptor).fields
         return Array(classDescriptor.elementsCount) { elementIndex ->
@@ -357,15 +364,15 @@ public class SerializationWorkflow internal constructor(
      * Encoding steps are ordered regarding the class descriptor and not the writer schema.
      */
     public val encoding: EncodingWorkflow,
+) {
     /**
      * The step of each element, by element index, when its value is missing: a [DecodingStep.GetDefaultValue],
      * [DecodingStep.IgnoreOptionalElement] or [DecodingStep.MissingElementValueFailure]. Used for the fields a record default
-     * value leaves out, which take their own default, as the specification reads a record default. Computed on first use,
-     * as only default values need it.
+     * value leaves out, which take their own default, as the specification reads a record default. Null until
+     * [RecordResolver.missingElements] computes it; the array is complete before it is published.
      */
-    missingElements: Lazy<Array<DecodingStep>>,
-) {
-    internal val missingElements: Array<DecodingStep> by missingElements
+    @Volatile
+    internal var missingElements: Array<DecodingStep>? = null
 }
 
 @InternalAvro4kApi

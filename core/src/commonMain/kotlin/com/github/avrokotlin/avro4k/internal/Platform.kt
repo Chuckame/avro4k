@@ -24,3 +24,10 @@ internal fun defaultLogicalTypes(): Map<String, KSerializer<out Any>> =
 
 /** The logical types that [defaultLogicalTypes] decodes to a type of the platform it runs on. */
 internal expect fun platformLogicalTypes(): Map<String, KSerializer<out Any>>
+
+/**
+ * The UTF-8 bytes of this string as avro4k writes them: the JVM's `String.getBytes(UTF_8)`, byte for byte, on every
+ * platform. An unpaired surrogate becomes `?` (0x3F), as on the JVM and so in Apache Avro, where Kotlin's
+ * `encodeToByteArray()` writes U+FFFD (3 bytes) on JS and native: the same string must give the same bytes everywhere.
+ */
+internal expect fun String.encodeToUtf8(): ByteArray

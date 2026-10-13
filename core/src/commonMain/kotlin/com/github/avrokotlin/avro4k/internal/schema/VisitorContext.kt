@@ -244,10 +244,16 @@ internal fun namedSchemaName(fullName: String): Name {
     return Name(fullName).also { validateAvroName(it.simpleName) }
 }
 
-/** The aliases of a record or an enum, relative to its namespace like Apache's `Schema.addAlias`, and validated like it. */
+/**
+ * The aliases of a record or an enum, relative to its namespace like Apache's `Schema.addAlias`, and validated like it.
+ * An alias equal to the schema's own name is dropped: Apache accepts it (a no-op, the name already matches), the model
+ * rejects it.
+ */
 internal fun AvroAlias?.toSchemaAliases(schemaName: Name): Set<Name> {
     val aliases = this?.value ?: return emptySet()
-    return aliases.mapTo(LinkedHashSet(aliases.size)) { alias -> Name(alias, schemaName.space).also { validateAvroName(it.simpleName) } }
+    return aliases.mapNotNullTo(LinkedHashSet(aliases.size)) { alias ->
+        Name(alias, schemaName.space).also { validateAvroName(it.simpleName) }.takeIf { it != schemaName }
+    }
 }
 
 /**

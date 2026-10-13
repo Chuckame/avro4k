@@ -44,3 +44,6 @@ internal actual fun platformLogicalTypes(): Map<String, KSerializer<out Any>> =
         LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS to InstantSerializer,
         LOGICAL_TYPE_NAME_TIMESTAMP_MICROS to InstantSerializer
     )
+
+/** `String.getBytes(UTF_8)`, the reference the other platforms match. */
+internal actual fun String.encodeToUtf8(): ByteArray = encodeToByteArray()

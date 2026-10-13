@@ -277,5 +277,20 @@ class KotlinxIoCodecTest {
         shouldThrow<SerializationException> { checkBinaryLength(Long.MAX_VALUE) }
     }
 
+    @Test
+    fun `a string is written as the JVM writes its UTF-8 bytes and an unpaired surrogate as a question mark`() {
+        fun written(value: String): List<Int> {
+            val buffer = Buffer()
+            KotlinxIoEncoder(buffer).writeString(value)
+            return buffer.readByteArray().map { it.toInt() and 0xff }
+        }
+        written("a\uD800b") shouldBe listOf(0x06, 0x61, 0x3f, 0x62)
+        written("\uDC00") shouldBe listOf(0x02, 0x3f)
+        written("x\uD83D") shouldBe listOf(0x04, 0x78, 0x3f)
+        written("\uD800𐀀") shouldBe listOf(0x0a, 0x3f, 0xf0, 0x90, 0x80, 0x80)
+        written("😀") shouldBe listOf(0x08, 0xf0, 0x9f, 0x98, 0x80)
+        written("é€") shouldBe listOf(0x0a, 0xc3, 0xa9, 0xe2, 0x82, 0xac)
+    }
+
     private fun bytes(vararg values: Int) = ByteArray(values.size) { values[it].toByte() }
 }

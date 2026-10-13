@@ -10,6 +10,7 @@ import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.aliases
 import com.github.avrokotlin.avro4k.internal.convertForEncoding
+import com.github.avrokotlin.avro4k.internal.encodeToUtf8
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
@@ -378,9 +379,9 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
 
             AvroSchema.Type.STRING -> encodeStringUnchecked(value)
 
-            AvroSchema.Type.BYTES -> encodeBytesUnchecked(value.encodeToByteArray())
+            AvroSchema.Type.BYTES -> encodeBytesUnchecked(value.encodeToUtf8())
 
-            AvroSchema.Type.FIXED -> encodeFixedUnchecked(ensureFixedSize(value.encodeToByteArray()))
+            AvroSchema.Type.FIXED -> encodeFixedUnchecked(ensureFixedSize(value.encodeToUtf8()))
 
             AvroSchema.Type.ENUM -> encodeEnumUnchecked(value)
 

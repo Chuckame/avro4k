@@ -101,6 +101,8 @@ private val avro4kByEqualApache = WeakKeyCache<Schema, AvroSchema>()
  * as the model's does for records) returns that one's conversion, without converting or pairing anything: so an
  * equal-but-fresh instance per call costs a hash and an `equals`, never a conversion or a cache insertion. For such an
  * instance, the result converts back to the canonical Apache instance (the one converted first), not to [schema].
+ * Apache's `equals` ignores enum defaults too, but they change how a reader resolves an unknown symbol: a schema that
+ * differs from the canonical one only by an enum default is converted on its own ([enumDefaultsMatch]).
  *
  * Only the canonical instances go in the caches, which are O(capacity) per insert. Use [apacheToAvro4kUncached] for a
  * schema that must not be converted through them.
@@ -112,7 +114,7 @@ private val avro4kByEqualApache = WeakKeyCache<Schema, AvroSchema>()
 @InternalAvro4kApi
 public fun apacheToAvro4k(schema: Schema): AvroSchema {
     avro4kByApache.pairedWith(schema)?.let { return it }
-    avro4kByEqualApache.getOrNull(schema)?.let { return it }
+    avro4kByEqualApache.getOrNull(schema)?.takeIf { enumDefaultsMatch(it, schema, identitySet()) }?.let { return it }
     val conversion = ApacheToAvro4k(cached = true)
     val converted = conversion.convert(schema)
     val result = seed(schema, converted, conversion.created, contended = avro4kByApache, fresh = apacheByAvro4k)
@@ -348,6 +350,31 @@ private class ApacheToAvro4k(private val cached: Boolean) {
         if (cached) created += schema to converted
     }
 }
+
+/**
+ * Whether every enum of [avro4k] has the default symbol of the enum at the same place in [apache], an Apache schema equal
+ * to the one [avro4k] was converted from: Apache's `equals` compares everything else the model keeps but docs and aliases.
+ */
+private fun enumDefaultsMatch(
+    avro4k: AvroSchema,
+    apache: Schema,
+    visited: MutableSet<AvroSchema>,
+): Boolean =
+    when (avro4k) {
+        is EnumSchema -> avro4k.defaultSymbol == apache.enumDefault
+
+        is RecordSchema ->
+            !visited.add(avro4k) ||
+                avro4k.fields.indices.all { enumDefaultsMatch(avro4k.fields[it].schema, apache.fields[it].schema(), visited) }
+
+        is UnionSchema -> avro4k.types.indices.all { enumDefaultsMatch(avro4k.types[it], apache.types[it], visited) }
+
+        is ArraySchema -> enumDefaultsMatch(avro4k.elementSchema, apache.elementType, visited)
+
+        is MapSchema -> enumDefaultsMatch(avro4k.valueSchema, apache.valueType, visited)
+
+        else -> true
+    }
 
 /**
  * Walks the avro4k tree and the Apache tree parsed from its json in parallel, collecting the pairs of nodes at the same

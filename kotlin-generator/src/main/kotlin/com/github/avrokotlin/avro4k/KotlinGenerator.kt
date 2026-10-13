@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.internal.apacheToAvro4kUncached
 import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
@@ -128,7 +129,8 @@ public class KotlinGenerator(
      */
     public fun generateKotlinClasses(schema: Schema, rootAnonymousSchemaName: String): List<FileSpec> {
         return generateRootKotlinClasses(
-            schema.toAvro4k(),
+            // uncached: the schema was parsed for this call, and an equal schema converted earlier may differ in its docs or aliases
+            apacheToAvro4kUncached(schema),
             potentialAnonymousClassName = rootAnonymousSchemaName.toPascalCase()
         )
     }

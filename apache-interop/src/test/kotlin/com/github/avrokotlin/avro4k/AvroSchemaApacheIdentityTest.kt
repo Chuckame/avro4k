@@ -98,6 +98,27 @@ class AvroSchemaApacheIdentityTest : FunSpec({
         }
     }
 
+    test("a schema equal to a converted one but for an enum default is converted with its own default") {
+        fun json(enumDefault: String) =
+            """{"type":"record","name":"EnumDefaultHolder","fields":[{"name":"color","type":["null",""" +
+                """{"type":"enum","name":"EnumDefaultColor","symbols":["A","B"]$enumDefault}]}]}"""
+
+        val canonical = Schema.Parser().parse(json(""))
+        val withDefault = Schema.Parser().parse(json(""","default":"B""""))
+        // Apache's equality ignores the enum default
+        withDefault shouldBe canonical
+
+        val canonicalConversion = canonical.toAvro4k()
+        val converted = withDefault.toAvro4k()
+
+        converted shouldNotBeSameInstanceAs canonicalConversion
+        val enum = ((converted as AvroSchema.RecordSchema).fields.single().schema as AvroSchema.UnionSchema).types[1]
+        (enum as AvroSchema.EnumSchema).defaultSymbol shouldBe "B"
+        converted.toApacheSchema() shouldBeSameInstanceAs withDefault
+        // an equal fresh instance with the same enum default still gets the canonical conversion
+        Schema.Parser().parse(json("")).toAvro4k() shouldBeSameInstanceAs canonicalConversion
+    }
+
     test("the uncached conversions neither read nor fill the caches") {
         val apache = Schema.Parser().parse(recursiveJson("uncached"))
         val avro4k = AvroSchema.fromJsonString(recursiveJson("uncached"))
