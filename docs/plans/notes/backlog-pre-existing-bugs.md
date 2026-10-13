@@ -17,27 +17,32 @@ Each entry below was reproduced on `main` (`56dc7da8`, the pre-migration JVM cod
 **Repro (main and v3):** writer `{"type":"record","name":"ProbeHolder","fields":[{"name":"value","type":["null","int"]}]}`,
 bytes `02d804` (branch 1, 300), reader `data class ProbeHolder(val value: Int)` →
 `SerializationException: Unsupported schema named 'union[null, int]' for decoded type of INT, and also not matching to
-any compatible type (one of LONG, STRING)`. Same with `["long","int"]`, and for every primitive, `String` and enum
-property. Decoding the union as a whole value works (`Avro.decodeFromByteArray(["null","int"], Int.serializer(), …)` →
-300), and so does a nullable property.
+any compatible type (one of LONG, STRING)`. Same with `["long","int"]`, and for every primitive and `String` property
+(`String?` → `String` fails the same way). Re-checked on both branches on 2026-10-13, what works: a nullable property
+(`Int?` → `Int?`), and a non-nullable **enum, record or list** property read from `["null", T]` (`Enum?` → `Enum`,
+`Record?` → `Record`, `List?` → `List` all decode). Decoding the union as a whole value works too
+(`Avro.decodeFromByteArray(["null","int"], Int.serializer(), …)` → 300). Typical trigger: a producer's model had
+`val value: Int?` and the consumer's has `val value: Int`; every value written was non-null, yet none can be read.
 
 **Spec:** writer union, reader not a union: the branch the writer selected is resolved against the reader's schema; an
 error only if it does not match. So this is valid input.
 
 **Cause:** the direct decoder resolves a union (reads its index) only in `decodeSerializableValue` and
-`decodeNotNullMark`. A primitive record element goes through kotlinx's `decodeIntElement` → `decodeInt()` (likewise
-`decodeString`, `decodeEnum`, …), which switch on the raw writer schema (`currentAvroSchema` on v3, the `var
+`decodeNotNullMark`. A nullable property goes through `decodeNotNullMark` first, and an enum, record or list property
+through `decodeSerializableValue`, so they work. A primitive record element goes through kotlinx's `decodeIntElement` →
+`decodeInt()` (likewise `decodeString`, `decodeLong`, …), which switch on the raw writer schema (`currentAvroSchema` on v3, the `var
 currentWriterSchema` on `main`), still the union. On v3 the public `currentWriterSchema` getter does resolve the union
 (since M3-24), but the decoder's own `decode*` methods read the raw field.
 
 **Fix sketch:** read the resolved schema at the start of each primitive `decode*` of `AbstractAvroDirectDecoder` (on v3:
 use `currentWriterSchema` instead of `currentAvroSchema`, or call `decodeAndResolveUnion()` first). Cost: one type
-compare per decoded value on the hot path → A/B on `complex` read. Tests: a record property of each primitive type,
-`String`, enum, read from `["null", T]` and from `[T, other]`.
+compare per decoded value on the hot path → A/B on `complex` read. Tests: a record property of each primitive type and
+`String` (and a value class over one), read from `["null", T]` and from `[T, other]`.
 
-**Issue:** *Decoding fails when a non-nullable property is written as a union* — a reader `data class X(val value: Int)`
-cannot read bytes written with `"value": ["null","int"]` (or any union), although the Avro spec resolves the written
-branch against the reader's type. Nullable properties and top-level values work.
+**Issue:** *Decoding fails when a non-nullable primitive or String property is written as a union* — a reader
+`data class X(val value: Int)` cannot read bytes written with `"value": ["null","int"]` (or any union), e.g. written by
+the same class when the property was still `Int?`, although the Avro spec resolves the written branch against the
+reader's type. Nullable properties, non-nullable enum/record/list properties and top-level values work.
 
 ## 2. No `int`/`long` → `float`/`double` promotion at decoding
 

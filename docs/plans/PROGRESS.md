@@ -24,7 +24,8 @@ Apache oracle on the JVM). Last measured: `:core:jvmTest` 1008, apache-interop 5
 1. **Stringable `Float`/`Double` on JS** (M3-16's only migration-scope finding, `notes/m3-16.md` → "Findings"): JS
    writes `1.0` as `"1"`, `1.0E7` as `"10000000"`, a decoded `Float` 0.1 as `"0.10000000149011612"`; JVM and native agree.
    Fix proposed to the user (JVM layout rebuilt from JS's shortest digits, in common code); **waiting for the user's
-   go-ahead**. Not api.
+   go-ahead**. Not api. Context for the decision: kotlinx-serialization-json has the same divergence (plain `toString()`,
+   map keys included) and leaves it, see the note.
 2. **M3-17** · re-baseline (orchestrator benchmarks, serialized) + `feature-dev:code-reviewer` over all of M3, and the
    timing of the M3-16 fixtures on jsNode and macosArm64 (recorded, not gated). **Watch list** (per-fork breakdown, JIT
    logs if it persists): `complex` read @1 (bimodal), `simple` write @25 (M3-11+12, −15%), `Polymorphic.writeConcrete`
