@@ -22,9 +22,11 @@ Here are the main features:
 
 > [!NOTE]
 > **Platforms**: the core runs on the JVM, JS (browser and Node.js) and Kotlin/Native (Apple, Linux, Windows and Android native targets): schema
-> generation, and binary encoding and decoding of your classes and the Kotlin types (`Uuid`, `Instant`, `Duration`…) through the `Avro` API.
-> <br/>These stay **JVM-only** for now: `AvroSingleObject`, the Java types (`UUID`, `BigDecimal`, `BigInteger`, `java.time`…), and the Apache Avro
-> interop (`AvroObjectContainer`, `GenericData`, Apache `Schema`, from the `apache-interop` module). wasm is not supported yet.
+> generation, binary encoding and decoding of your classes and the Kotlin types (`Uuid`, `Instant`, `Duration`…) through the `Avro` API, and
+> single object encoding (`AvroSingleObject`). wasm is not supported yet.
+> <br/>These are **JVM-only**: the Java types (`UUID`, `BigDecimal`, `BigInteger`, `java.time`…), and the Apache Avro interop from the
+> `apache-interop` module (object container files with `AvroObjectContainer`, `GenericData`, conversions with Apache's `Schema`).
+> <br/>Coming from v2? Check the [migration guide](Migrating-from-v2.md).
 
 # Quick start
 
@@ -210,7 +212,8 @@ data class Project(val name: String, val language: String)
 fun main() {
     val schema = Avro.schema<Project>()
     // Apache's SchemaNormalization needs an Apache schema: `toApacheSchema()` comes from the `apache-interop` module,
-    // which also brings Apache Avro
+    // which also brings Apache Avro. On the other platforms, compute the registry's key yourself: avro4k does not expose its
+    // fingerprint function (CRC-64-AVRO of the schema's parsing canonical form).
     val schemasByFingerprint = mapOf(SchemaNormalization.parsingFingerprint64(schema.toApacheSchema()) to schema)
     val singleObjectInstance = AvroSingleObject(schemasByFingerprint::get)
 
@@ -299,7 +302,7 @@ AvroObjectContainer.openWriter(fileStream) {
 # Setup
 
 <details open>
-  <summary><b>Gradle Kotlin DSL</b></summary>
+  <summary><b>Gradle Kotlin DSL (JVM)</b></summary>
 
 ```kotlin
 plugins {
@@ -309,6 +312,39 @@ plugins {
 
 dependencies {
     implementation("com.github.avro-kotlin.avro4k:avro4k-core:$avro4kVersion")
+}
+```
+
+</details>
+
+<br>
+
+<details>
+  <summary><b>Gradle Kotlin DSL (Kotlin Multiplatform)</b></summary>
+
+```kotlin
+plugins {
+    kotlin("multiplatform") version kotlinVersion
+    kotlin("plugin.serialization") version kotlinVersion
+}
+
+kotlin {
+    jvm()
+    js(IR) { nodejs() }
+    linuxX64()
+    macosArm64()
+    // ... any other target supported by avro4k
+
+    sourceSets {
+        commonMain.dependencies {
+            // Gradle resolves the right artifact of each target (avro4k-core-jvm, avro4k-core-js, avro4k-core-linuxx64…)
+            implementation("com.github.avro-kotlin.avro4k:avro4k-core:$avro4kVersion")
+        }
+        jvmMain.dependencies {
+            // Only if you use object container files, GenericData or Apache's Schema
+            implementation("com.github.avro-kotlin.avro4k:avro4k-apache-interop:$avro4kVersion")
+        }
+    }
 }
 ```
 
@@ -379,10 +415,16 @@ Add the avro4k dependency:
 
 <dependency>
     <groupId>com.github.avro-kotlin.avro4k</groupId>
-    <artifactId>avro4k-core</artifactId>
+    <artifactId>avro4k-core-jvm</artifactId>
     <version>${avro4k.version}</version>
 </dependency>
 ```
+
+> [!NOTE]
+> Maven does not read Gradle's module metadata, so it needs the JVM artifact `avro4k-core-jvm`, the one holding the classes. The `avro4k-core` artifact
+> is the multiplatform entry point that Gradle resolves to the right platform artifact; Maven resolves it to the JVM one starting from v3.
+> The same goes for the Apache interop: `avro4k-apache-interop`, and for the Confluent serializers: `avro4k-confluent-kafka-serializer`.
+> Import `avro4k-bom` (`<type>pom</type>`, `<scope>import</scope>`) in your `dependencyManagement` to omit the versions of all these artifacts.
 
 </details>
 
@@ -1144,6 +1186,9 @@ So to mark a field as optional and facilitate avro contract evolution regarding 
 - Kotlin 1.7.20 up to 1.8.10 cannot properly compile @SerialInfo-Annotations on enums (see https://github.com/Kotlin/kotlinx.serialization/issues/2121).
   This is fixed with kotlin 1.8.20. So if you are planning to use any of avro4k's annotations on enum types, please make sure that you are using kotlin >= 1.8.20.
 - Avro 1.12.0 introduced corruption for list of double in generic encoding, where doubles are casted to floats. Will be fixed for the next version when it will be released 
+
+# Migrating from v2 to v3
+Heads up to the [migration guide](Migrating-from-v2.md) to update your code from avro4k v2 to v3.
 
 # Migrating from v1 to v2
 Heads up to the [migration guide](Migrating-from-v1.md) to update your code from avro4k v1 to v2.

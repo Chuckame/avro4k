@@ -61,6 +61,9 @@ Add the dependency to your project:
 implementation("com.github.avro-kotlin.avro4k:avro4k-confluent-kafka-serializer:<latest-version>")
 ```
 
+This module needs the JVM. The `avro4k-core` classes it runs on and the Apache Avro interop come with it at runtime, but your own code (the `Avro`
+instance, your serializers…) compiles against `avro4k-core` (`avro4k-core-jvm` with Maven), so declare it too, as in the [main readme](../README.md#setup).
+
 There are 3 types of serialization:
 - Generic: for serializing any type and deserializing to generic classes (like `GenericRecord`, `GenericEnumSymbol`, `GenericFixed`, `GenericArray`) and primitive types (like `Int`, `String`, etc)
 - Reflect: for serializing any type but deserializing to specific records or kotlin/java classes. It will fall back to generic deserialization if no specific class is found
