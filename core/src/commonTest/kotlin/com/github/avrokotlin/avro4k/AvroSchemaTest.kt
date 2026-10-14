@@ -100,6 +100,30 @@ class AvroSchemaTest {
     }
 
     @Test
+    fun dropsAnAliasEqualToTheOwnName() {
+        // valid in the specification and accepted by Apache's parser, but redundant: the model's constructors reject it
+        val record =
+            parse(
+                """
+                {"type":"record","name":"Foo","namespace":"com.x","aliases":["Foo","com.x.Foo","Old"],
+                 "fields":[
+                   {"name":"a","type":"int","aliases":["a","b"]},
+                   {"name":"e","type":{"type":"enum","name":"E","symbols":["A"],"aliases":["E"]}},
+                   {"name":"f","type":{"type":"fixed","name":"F","namespace":"other","size":1,"aliases":["other.F","F2"]}}
+                 ]}
+                """.trimIndent()
+            ) as RecordSchema
+
+        record.aliases shouldBe setOf(Name("com.x.Old"))
+        record.getFieldByName("a").aliases shouldBe setOf("b")
+        (record.getFieldByName("e").schema as EnumSchema).aliases shouldBe emptySet()
+        (record.getFieldByName("f").schema as FixedSchema).aliases shouldBe setOf(Name("other.F2"))
+        // the same alias in another namespace is a different name, so it stays
+        (parse("""{"type":"enum","name":"E","namespace":"ns","symbols":["A"],"aliases":["other.E"]}""") as EnumSchema).aliases shouldBe
+            setOf(Name("other.E"))
+    }
+
+    @Test
     fun parsingRegistersNamedTypesInKnownNamedTypes() {
         val known = mutableMapOf<String, AvroSchema>()
         val fixed = AvroSchema.fromJsonString("""{"type":"fixed","name":"F","namespace":"ns","size":1}""", known)

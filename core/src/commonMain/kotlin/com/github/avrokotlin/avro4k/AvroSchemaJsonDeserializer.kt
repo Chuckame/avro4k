@@ -163,7 +163,7 @@ private fun fromJsonElement(
                         symbols = props.removeMandatory("symbols").jsonArray.map { it.stringPrimitive },
                         defaultSymbol = props.remove("default")?.stringPrimitive,
                         doc = props.remove("doc")?.stringPrimitive,
-                        aliases = props.removeAliases(name.space) ?: emptySet(),
+                        aliases = props.removeAliases(name),
                         props = props
                     ).also { knownNamedTypes[name.fullName] = it }
                 }
@@ -174,7 +174,7 @@ private fun fromJsonElement(
                         name = name,
                         size = props.removeMandatory("size").jsonPrimitive.int,
                         doc = props.remove("doc")?.stringPrimitive,
-                        aliases = props.removeAliases(name.space) ?: emptySet(),
+                        aliases = props.removeAliases(name),
                         props = props
                     ).also { knownNamedTypes[name.fullName] = it }
                 }
@@ -187,17 +187,19 @@ private fun fromJsonElement(
                         name = name,
                         fields = fields,
                         doc = props.remove("doc")?.stringPrimitive,
-                        aliases = props.removeAliases(name.space) ?: emptySet(),
+                        aliases = props.removeAliases(name),
                         props = props
                     )
                     knownNamedTypes[name.fullName] = schema
                     fieldsJson.forEach { field ->
                         val fieldProps = field.jsonObject.toMutableMap()
+                        val fieldName = fieldProps.removeMandatory("name").stringPrimitive
                         fields += RecordSchema.Field(
-                            name = fieldProps.removeMandatory("name").stringPrimitive,
+                            name = fieldName,
                             schema = fromJsonElement(fieldProps.removeMandatory("type"), name.space, knownNamedTypes),
                             doc = fieldProps.remove("doc")?.stringPrimitive,
-                            aliases = fieldProps.remove("aliases")?.jsonArray?.map { it.stringPrimitive }?.toSet() ?: emptySet(),
+                            // an alias equal to the field's own name is valid but redundant: dropped, as the Apache conversion does
+                            aliases = fieldProps.remove("aliases")?.jsonArray?.map { it.stringPrimitive }?.filterTo(mutableSetOf()) { it != fieldName } ?: emptySet(),
                             // TODO validate record's default, requiring all the fields to be present, and fixed default to be of expected size
                             defaultValue = fieldProps.remove("default"),
                             props = fieldProps
@@ -213,9 +215,12 @@ private fun fromJsonElement(
     }
 }
 
-private fun MutableMap<String, JsonElement>.removeAliases(
-    namespace: String?,
-): Set<Name>? = remove("aliases")?.jsonArray?.map { Name(it.stringPrimitive, namespace) }?.toSet()
+/**
+ * An alias equal to the type's own name (relative ones resolved against its namespace first) is valid in the
+ * specification but redundant, so it is dropped, as the Apache conversion and schema generation do.
+ */
+private fun MutableMap<String, JsonElement>.removeAliases(name: Name): Set<Name> =
+    remove("aliases")?.jsonArray?.map { Name(it.stringPrimitive, name.space) }?.filterTo(mutableSetOf()) { it != name } ?: emptySet()
 
 private fun <K : Any, V : Any> MutableMap<K, V>.removeMandatory(key: K): V {
     return this.remove(key) ?: throw AvroSchemaParseException("Missing '$key' key")

@@ -27,8 +27,14 @@ end-to-end rows better (+14% to +39%), 3 slightly better, 5 the same; EA-off all
    in the V3 pipe**: it stays open, and the GenericData APIs in `apache-interop` stay supported.
 2. Then M5 (decomposition first). Its reference rows: `complex` read @1 and the bimodal `simple` write @1/@25.
 
-**Open user decisions:** the model's own JSON parser rejects an alias equal to the schema's name (Apache accepts it),
-left as is; backlog §7–11 issues to open; the older ones listed in the 2026-10-11 handoff below.
+**Settled (2026-10-14, user):** an alias equal to the schema's (or field's) own name — valid in the specification,
+accepted by Apache — is now **dropped by the model's JSON parser** (`AvroSchema.fromJsonString`/`fromJsonElement`) instead
+of failing, like the Apache conversion and schema generation already did; the model's constructors stay strict. Only
+effect besides no longer throwing: re-serialising the parsed schema omits the redundant alias (aliases are not in the
+canonical form, fingerprints unchanged). Test: `AvroSchemaTest.dropsAnAliasEqualToTheOwnName` (fails without the change). ACC+KMP green, `.api` unchanged:
+`:core:jvmTest` 1013 → 1014, jsNode/jsBrowser 200 → 201, macosArm64/iosSimulatorArm64 203 → 204.
+
+**Open user decisions:** backlog §7–11 issues to open; the older ones listed in the 2026-10-11 handoff below.
 
 **Process lessons from this session:**
 - A long unattended benchmark script must hold `caffeinate -dimsu -w $$` for its **whole** duration, not per Gradle
@@ -46,8 +52,8 @@ left as is; backlog §7–11 issues to open; the older ones listed in the 2026-1
    `@AvroGenerated`), not fixed by rule; the user opens the issues.
 2. ~~Fixture timings~~ **done:** `benchmark/README.md` → "M3-17: first timing off the JVM" (warm pass: JVM ~7 ms, JS ~8.5 ms, native debug ~17 ms).
 3. ~~The re-baseline~~ **done:** see the newer section above.
-4. Open user decision: the model's own JSON parser rejects an alias equal to the schema's name (Apache accepts it);
-   left as is.
+4. ~~Open user decision: the model's own JSON parser rejects an alias equal to the schema's name~~ **settled:** dropped
+   by the parser (see the newer section above).
 
 ### Earlier (2026-10-13): M3-22's A/B and M3-16 done, JS floating-point text documented — next M3-17
 
