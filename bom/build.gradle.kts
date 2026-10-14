@@ -14,6 +14,9 @@ dependencies {
             }
         }
         api(project(":core"))
+        // Maven users depend on the JVM artifact of core, that has the classes: the BOM manages its version too.
+        // Gradle users keep depending on `avro4k-core`, which resolves to the right platform artifact by itself.
+        api("${project.group}:avro4k-core-jvm:${project.version}")
         api(project(":apache-interop"))
         api(project(":kotlin-generator"))
         api(project(":confluent-kafka-serializer"))

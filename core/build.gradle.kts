@@ -1,3 +1,5 @@
+import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.publish.maven.tasks.GenerateMavenPom
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTargetWithSimulatorTests
 import org.jetbrains.kotlin.konan.target.Family
@@ -127,6 +129,42 @@ run {
             }
         }
 }
+
+// Maven resolves a Kotlin Multiplatform library through the POM of its root artifact (`avro4k-core`), which has no
+// classes and only lists the common dependencies. Gradle follows the Gradle module metadata to the right platform
+// artifact, Maven cannot, so the root POM also points to the JVM artifact, like other multiplatform libraries do.
+publishing {
+    publications.withType<MavenPublication>().matching { it.name == "kotlinMultiplatform" }.configureEach {
+        // Locals, not script members: the XML action must stay serializable for the configuration cache
+        val jvmArtifactGroup = project.group.toString()
+        val jvmArtifactVersion = project.version.toString()
+        pom.withXml {
+            val root = asNode()
+            val dependencies =
+                root.children().filterIsInstance<groovy.util.Node>().firstOrNull { it.name().toString().endsWith("dependencies") }
+                    ?: root.appendNode("dependencies")
+            dependencies.appendNode("dependency").apply {
+                appendNode("groupId", jvmArtifactGroup)
+                appendNode("artifactId", "avro4k-core-jvm")
+                appendNode("version", jvmArtifactVersion)
+                appendNode("scope", "compile")
+            }
+        }
+    }
+}
+
+// Guards the root POM above: without the JVM artifact in it, `avro4k-core` is unusable from Maven (no classes at all)
+val checkMavenRootPom by tasks.registering {
+    val generatePom = tasks.named<GenerateMavenPom>("generatePomFileForKotlinMultiplatformPublication")
+    dependsOn(generatePom)
+    val pomFile = generatePom.map { it.destination }
+    doLast {
+        check("<artifactId>avro4k-core-jvm</artifactId>" in pomFile.get().readText()) {
+            "The root POM of avro4k-core must depend on avro4k-core-jvm for Maven consumers: ${pomFile.get()}"
+        }
+    }
+}
+tasks.named("check") { dependsOn(checkMavenRootPom) }
 
 spotless {
     json {

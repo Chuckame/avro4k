@@ -11,7 +11,9 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    # macOS: the Apple Kotlin/Native targets (ios, macos, tvos, watchos) can only be built, and so published, on a Mac.
+    # A macOS host builds every other target of the library too, so one runner publishes the whole matrix.
+    runs-on: macos-latest
     steps:
       - name: Fail if branch is not main
         if: github.ref != 'refs/heads/main'
