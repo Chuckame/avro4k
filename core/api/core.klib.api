@@ -1,0 +1,714 @@
+// Klib ABI Dump
+// Targets: [androidNativeArm32, androidNativeArm64, androidNativeX64, androidNativeX86, iosArm64, iosSimulatorArm64, iosX64, js, linuxArm64, linuxX64, macosArm64, mingwX64, tvosArm64, tvosSimulatorArm64, watchosArm32, watchosArm64, watchosDeviceArm64, watchosSimulatorArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <com.github.avro-kotlin.avro4k:core>
+open annotation class com.github.avrokotlin.avro4k/AvroAlias : kotlin/Annotation { // com.github.avrokotlin.avro4k/AvroAlias|null[0]
+    constructor <init>(kotlin/Array<out kotlin/String>...) // com.github.avrokotlin.avro4k/AvroAlias.<init>|<init>(kotlin.Array<out|kotlin.String>...){}[0]
+
+    final val value // com.github.avrokotlin.avro4k/AvroAlias.value|{}value[0]
+        final fun <get-value>(): kotlin/Array<out kotlin/String> // com.github.avrokotlin.avro4k/AvroAlias.value.<get-value>|<get-value>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/AvroDecimal : kotlin/Annotation { // com.github.avrokotlin.avro4k/AvroDecimal|null[0]
+    constructor <init>(kotlin/Int, kotlin/Int) // com.github.avrokotlin.avro4k/AvroDecimal.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+
+    final val precision // com.github.avrokotlin.avro4k/AvroDecimal.precision|{}precision[0]
+        final fun <get-precision>(): kotlin/Int // com.github.avrokotlin.avro4k/AvroDecimal.precision.<get-precision>|<get-precision>(){}[0]
+    final val scale // com.github.avrokotlin.avro4k/AvroDecimal.scale|{}scale[0]
+        final fun <get-scale>(): kotlin/Int // com.github.avrokotlin.avro4k/AvroDecimal.scale.<get-scale>|<get-scale>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/AvroDefault : kotlin/Annotation { // com.github.avrokotlin.avro4k/AvroDefault|null[0]
+    constructor <init>(kotlin/String) // com.github.avrokotlin.avro4k/AvroDefault.<init>|<init>(kotlin.String){}[0]
+
+    final val value // com.github.avrokotlin.avro4k/AvroDefault.value|{}value[0]
+        final fun <get-value>(): kotlin/String // com.github.avrokotlin.avro4k/AvroDefault.value.<get-value>|<get-value>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/AvroDoc : kotlin/Annotation { // com.github.avrokotlin.avro4k/AvroDoc|null[0]
+    constructor <init>(kotlin/String) // com.github.avrokotlin.avro4k/AvroDoc.<init>|<init>(kotlin.String){}[0]
+
+    final val value // com.github.avrokotlin.avro4k/AvroDoc.value|{}value[0]
+        final fun <get-value>(): kotlin/String // com.github.avrokotlin.avro4k/AvroDoc.value.<get-value>|<get-value>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/AvroEnumDefault : kotlin/Annotation { // com.github.avrokotlin.avro4k/AvroEnumDefault|null[0]
+    constructor <init>() // com.github.avrokotlin.avro4k/AvroEnumDefault.<init>|<init>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/AvroFixed : kotlin/Annotation { // com.github.avrokotlin.avro4k/AvroFixed|null[0]
+    constructor <init>(kotlin/Int) // com.github.avrokotlin.avro4k/AvroFixed.<init>|<init>(kotlin.Int){}[0]
+
+    final val size // com.github.avrokotlin.avro4k/AvroFixed.size|{}size[0]
+        final fun <get-size>(): kotlin/Int // com.github.avrokotlin.avro4k/AvroFixed.size.<get-size>|<get-size>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/AvroProp : kotlin/Annotation { // com.github.avrokotlin.avro4k/AvroProp|null[0]
+    constructor <init>(kotlin/String, kotlin/String) // com.github.avrokotlin.avro4k/AvroProp.<init>|<init>(kotlin.String;kotlin.String){}[0]
+
+    final val key // com.github.avrokotlin.avro4k/AvroProp.key|{}key[0]
+        final fun <get-key>(): kotlin/String // com.github.avrokotlin.avro4k/AvroProp.key.<get-key>|<get-key>(){}[0]
+    final val value // com.github.avrokotlin.avro4k/AvroProp.value|{}value[0]
+        final fun <get-value>(): kotlin/String // com.github.avrokotlin.avro4k/AvroProp.value.<get-value>|<get-value>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/AvroStringable : kotlin/Annotation { // com.github.avrokotlin.avro4k/AvroStringable|null[0]
+    constructor <init>() // com.github.avrokotlin.avro4k/AvroStringable.<init>|<init>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/ExperimentalAvro4kApi : kotlin/Annotation { // com.github.avrokotlin.avro4k/ExperimentalAvro4kApi|null[0]
+    constructor <init>() // com.github.avrokotlin.avro4k/ExperimentalAvro4kApi.<init>|<init>(){}[0]
+}
+
+open annotation class com.github.avrokotlin.avro4k/InternalAvro4kApi : kotlin/Annotation { // com.github.avrokotlin.avro4k/InternalAvro4kApi|null[0]
+    constructor <init>() // com.github.avrokotlin.avro4k/InternalAvro4kApi.<init>|<init>(){}[0]
+}
+
+abstract interface com.github.avrokotlin.avro4k.serializer/SchemaSupplierContext { // com.github.avrokotlin.avro4k.serializer/SchemaSupplierContext|null[0]
+    abstract val configuration // com.github.avrokotlin.avro4k.serializer/SchemaSupplierContext.configuration|{}configuration[0]
+        abstract fun <get-configuration>(): com.github.avrokotlin.avro4k/AvroConfiguration // com.github.avrokotlin.avro4k.serializer/SchemaSupplierContext.configuration.<get-configuration>|<get-configuration>(){}[0]
+    abstract val inlinedElements // com.github.avrokotlin.avro4k.serializer/SchemaSupplierContext.inlinedElements|{}inlinedElements[0]
+        abstract fun <get-inlinedElements>(): kotlin.collections/List<com.github.avrokotlin.avro4k.serializer/ElementLocation> // com.github.avrokotlin.avro4k.serializer/SchemaSupplierContext.inlinedElements.<get-inlinedElements>|<get-inlinedElements>(){}[0]
+}
+
+abstract interface com.github.avrokotlin.avro4k/AvroDecoder : kotlinx.serialization.encoding/Decoder { // com.github.avrokotlin.avro4k/AvroDecoder|null[0]
+    abstract val avro // com.github.avrokotlin.avro4k/AvroDecoder.avro|{}avro[0]
+        abstract fun <get-avro>(): com.github.avrokotlin.avro4k/Avro // com.github.avrokotlin.avro4k/AvroDecoder.avro.<get-avro>|<get-avro>(){}[0]
+    abstract val currentWriterSchema // com.github.avrokotlin.avro4k/AvroDecoder.currentWriterSchema|{}currentWriterSchema[0]
+        abstract fun <get-currentWriterSchema>(): com.github.avrokotlin.avro4k/ResolvedSchema // com.github.avrokotlin.avro4k/AvroDecoder.currentWriterSchema.<get-currentWriterSchema>|<get-currentWriterSchema>(){}[0]
+
+    abstract fun decodeBytes(): kotlin/ByteArray // com.github.avrokotlin.avro4k/AvroDecoder.decodeBytes|decodeBytes(){}[0]
+    abstract fun decodeFixed(): kotlin/ByteArray // com.github.avrokotlin.avro4k/AvroDecoder.decodeFixed|decodeFixed(){}[0]
+}
+
+abstract interface com.github.avrokotlin.avro4k/AvroEncoder : kotlinx.serialization.encoding/Encoder { // com.github.avrokotlin.avro4k/AvroEncoder|null[0]
+    abstract val avro // com.github.avrokotlin.avro4k/AvroEncoder.avro|{}avro[0]
+        abstract fun <get-avro>(): com.github.avrokotlin.avro4k/Avro // com.github.avrokotlin.avro4k/AvroEncoder.avro.<get-avro>|<get-avro>(){}[0]
+    abstract val currentWriterSchema // com.github.avrokotlin.avro4k/AvroEncoder.currentWriterSchema|{}currentWriterSchema[0]
+        abstract fun <get-currentWriterSchema>(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/AvroEncoder.currentWriterSchema.<get-currentWriterSchema>|<get-currentWriterSchema>(){}[0]
+
+    abstract fun encodeBytes(kotlin/ByteArray) // com.github.avrokotlin.avro4k/AvroEncoder.encodeBytes|encodeBytes(kotlin.ByteArray){}[0]
+    abstract fun encodeFixed(kotlin/ByteArray) // com.github.avrokotlin.avro4k/AvroEncoder.encodeFixed|encodeFixed(kotlin.ByteArray){}[0]
+    abstract fun encodeUnionIndex(kotlin/Int) // com.github.avrokotlin.avro4k/AvroEncoder.encodeUnionIndex|encodeUnionIndex(kotlin.Int){}[0]
+}
+
+abstract interface com.github.avrokotlin.avro4k/FieldNamingStrategy { // com.github.avrokotlin.avro4k/FieldNamingStrategy|null[0]
+    abstract fun resolve(kotlinx.serialization.descriptors/SerialDescriptor, kotlin/Int): kotlin/String // com.github.avrokotlin.avro4k/FieldNamingStrategy.resolve|resolve(kotlinx.serialization.descriptors.SerialDescriptor;kotlin.Int){}[0]
+
+    final object Builtins { // com.github.avrokotlin.avro4k/FieldNamingStrategy.Builtins|null[0]
+        final object OriginalElementName : com.github.avrokotlin.avro4k/FieldNamingStrategy { // com.github.avrokotlin.avro4k/FieldNamingStrategy.Builtins.OriginalElementName|null[0]
+            final fun resolve(kotlinx.serialization.descriptors/SerialDescriptor, kotlin/Int): kotlin/String // com.github.avrokotlin.avro4k/FieldNamingStrategy.Builtins.OriginalElementName.resolve|resolve(kotlinx.serialization.descriptors.SerialDescriptor;kotlin.Int){}[0]
+        }
+
+        final object PascalCase : com.github.avrokotlin.avro4k/FieldNamingStrategy { // com.github.avrokotlin.avro4k/FieldNamingStrategy.Builtins.PascalCase|null[0]
+            final fun resolve(kotlinx.serialization.descriptors/SerialDescriptor, kotlin/Int): kotlin/String // com.github.avrokotlin.avro4k/FieldNamingStrategy.Builtins.PascalCase.resolve|resolve(kotlinx.serialization.descriptors.SerialDescriptor;kotlin.Int){}[0]
+        }
+
+        final object SnakeCase : com.github.avrokotlin.avro4k/FieldNamingStrategy { // com.github.avrokotlin.avro4k/FieldNamingStrategy.Builtins.SnakeCase|null[0]
+            final fun resolve(kotlinx.serialization.descriptors/SerialDescriptor, kotlin/Int): kotlin/String // com.github.avrokotlin.avro4k/FieldNamingStrategy.Builtins.SnakeCase.resolve|resolve(kotlinx.serialization.descriptors.SerialDescriptor;kotlin.Int){}[0]
+        }
+    }
+}
+
+abstract class <#A: kotlin/Any?> com.github.avrokotlin.avro4k.serializer/AvroSerializer : com.github.avrokotlin.avro4k.serializer/AvroSchemaSupplier, kotlinx.serialization/KSerializer<#A> { // com.github.avrokotlin.avro4k.serializer/AvroSerializer|null[0]
+    constructor <init>(kotlin/String) // com.github.avrokotlin.avro4k.serializer/AvroSerializer.<init>|<init>(kotlin.String){}[0]
+
+    final val descriptor // com.github.avrokotlin.avro4k.serializer/AvroSerializer.descriptor|{}descriptor[0]
+        final fun <get-descriptor>(): kotlinx.serialization.descriptors/SerialDescriptor // com.github.avrokotlin.avro4k.serializer/AvroSerializer.descriptor.<get-descriptor>|<get-descriptor>(){}[0]
+    open val supportsNull // com.github.avrokotlin.avro4k.serializer/AvroSerializer.supportsNull|{}supportsNull[0]
+        open fun <get-supportsNull>(): kotlin/Boolean // com.github.avrokotlin.avro4k.serializer/AvroSerializer.supportsNull.<get-supportsNull>|<get-supportsNull>(){}[0]
+
+    abstract fun deserializeAvro(com.github.avrokotlin.avro4k/AvroDecoder): #A // com.github.avrokotlin.avro4k.serializer/AvroSerializer.deserializeAvro|deserializeAvro(com.github.avrokotlin.avro4k.AvroDecoder){}[0]
+    abstract fun serializeAvro(com.github.avrokotlin.avro4k/AvroEncoder, #A) // com.github.avrokotlin.avro4k.serializer/AvroSerializer.serializeAvro|serializeAvro(com.github.avrokotlin.avro4k.AvroEncoder;1:0){}[0]
+    final fun deserialize(kotlinx.serialization.encoding/Decoder): #A // com.github.avrokotlin.avro4k.serializer/AvroSerializer.deserialize|deserialize(kotlinx.serialization.encoding.Decoder){}[0]
+    final fun serialize(kotlinx.serialization.encoding/Encoder, #A) // com.github.avrokotlin.avro4k.serializer/AvroSerializer.serialize|serialize(kotlinx.serialization.encoding.Encoder;1:0){}[0]
+    open fun deserializeGeneric(kotlinx.serialization.encoding/Decoder): #A // com.github.avrokotlin.avro4k.serializer/AvroSerializer.deserializeGeneric|deserializeGeneric(kotlinx.serialization.encoding.Decoder){}[0]
+    open fun serializeGeneric(kotlinx.serialization.encoding/Encoder, #A) // com.github.avrokotlin.avro4k.serializer/AvroSerializer.serializeGeneric|serializeGeneric(kotlinx.serialization.encoding.Encoder;1:0){}[0]
+}
+
+abstract class com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer : kotlinx.serialization/KSerializer<kotlin/Any> { // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer|null[0]
+    final val nullable // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.nullable|{}nullable[0]
+        final fun <get-nullable>(): kotlinx.serialization/KSerializer<kotlin/Any?> // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.nullable.<get-nullable>|<get-nullable>(){}[0]
+    open val descriptor // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.descriptor|{}descriptor[0]
+        open fun <get-descriptor>(): kotlinx.serialization.descriptors/SerialDescriptor // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.descriptor.<get-descriptor>|<get-descriptor>(){}[0]
+
+    open fun (kotlinx.serialization.modules/SerializersModule).preResolveDeserializationStrategy(com.github.avrokotlin.avro4k/AvroSchema): kotlinx.serialization/DeserializationStrategy<kotlin/Any>? // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.preResolveDeserializationStrategy|preResolveDeserializationStrategy@kotlinx.serialization.modules.SerializersModule(com.github.avrokotlin.avro4k.AvroSchema){}[0]
+    open fun (kotlinx.serialization.modules/SerializersModule).resolveArrayDeserializationStrategy(com.github.avrokotlin.avro4k/AvroSchema): kotlinx.serialization/DeserializationStrategy<kotlin/Any> // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.resolveArrayDeserializationStrategy|resolveArrayDeserializationStrategy@kotlinx.serialization.modules.SerializersModule(com.github.avrokotlin.avro4k.AvroSchema){}[0]
+    open fun (kotlinx.serialization.modules/SerializersModule).resolveEnumDeserializationStrategy(com.github.avrokotlin.avro4k/AvroSchema): kotlinx.serialization/DeserializationStrategy<kotlin/Any> // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.resolveEnumDeserializationStrategy|resolveEnumDeserializationStrategy@kotlinx.serialization.modules.SerializersModule(com.github.avrokotlin.avro4k.AvroSchema){}[0]
+    open fun (kotlinx.serialization.modules/SerializersModule).resolveFixedDeserializationStrategy(com.github.avrokotlin.avro4k/AvroSchema): kotlinx.serialization/DeserializationStrategy<kotlin/Any> // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.resolveFixedDeserializationStrategy|resolveFixedDeserializationStrategy@kotlinx.serialization.modules.SerializersModule(com.github.avrokotlin.avro4k.AvroSchema){}[0]
+    open fun (kotlinx.serialization.modules/SerializersModule).resolveMapDeserializationStrategy(com.github.avrokotlin.avro4k/AvroSchema): kotlinx.serialization/DeserializationStrategy<kotlin/Any> // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.resolveMapDeserializationStrategy|resolveMapDeserializationStrategy@kotlinx.serialization.modules.SerializersModule(com.github.avrokotlin.avro4k.AvroSchema){}[0]
+    open fun (kotlinx.serialization.modules/SerializersModule).resolveRecordDeserializationStrategy(com.github.avrokotlin.avro4k/AvroSchema): kotlinx.serialization/DeserializationStrategy<kotlin/Any> // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.resolveRecordDeserializationStrategy|resolveRecordDeserializationStrategy@kotlinx.serialization.modules.SerializersModule(com.github.avrokotlin.avro4k.AvroSchema){}[0]
+    open fun deserialize(kotlinx.serialization.encoding/Decoder): kotlin/Any // com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer.deserialize|deserialize(kotlinx.serialization.encoding.Decoder){}[0]
+}
+
+final class com.github.avrokotlin.avro4k.serializer/AvroDuration { // com.github.avrokotlin.avro4k.serializer/AvroDuration|null[0]
+    constructor <init>(kotlin/UInt, kotlin/UInt, kotlin/UInt) // com.github.avrokotlin.avro4k.serializer/AvroDuration.<init>|<init>(kotlin.UInt;kotlin.UInt;kotlin.UInt){}[0]
+
+    final val days // com.github.avrokotlin.avro4k.serializer/AvroDuration.days|{}days[0]
+        final fun <get-days>(): kotlin/UInt // com.github.avrokotlin.avro4k.serializer/AvroDuration.days.<get-days>|<get-days>(){}[0]
+    final val millis // com.github.avrokotlin.avro4k.serializer/AvroDuration.millis|{}millis[0]
+        final fun <get-millis>(): kotlin/UInt // com.github.avrokotlin.avro4k.serializer/AvroDuration.millis.<get-millis>|<get-millis>(){}[0]
+    final val months // com.github.avrokotlin.avro4k.serializer/AvroDuration.months|{}months[0]
+        final fun <get-months>(): kotlin/UInt // com.github.avrokotlin.avro4k.serializer/AvroDuration.months.<get-months>|<get-months>(){}[0]
+
+    final fun component1(): kotlin/UInt // com.github.avrokotlin.avro4k.serializer/AvroDuration.component1|component1(){}[0]
+    final fun component2(): kotlin/UInt // com.github.avrokotlin.avro4k.serializer/AvroDuration.component2|component2(){}[0]
+    final fun component3(): kotlin/UInt // com.github.avrokotlin.avro4k.serializer/AvroDuration.component3|component3(){}[0]
+    final fun copy(kotlin/UInt = ..., kotlin/UInt = ..., kotlin/UInt = ...): com.github.avrokotlin.avro4k.serializer/AvroDuration // com.github.avrokotlin.avro4k.serializer/AvroDuration.copy|copy(kotlin.UInt;kotlin.UInt;kotlin.UInt){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k.serializer/AvroDuration.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k.serializer/AvroDuration.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.github.avrokotlin.avro4k.serializer/AvroDuration.toString|toString(){}[0]
+
+    final object Companion { // com.github.avrokotlin.avro4k.serializer/AvroDuration.Companion|null[0]
+        final fun parse(kotlin/String): com.github.avrokotlin.avro4k.serializer/AvroDuration // com.github.avrokotlin.avro4k.serializer/AvroDuration.Companion.parse|parse(kotlin.String){}[0]
+        final fun serializer(): kotlinx.serialization/KSerializer<com.github.avrokotlin.avro4k.serializer/AvroDuration> // com.github.avrokotlin.avro4k.serializer/AvroDuration.Companion.serializer|serializer(){}[0]
+        final fun tryParse(kotlin/String): com.github.avrokotlin.avro4k.serializer/AvroDuration? // com.github.avrokotlin.avro4k.serializer/AvroDuration.Companion.tryParse|tryParse(kotlin.String){}[0]
+    }
+}
+
+final class com.github.avrokotlin.avro4k.serializer/AvroDurationParseException : com.github.avrokotlin.avro4k/AvroSerializationException { // com.github.avrokotlin.avro4k.serializer/AvroDurationParseException|null[0]
+    constructor <init>(kotlin/String) // com.github.avrokotlin.avro4k.serializer/AvroDurationParseException.<init>|<init>(kotlin.String){}[0]
+}
+
+final class com.github.avrokotlin.avro4k.serializer/ElementLocation { // com.github.avrokotlin.avro4k.serializer/ElementLocation|null[0]
+    final val descriptor // com.github.avrokotlin.avro4k.serializer/ElementLocation.descriptor|{}descriptor[0]
+        final fun <get-descriptor>(): kotlinx.serialization.descriptors/SerialDescriptor // com.github.avrokotlin.avro4k.serializer/ElementLocation.descriptor.<get-descriptor>|<get-descriptor>(){}[0]
+    final val elementIndex // com.github.avrokotlin.avro4k.serializer/ElementLocation.elementIndex|{}elementIndex[0]
+        final fun <get-elementIndex>(): kotlin/Int // com.github.avrokotlin.avro4k.serializer/ElementLocation.elementIndex.<get-elementIndex>|<get-elementIndex>(){}[0]
+
+    final fun component1(): kotlinx.serialization.descriptors/SerialDescriptor // com.github.avrokotlin.avro4k.serializer/ElementLocation.component1|component1(){}[0]
+    final fun component2(): kotlin/Int // com.github.avrokotlin.avro4k.serializer/ElementLocation.component2|component2(){}[0]
+    final fun copy(kotlinx.serialization.descriptors/SerialDescriptor = ..., kotlin/Int = ...): com.github.avrokotlin.avro4k.serializer/ElementLocation // com.github.avrokotlin.avro4k.serializer/ElementLocation.copy|copy(kotlinx.serialization.descriptors.SerialDescriptor;kotlin.Int){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k.serializer/ElementLocation.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k.serializer/ElementLocation.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.github.avrokotlin.avro4k.serializer/ElementLocation.toString|toString(){}[0]
+}
+
+final class com.github.avrokotlin.avro4k/AvroBuilder { // com.github.avrokotlin.avro4k/AvroBuilder|null[0]
+    final var fieldNamingStrategy // com.github.avrokotlin.avro4k/AvroBuilder.fieldNamingStrategy|{}fieldNamingStrategy[0]
+        final fun <get-fieldNamingStrategy>(): com.github.avrokotlin.avro4k/FieldNamingStrategy // com.github.avrokotlin.avro4k/AvroBuilder.fieldNamingStrategy.<get-fieldNamingStrategy>|<get-fieldNamingStrategy>(){}[0]
+        final fun <set-fieldNamingStrategy>(com.github.avrokotlin.avro4k/FieldNamingStrategy) // com.github.avrokotlin.avro4k/AvroBuilder.fieldNamingStrategy.<set-fieldNamingStrategy>|<set-fieldNamingStrategy>(com.github.avrokotlin.avro4k.FieldNamingStrategy){}[0]
+    final var implicitEmptyCollections // com.github.avrokotlin.avro4k/AvroBuilder.implicitEmptyCollections|{}implicitEmptyCollections[0]
+        final fun <get-implicitEmptyCollections>(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroBuilder.implicitEmptyCollections.<get-implicitEmptyCollections>|<get-implicitEmptyCollections>(){}[0]
+        final fun <set-implicitEmptyCollections>(kotlin/Boolean) // com.github.avrokotlin.avro4k/AvroBuilder.implicitEmptyCollections.<set-implicitEmptyCollections>|<set-implicitEmptyCollections>(kotlin.Boolean){}[0]
+    final var implicitNulls // com.github.avrokotlin.avro4k/AvroBuilder.implicitNulls|{}implicitNulls[0]
+        final fun <get-implicitNulls>(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroBuilder.implicitNulls.<get-implicitNulls>|<get-implicitNulls>(){}[0]
+        final fun <set-implicitNulls>(kotlin/Boolean) // com.github.avrokotlin.avro4k/AvroBuilder.implicitNulls.<set-implicitNulls>|<set-implicitNulls>(kotlin.Boolean){}[0]
+    final var serializersModule // com.github.avrokotlin.avro4k/AvroBuilder.serializersModule|{}serializersModule[0]
+        final fun <get-serializersModule>(): kotlinx.serialization.modules/SerializersModule // com.github.avrokotlin.avro4k/AvroBuilder.serializersModule.<get-serializersModule>|<get-serializersModule>(){}[0]
+        final fun <set-serializersModule>(kotlinx.serialization.modules/SerializersModule) // com.github.avrokotlin.avro4k/AvroBuilder.serializersModule.<set-serializersModule>|<set-serializersModule>(kotlinx.serialization.modules.SerializersModule){}[0]
+    final var validateSerialization // com.github.avrokotlin.avro4k/AvroBuilder.validateSerialization|{}validateSerialization[0]
+        final fun <get-validateSerialization>(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroBuilder.validateSerialization.<get-validateSerialization>|<get-validateSerialization>(){}[0]
+        final fun <set-validateSerialization>(kotlin/Boolean) // com.github.avrokotlin.avro4k/AvroBuilder.validateSerialization.<set-validateSerialization>|<set-validateSerialization>(kotlin.Boolean){}[0]
+
+    final fun setLogicalTypeSerializer(kotlin/String, kotlinx.serialization/KSerializer<out kotlin/Any>) // com.github.avrokotlin.avro4k/AvroBuilder.setLogicalTypeSerializer|setLogicalTypeSerializer(kotlin.String;kotlinx.serialization.KSerializer<out|kotlin.Any>){}[0]
+}
+
+final class com.github.avrokotlin.avro4k/AvroConfiguration { // com.github.avrokotlin.avro4k/AvroConfiguration|null[0]
+    constructor <init>(com.github.avrokotlin.avro4k/FieldNamingStrategy = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization/KSerializer<out kotlin/Any>> = ...) // com.github.avrokotlin.avro4k/AvroConfiguration.<init>|<init>(com.github.avrokotlin.avro4k.FieldNamingStrategy;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.collections.Map<kotlin.String,kotlinx.serialization.KSerializer<out|kotlin.Any>>){}[0]
+
+    final val fieldNamingStrategy // com.github.avrokotlin.avro4k/AvroConfiguration.fieldNamingStrategy|{}fieldNamingStrategy[0]
+        final fun <get-fieldNamingStrategy>(): com.github.avrokotlin.avro4k/FieldNamingStrategy // com.github.avrokotlin.avro4k/AvroConfiguration.fieldNamingStrategy.<get-fieldNamingStrategy>|<get-fieldNamingStrategy>(){}[0]
+    final val implicitEmptyCollections // com.github.avrokotlin.avro4k/AvroConfiguration.implicitEmptyCollections|{}implicitEmptyCollections[0]
+        final fun <get-implicitEmptyCollections>(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroConfiguration.implicitEmptyCollections.<get-implicitEmptyCollections>|<get-implicitEmptyCollections>(){}[0]
+    final val implicitNulls // com.github.avrokotlin.avro4k/AvroConfiguration.implicitNulls|{}implicitNulls[0]
+        final fun <get-implicitNulls>(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroConfiguration.implicitNulls.<get-implicitNulls>|<get-implicitNulls>(){}[0]
+    final val logicalTypes // com.github.avrokotlin.avro4k/AvroConfiguration.logicalTypes|{}logicalTypes[0]
+        final fun <get-logicalTypes>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization/KSerializer<out kotlin/Any>> // com.github.avrokotlin.avro4k/AvroConfiguration.logicalTypes.<get-logicalTypes>|<get-logicalTypes>(){}[0]
+    final val validateSerialization // com.github.avrokotlin.avro4k/AvroConfiguration.validateSerialization|{}validateSerialization[0]
+        final fun <get-validateSerialization>(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroConfiguration.validateSerialization.<get-validateSerialization>|<get-validateSerialization>(){}[0]
+
+    final fun component1(): com.github.avrokotlin.avro4k/FieldNamingStrategy // com.github.avrokotlin.avro4k/AvroConfiguration.component1|component1(){}[0]
+    final fun component2(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroConfiguration.component2|component2(){}[0]
+    final fun component3(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroConfiguration.component3|component3(){}[0]
+    final fun component4(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroConfiguration.component4|component4(){}[0]
+    final fun component5(): kotlin.collections/Map<kotlin/String, kotlinx.serialization/KSerializer<out kotlin/Any>> // com.github.avrokotlin.avro4k/AvroConfiguration.component5|component5(){}[0]
+    final fun copy(com.github.avrokotlin.avro4k/FieldNamingStrategy = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization/KSerializer<out kotlin/Any>> = ...): com.github.avrokotlin.avro4k/AvroConfiguration // com.github.avrokotlin.avro4k/AvroConfiguration.copy|copy(com.github.avrokotlin.avro4k.FieldNamingStrategy;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.collections.Map<kotlin.String,kotlinx.serialization.KSerializer<out|kotlin.Any>>){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroConfiguration.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroConfiguration.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroConfiguration.toString|toString(){}[0]
+}
+
+final class com.github.avrokotlin.avro4k/AvroSingleObject : kotlinx.serialization/BinaryFormat { // com.github.avrokotlin.avro4k/AvroSingleObject|null[0]
+    constructor <init>(kotlin/Function1<kotlin/Long, com.github.avrokotlin.avro4k/AvroSchema?>, com.github.avrokotlin.avro4k/Avro = ...) // com.github.avrokotlin.avro4k/AvroSingleObject.<init>|<init>(kotlin.Function1<kotlin.Long,com.github.avrokotlin.avro4k.AvroSchema?>;com.github.avrokotlin.avro4k.Avro){}[0]
+
+    final val avro // com.github.avrokotlin.avro4k/AvroSingleObject.avro|{}avro[0]
+        final fun <get-avro>(): com.github.avrokotlin.avro4k/Avro // com.github.avrokotlin.avro4k/AvroSingleObject.avro.<get-avro>|<get-avro>(){}[0]
+    final val serializersModule // com.github.avrokotlin.avro4k/AvroSingleObject.serializersModule|{}serializersModule[0]
+        final fun <get-serializersModule>(): kotlinx.serialization.modules/SerializersModule // com.github.avrokotlin.avro4k/AvroSingleObject.serializersModule.<get-serializersModule>|<get-serializersModule>(){}[0]
+
+    final fun <#A1: kotlin/Any?> decodeFromByteArray(kotlinx.serialization/DeserializationStrategy<#A1>, kotlin/ByteArray): #A1 // com.github.avrokotlin.avro4k/AvroSingleObject.decodeFromByteArray|decodeFromByteArray(kotlinx.serialization.DeserializationStrategy<0:0>;kotlin.ByteArray){0§<kotlin.Any?>}[0]
+    final fun <#A1: kotlin/Any?> decodeFromSource(kotlinx.serialization/DeserializationStrategy<#A1>, kotlinx.io/Source): #A1 // com.github.avrokotlin.avro4k/AvroSingleObject.decodeFromSource|decodeFromSource(kotlinx.serialization.DeserializationStrategy<0:0>;kotlinx.io.Source){0§<kotlin.Any?>}[0]
+    final fun <#A1: kotlin/Any?> encodeToByteArray(kotlinx.serialization/SerializationStrategy<#A1>, #A1): kotlin/ByteArray // com.github.avrokotlin.avro4k/AvroSingleObject.encodeToByteArray|encodeToByteArray(kotlinx.serialization.SerializationStrategy<0:0>;0:0){0§<kotlin.Any?>}[0]
+    final fun <#A1: kotlin/Any?> encodeToSink(com.github.avrokotlin.avro4k/AvroSchema, kotlinx.serialization/SerializationStrategy<#A1>, #A1, kotlinx.io/Sink) // com.github.avrokotlin.avro4k/AvroSingleObject.encodeToSink|encodeToSink(com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.SerializationStrategy<0:0>;0:0;kotlinx.io.Sink){0§<kotlin.Any?>}[0]
+}
+
+final class com.github.avrokotlin.avro4k/MissingFieldsEncodingException : com.github.avrokotlin.avro4k/AvroSchemaMismatchException { // com.github.avrokotlin.avro4k/MissingFieldsEncodingException|null[0]
+    constructor <init>(kotlin.collections/List<com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field>, com.github.avrokotlin.avro4k/AvroSchema) // com.github.avrokotlin.avro4k/MissingFieldsEncodingException.<init>|<init>(kotlin.collections.List<com.github.avrokotlin.avro4k.AvroSchema.RecordSchema.Field>;com.github.avrokotlin.avro4k.AvroSchema){}[0]
+    constructor <init>(kotlin.collections/List<com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field>, com.github.avrokotlin.avro4k/AvroSchema, kotlinx.serialization.descriptors/SerialDescriptor) // com.github.avrokotlin.avro4k/MissingFieldsEncodingException.<init>|<init>(kotlin.collections.List<com.github.avrokotlin.avro4k.AvroSchema.RecordSchema.Field>;com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.descriptors.SerialDescriptor){}[0]
+    constructor <init>(kotlin/String) // com.github.avrokotlin.avro4k/MissingFieldsEncodingException.<init>|<init>(kotlin.String){}[0]
+}
+
+final class com.github.avrokotlin.avro4k/Name { // com.github.avrokotlin.avro4k/Name|null[0]
+    constructor <init>(kotlin/String, kotlin/String? = ...) // com.github.avrokotlin.avro4k/Name.<init>|<init>(kotlin.String;kotlin.String?){}[0]
+
+    final val fullName // com.github.avrokotlin.avro4k/Name.fullName|{}fullName[0]
+        final fun <get-fullName>(): kotlin/String // com.github.avrokotlin.avro4k/Name.fullName.<get-fullName>|<get-fullName>(){}[0]
+    final val simpleName // com.github.avrokotlin.avro4k/Name.simpleName|{}simpleName[0]
+        final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/Name.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+    final val space // com.github.avrokotlin.avro4k/Name.space|{}space[0]
+        final fun <get-space>(): kotlin/String? // com.github.avrokotlin.avro4k/Name.space.<get-space>|<get-space>(){}[0]
+
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/Name.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/Name.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/Name.toString|toString(){}[0]
+}
+
+open class com.github.avrokotlin.avro4k.serializer/AnySerializer : com.github.avrokotlin.avro4k.serializer/AbstractAnySerializer { // com.github.avrokotlin.avro4k.serializer/AnySerializer|null[0]
+    constructor <init>() // com.github.avrokotlin.avro4k.serializer/AnySerializer.<init>|<init>(){}[0]
+
+    open fun (kotlinx.serialization.modules/SerializersModule).inferSerializationStrategyFromNonSerializableType(kotlin.reflect/KClass<out kotlin/Any>): kotlinx.serialization/SerializationStrategy<*>? // com.github.avrokotlin.avro4k.serializer/AnySerializer.inferSerializationStrategyFromNonSerializableType|inferSerializationStrategyFromNonSerializableType@kotlinx.serialization.modules.SerializersModule(kotlin.reflect.KClass<out|kotlin.Any>){}[0]
+    open fun serialize(kotlinx.serialization.encoding/Encoder, kotlin/Any) // com.github.avrokotlin.avro4k.serializer/AnySerializer.serialize|serialize(kotlinx.serialization.encoding.Encoder;kotlin.Any){}[0]
+}
+
+open class com.github.avrokotlin.avro4k/AvroMalformedDataException : com.github.avrokotlin.avro4k/AvroSerializationException { // com.github.avrokotlin.avro4k/AvroMalformedDataException|null[0]
+    constructor <init>(kotlin/String?) // com.github.avrokotlin.avro4k/AvroMalformedDataException.<init>|<init>(kotlin.String?){}[0]
+    constructor <init>(kotlin/String?, kotlin/Throwable?) // com.github.avrokotlin.avro4k/AvroMalformedDataException.<init>|<init>(kotlin.String?;kotlin.Throwable?){}[0]
+}
+
+open class com.github.avrokotlin.avro4k/AvroSchemaGenerationException : com.github.avrokotlin.avro4k/AvroSerializationException { // com.github.avrokotlin.avro4k/AvroSchemaGenerationException|null[0]
+    constructor <init>(kotlin/String, kotlin/String) // com.github.avrokotlin.avro4k/AvroSchemaGenerationException.<init>|<init>(kotlin.String;kotlin.String){}[0]
+    constructor <init>(kotlin/String, kotlin/String, kotlin/Throwable?) // com.github.avrokotlin.avro4k/AvroSchemaGenerationException.<init>|<init>(kotlin.String;kotlin.String;kotlin.Throwable?){}[0]
+
+    final val path // com.github.avrokotlin.avro4k/AvroSchemaGenerationException.path|{}path[0]
+        final fun <get-path>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchemaGenerationException.path.<get-path>|<get-path>(){}[0]
+}
+
+open class com.github.avrokotlin.avro4k/AvroSchemaMismatchException : com.github.avrokotlin.avro4k/AvroSerializationException { // com.github.avrokotlin.avro4k/AvroSchemaMismatchException|null[0]
+    constructor <init>(kotlin/String?) // com.github.avrokotlin.avro4k/AvroSchemaMismatchException.<init>|<init>(kotlin.String?){}[0]
+    constructor <init>(kotlin/String?, kotlin/Throwable?) // com.github.avrokotlin.avro4k/AvroSchemaMismatchException.<init>|<init>(kotlin.String?;kotlin.Throwable?){}[0]
+}
+
+open class com.github.avrokotlin.avro4k/AvroSchemaParseException : com.github.avrokotlin.avro4k/AvroSerializationException { // com.github.avrokotlin.avro4k/AvroSchemaParseException|null[0]
+    constructor <init>(kotlin/String?) // com.github.avrokotlin.avro4k/AvroSchemaParseException.<init>|<init>(kotlin.String?){}[0]
+    constructor <init>(kotlin/String?, kotlin/Throwable?) // com.github.avrokotlin.avro4k/AvroSchemaParseException.<init>|<init>(kotlin.String?;kotlin.Throwable?){}[0]
+}
+
+open class com.github.avrokotlin.avro4k/AvroSerializationException : kotlinx.serialization/SerializationException { // com.github.avrokotlin.avro4k/AvroSerializationException|null[0]
+    constructor <init>(kotlin/String?) // com.github.avrokotlin.avro4k/AvroSerializationException.<init>|<init>(kotlin.String?){}[0]
+    constructor <init>(kotlin/String?, kotlin/Throwable?) // com.github.avrokotlin.avro4k/AvroSerializationException.<init>|<init>(kotlin.String?;kotlin.Throwable?){}[0]
+}
+
+open class com.github.avrokotlin.avro4k/AvroValidationException : com.github.avrokotlin.avro4k/AvroSerializationException { // com.github.avrokotlin.avro4k/AvroValidationException|null[0]
+    constructor <init>(kotlin/String, kotlin/String) // com.github.avrokotlin.avro4k/AvroValidationException.<init>|<init>(kotlin.String;kotlin.String){}[0]
+
+    final val path // com.github.avrokotlin.avro4k/AvroValidationException.path|{}path[0]
+        final fun <get-path>(): kotlin/String // com.github.avrokotlin.avro4k/AvroValidationException.path.<get-path>|<get-path>(){}[0]
+}
+
+sealed class com.github.avrokotlin.avro4k/Avro : kotlinx.serialization/BinaryFormat { // com.github.avrokotlin.avro4k/Avro|null[0]
+    final val configuration // com.github.avrokotlin.avro4k/Avro.configuration|{}configuration[0]
+        final fun <get-configuration>(): com.github.avrokotlin.avro4k/AvroConfiguration // com.github.avrokotlin.avro4k/Avro.configuration.<get-configuration>|<get-configuration>(){}[0]
+    final val serializersModule // com.github.avrokotlin.avro4k/Avro.serializersModule|{}serializersModule[0]
+        final fun <get-serializersModule>(): kotlinx.serialization.modules/SerializersModule // com.github.avrokotlin.avro4k/Avro.serializersModule.<get-serializersModule>|<get-serializersModule>(){}[0]
+
+    final fun <#A1: kotlin/Any?> decodeFromByteArray(com.github.avrokotlin.avro4k/AvroSchema, kotlinx.serialization/DeserializationStrategy<#A1>, kotlin/ByteArray): #A1 // com.github.avrokotlin.avro4k/Avro.decodeFromByteArray|decodeFromByteArray(com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.DeserializationStrategy<0:0>;kotlin.ByteArray){0§<kotlin.Any?>}[0]
+    final fun <#A1: kotlin/Any?> encodeToByteArray(com.github.avrokotlin.avro4k/AvroSchema, kotlinx.serialization/SerializationStrategy<#A1>, #A1): kotlin/ByteArray // com.github.avrokotlin.avro4k/Avro.encodeToByteArray|encodeToByteArray(com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.SerializationStrategy<0:0>;0:0){0§<kotlin.Any?>}[0]
+    final fun schema(kotlinx.serialization.descriptors/SerialDescriptor): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/Avro.schema|schema(kotlinx.serialization.descriptors.SerialDescriptor){}[0]
+    open fun <#A1: kotlin/Any?> decodeFromByteArray(kotlinx.serialization/DeserializationStrategy<#A1>, kotlin/ByteArray): #A1 // com.github.avrokotlin.avro4k/Avro.decodeFromByteArray|decodeFromByteArray(kotlinx.serialization.DeserializationStrategy<0:0>;kotlin.ByteArray){0§<kotlin.Any?>}[0]
+    open fun <#A1: kotlin/Any?> encodeToByteArray(kotlinx.serialization/SerializationStrategy<#A1>, #A1): kotlin/ByteArray // com.github.avrokotlin.avro4k/Avro.encodeToByteArray|encodeToByteArray(kotlinx.serialization.SerializationStrategy<0:0>;0:0){0§<kotlin.Any?>}[0]
+
+    final object Default : com.github.avrokotlin.avro4k/Avro // com.github.avrokotlin.avro4k/Avro.Default|null[0]
+}
+
+sealed class com.github.avrokotlin.avro4k/AvroSchema { // com.github.avrokotlin.avro4k/AvroSchema|null[0]
+    abstract val simpleName // com.github.avrokotlin.avro4k/AvroSchema.simpleName|{}simpleName[0]
+        abstract fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+    final val logicalTypeName // com.github.avrokotlin.avro4k/AvroSchema.logicalTypeName|{}logicalTypeName[0]
+        final fun <get-logicalTypeName>(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.logicalTypeName.<get-logicalTypeName>|<get-logicalTypeName>(){}[0]
+    final val type // com.github.avrokotlin.avro4k/AvroSchema.type|{}type[0]
+        final fun <get-type>(): com.github.avrokotlin.avro4k/AvroSchema.Type // com.github.avrokotlin.avro4k/AvroSchema.type.<get-type>|<get-type>(){}[0]
+    open val fullName // com.github.avrokotlin.avro4k/AvroSchema.fullName|{}fullName[0]
+        open fun <get-fullName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.fullName.<get-fullName>|<get-fullName>(){}[0]
+
+    final enum class Type : kotlin/Enum<com.github.avrokotlin.avro4k/AvroSchema.Type> { // com.github.avrokotlin.avro4k/AvroSchema.Type|null[0]
+        enum entry ARRAY // com.github.avrokotlin.avro4k/AvroSchema.Type.ARRAY|null[0]
+        enum entry BOOLEAN // com.github.avrokotlin.avro4k/AvroSchema.Type.BOOLEAN|null[0]
+        enum entry BYTES // com.github.avrokotlin.avro4k/AvroSchema.Type.BYTES|null[0]
+        enum entry DOUBLE // com.github.avrokotlin.avro4k/AvroSchema.Type.DOUBLE|null[0]
+        enum entry ENUM // com.github.avrokotlin.avro4k/AvroSchema.Type.ENUM|null[0]
+        enum entry FIXED // com.github.avrokotlin.avro4k/AvroSchema.Type.FIXED|null[0]
+        enum entry FLOAT // com.github.avrokotlin.avro4k/AvroSchema.Type.FLOAT|null[0]
+        enum entry INT // com.github.avrokotlin.avro4k/AvroSchema.Type.INT|null[0]
+        enum entry LONG // com.github.avrokotlin.avro4k/AvroSchema.Type.LONG|null[0]
+        enum entry MAP // com.github.avrokotlin.avro4k/AvroSchema.Type.MAP|null[0]
+        enum entry NULL // com.github.avrokotlin.avro4k/AvroSchema.Type.NULL|null[0]
+        enum entry RECORD // com.github.avrokotlin.avro4k/AvroSchema.Type.RECORD|null[0]
+        enum entry STRING // com.github.avrokotlin.avro4k/AvroSchema.Type.STRING|null[0]
+        enum entry UNION // com.github.avrokotlin.avro4k/AvroSchema.Type.UNION|null[0]
+
+        final val entries // com.github.avrokotlin.avro4k/AvroSchema.Type.entries|#static{}entries[0]
+            final fun <get-entries>(): kotlin.enums/EnumEntries<com.github.avrokotlin.avro4k/AvroSchema.Type> // com.github.avrokotlin.avro4k/AvroSchema.Type.entries.<get-entries>|<get-entries>#static(){}[0]
+
+        final fun valueOf(kotlin/String): com.github.avrokotlin.avro4k/AvroSchema.Type // com.github.avrokotlin.avro4k/AvroSchema.Type.valueOf|valueOf#static(kotlin.String){}[0]
+        final fun values(): kotlin/Array<com.github.avrokotlin.avro4k/AvroSchema.Type> // com.github.avrokotlin.avro4k/AvroSchema.Type.values|values#static(){}[0]
+    }
+
+    final class ArraySchema : com.github.avrokotlin.avro4k/ResolvedSchema { // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema|null[0]
+        constructor <init>(com.github.avrokotlin.avro4k/AvroSchema, kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.<init>|<init>(com.github.avrokotlin.avro4k.AvroSchema;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val elementSchema // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.elementSchema|{}elementSchema[0]
+            final fun <get-elementSchema>(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.elementSchema.<get-elementSchema>|<get-elementSchema>(){}[0]
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.component1|component1(){}[0]
+        final fun component2(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.component2|component2(){}[0]
+        final fun copy(com.github.avrokotlin.avro4k/AvroSchema = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.ArraySchema // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.copy|copy(com.github.avrokotlin.avro4k.AvroSchema;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.ArraySchema.toString|toString(){}[0]
+    }
+
+    final class BooleanSchema : com.github.avrokotlin.avro4k/AvroSchema.PrimitiveSchema { // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema|null[0]
+        constructor <init>(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.copy|copy(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.BooleanSchema.toString|toString(){}[0]
+    }
+
+    final class BytesSchema : com.github.avrokotlin.avro4k/AvroSchema.PrimitiveSchema { // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema|null[0]
+        constructor <init>(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.BytesSchema // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.copy|copy(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.BytesSchema.toString|toString(){}[0]
+    }
+
+    final class DoubleSchema : com.github.avrokotlin.avro4k/AvroSchema.PrimitiveSchema { // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema|null[0]
+        constructor <init>(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.copy|copy(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.DoubleSchema.toString|toString(){}[0]
+    }
+
+    final class EnumSchema : com.github.avrokotlin.avro4k/AvroSchema.NamedSchema { // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema|null[0]
+        constructor <init>(com.github.avrokotlin.avro4k/Name, kotlin.collections/List<kotlin/String>, kotlin/String? = ..., kotlin/String? = ..., kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.<init>|<init>(com.github.avrokotlin.avro4k.Name;kotlin.collections.List<kotlin.String>;kotlin.String?;kotlin.String?;kotlin.collections.Set<com.github.avrokotlin.avro4k.Name>;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val aliases // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.aliases|{}aliases[0]
+            final fun <get-aliases>(): kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.aliases.<get-aliases>|<get-aliases>(){}[0]
+        final val defaultSymbol // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.defaultSymbol|{}defaultSymbol[0]
+            final fun <get-defaultSymbol>(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.defaultSymbol.<get-defaultSymbol>|<get-defaultSymbol>(){}[0]
+        final val doc // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.doc|{}doc[0]
+            final fun <get-doc>(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.doc.<get-doc>|<get-doc>(){}[0]
+        final val name // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.name|{}name[0]
+            final fun <get-name>(): com.github.avrokotlin.avro4k/Name // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.name.<get-name>|<get-name>(){}[0]
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.props.<get-props>|<get-props>(){}[0]
+        final val symbols // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.symbols|{}symbols[0]
+            final fun <get-symbols>(): kotlin.collections/List<kotlin/String> // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.symbols.<get-symbols>|<get-symbols>(){}[0]
+
+        final fun component1(): com.github.avrokotlin.avro4k/Name // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.component1|component1(){}[0]
+        final fun component2(): kotlin.collections/List<kotlin/String> // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.component2|component2(){}[0]
+        final fun component3(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.component3|component3(){}[0]
+        final fun component4(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.component4|component4(){}[0]
+        final fun component5(): kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.component5|component5(){}[0]
+        final fun component6(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.component6|component6(){}[0]
+        final fun copy(com.github.avrokotlin.avro4k/Name = ..., kotlin.collections/List<kotlin/String> = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.EnumSchema // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.copy|copy(com.github.avrokotlin.avro4k.Name;kotlin.collections.List<kotlin.String>;kotlin.String?;kotlin.String?;kotlin.collections.Set<com.github.avrokotlin.avro4k.Name>;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.equals|equals(kotlin.Any?){}[0]
+        final fun getSymbolIndexOrNull(kotlin/String): kotlin/Int? // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.getSymbolIndexOrNull|getSymbolIndexOrNull(kotlin.String){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.EnumSchema.toString|toString(){}[0]
+    }
+
+    final class FixedSchema : com.github.avrokotlin.avro4k/AvroSchema.NamedSchema { // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema|null[0]
+        constructor <init>(com.github.avrokotlin.avro4k/Name, kotlin/Int, kotlin/String? = ..., kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.<init>|<init>(com.github.avrokotlin.avro4k.Name;kotlin.Int;kotlin.String?;kotlin.collections.Set<com.github.avrokotlin.avro4k.Name>;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val aliases // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.aliases|{}aliases[0]
+            final fun <get-aliases>(): kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.aliases.<get-aliases>|<get-aliases>(){}[0]
+        final val doc // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.doc|{}doc[0]
+            final fun <get-doc>(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.doc.<get-doc>|<get-doc>(){}[0]
+        final val name // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.name|{}name[0]
+            final fun <get-name>(): com.github.avrokotlin.avro4k/Name // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.name.<get-name>|<get-name>(){}[0]
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.props.<get-props>|<get-props>(){}[0]
+        final val size // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.size|{}size[0]
+            final fun <get-size>(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.size.<get-size>|<get-size>(){}[0]
+
+        final fun component1(): com.github.avrokotlin.avro4k/Name // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.component1|component1(){}[0]
+        final fun component2(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.component2|component2(){}[0]
+        final fun component3(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.component3|component3(){}[0]
+        final fun component4(): kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.component4|component4(){}[0]
+        final fun component5(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.component5|component5(){}[0]
+        final fun copy(com.github.avrokotlin.avro4k/Name = ..., kotlin/Int = ..., kotlin/String? = ..., kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.FixedSchema // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.copy|copy(com.github.avrokotlin.avro4k.Name;kotlin.Int;kotlin.String?;kotlin.collections.Set<com.github.avrokotlin.avro4k.Name>;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.FixedSchema.toString|toString(){}[0]
+    }
+
+    final class FloatSchema : com.github.avrokotlin.avro4k/AvroSchema.PrimitiveSchema { // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema|null[0]
+        constructor <init>(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.FloatSchema // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.copy|copy(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.FloatSchema.toString|toString(){}[0]
+    }
+
+    final class IntSchema : com.github.avrokotlin.avro4k/AvroSchema.PrimitiveSchema { // com.github.avrokotlin.avro4k/AvroSchema.IntSchema|null[0]
+        constructor <init>(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.IntSchema // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.copy|copy(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.IntSchema.toString|toString(){}[0]
+    }
+
+    final class LongSchema : com.github.avrokotlin.avro4k/AvroSchema.PrimitiveSchema { // com.github.avrokotlin.avro4k/AvroSchema.LongSchema|null[0]
+        constructor <init>(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.LongSchema // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.copy|copy(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.LongSchema.toString|toString(){}[0]
+    }
+
+    final class MapSchema : com.github.avrokotlin.avro4k/ResolvedSchema { // com.github.avrokotlin.avro4k/AvroSchema.MapSchema|null[0]
+        constructor <init>(com.github.avrokotlin.avro4k/AvroSchema, kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.<init>|<init>(com.github.avrokotlin.avro4k.AvroSchema;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+        final val valueSchema // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.valueSchema|{}valueSchema[0]
+            final fun <get-valueSchema>(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.valueSchema.<get-valueSchema>|<get-valueSchema>(){}[0]
+
+        final fun component1(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.component1|component1(){}[0]
+        final fun component2(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.component2|component2(){}[0]
+        final fun copy(com.github.avrokotlin.avro4k/AvroSchema = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.MapSchema // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.copy|copy(com.github.avrokotlin.avro4k.AvroSchema;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.MapSchema.toString|toString(){}[0]
+    }
+
+    final class NullSchema : com.github.avrokotlin.avro4k/ResolvedSchema { // com.github.avrokotlin.avro4k/AvroSchema.NullSchema|null[0]
+        constructor <init>(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.NullSchema // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.copy|copy(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.NullSchema.toString|toString(){}[0]
+    }
+
+    final class RecordSchema : com.github.avrokotlin.avro4k/AvroSchema.NamedSchema { // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema|null[0]
+        constructor <init>(com.github.avrokotlin.avro4k/Name, kotlin.collections/List<com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field>, kotlin/String? = ..., kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.<init>|<init>(com.github.avrokotlin.avro4k.Name;kotlin.collections.List<com.github.avrokotlin.avro4k.AvroSchema.RecordSchema.Field>;kotlin.String?;kotlin.collections.Set<com.github.avrokotlin.avro4k.Name>;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val aliases // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.aliases|{}aliases[0]
+            final fun <get-aliases>(): kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.aliases.<get-aliases>|<get-aliases>(){}[0]
+        final val doc // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.doc|{}doc[0]
+            final fun <get-doc>(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.doc.<get-doc>|<get-doc>(){}[0]
+        final val fields // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.fields|{}fields[0]
+            final fun <get-fields>(): kotlin.collections/List<com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.fields.<get-fields>|<get-fields>(){}[0]
+        final val name // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.name|{}name[0]
+            final fun <get-name>(): com.github.avrokotlin.avro4k/Name // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.name.<get-name>|<get-name>(){}[0]
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.props.<get-props>|<get-props>(){}[0]
+
+        final fun component1(): com.github.avrokotlin.avro4k/Name // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.component1|component1(){}[0]
+        final fun component2(): kotlin.collections/List<com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.component2|component2(){}[0]
+        final fun component3(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.component3|component3(){}[0]
+        final fun component4(): kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.component4|component4(){}[0]
+        final fun component5(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.component5|component5(){}[0]
+        final fun copy(com.github.avrokotlin.avro4k/Name = ..., kotlin.collections/List<com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field> = ..., kotlin/String? = ..., kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.RecordSchema // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.copy|copy(com.github.avrokotlin.avro4k.Name;kotlin.collections.List<com.github.avrokotlin.avro4k.AvroSchema.RecordSchema.Field>;kotlin.String?;kotlin.collections.Set<com.github.avrokotlin.avro4k.Name>;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.equals|equals(kotlin.Any?){}[0]
+        final fun getFieldByName(kotlin/String): com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.getFieldByName|getFieldByName(kotlin.String){}[0]
+        final fun getFieldIndexOrNull(kotlin/String): kotlin/Int? // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.getFieldIndexOrNull|getFieldIndexOrNull(kotlin.String){}[0]
+        final fun getFieldOrNull(kotlin/String): com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field? // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.getFieldOrNull|getFieldOrNull(kotlin.String){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.toString|toString(){}[0]
+
+        final class Field : com.github.avrokotlin.avro4k/WithDoc, com.github.avrokotlin.avro4k/WithProps { // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field|null[0]
+            constructor <init>(kotlin/String, com.github.avrokotlin.avro4k/AvroSchema, kotlinx.serialization.json/JsonElement? = ..., kotlin/String? = ..., kotlin.collections/Set<kotlin/String> = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.<init>|<init>(kotlin.String;com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.json.JsonElement?;kotlin.String?;kotlin.collections.Set<kotlin.String>;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+            final val aliases // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.aliases|{}aliases[0]
+                final fun <get-aliases>(): kotlin.collections/Set<kotlin/String> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.aliases.<get-aliases>|<get-aliases>(){}[0]
+            final val defaultValue // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.defaultValue|{}defaultValue[0]
+                final fun <get-defaultValue>(): kotlinx.serialization.json/JsonElement? // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.defaultValue.<get-defaultValue>|<get-defaultValue>(){}[0]
+            final val doc // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.doc|{}doc[0]
+                final fun <get-doc>(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.doc.<get-doc>|<get-doc>(){}[0]
+            final val name // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.name|{}name[0]
+                final fun <get-name>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.name.<get-name>|<get-name>(){}[0]
+            final val props // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.props|{}props[0]
+                final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.props.<get-props>|<get-props>(){}[0]
+            final val schema // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.schema|{}schema[0]
+                final fun <get-schema>(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.schema.<get-schema>|<get-schema>(){}[0]
+
+            final fun component1(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.component1|component1(){}[0]
+            final fun component2(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.component2|component2(){}[0]
+            final fun component3(): kotlinx.serialization.json/JsonElement? // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.component3|component3(){}[0]
+            final fun component4(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.component4|component4(){}[0]
+            final fun component5(): kotlin.collections/Set<kotlin/String> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.component5|component5(){}[0]
+            final fun component6(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.component6|component6(){}[0]
+            final fun copy(kotlin/String = ..., com.github.avrokotlin.avro4k/AvroSchema = ..., kotlinx.serialization.json/JsonElement? = ..., kotlin/String? = ..., kotlin.collections/Set<kotlin/String> = ..., kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.copy|copy(kotlin.String;com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.json.JsonElement?;kotlin.String?;kotlin.collections.Set<kotlin.String>;kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+            final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.equals|equals(kotlin.Any?){}[0]
+            final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.hashCode|hashCode(){}[0]
+            final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.RecordSchema.Field.toString|toString(){}[0]
+        }
+    }
+
+    final class StringSchema : com.github.avrokotlin.avro4k/AvroSchema.PrimitiveSchema { // com.github.avrokotlin.avro4k/AvroSchema.StringSchema|null[0]
+        constructor <init>(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...) // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.<init>|<init>(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+
+        final val props // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.props|{}props[0]
+            final fun <get-props>(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.props.<get-props>|<get-props>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+
+        final fun component1(): kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/Map<kotlin/String, kotlinx.serialization.json/JsonElement> = ...): com.github.avrokotlin.avro4k/AvroSchema.StringSchema // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.copy|copy(kotlin.collections.Map<kotlin.String,kotlinx.serialization.json.JsonElement>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.StringSchema.toString|toString(){}[0]
+    }
+
+    final class UnionSchema : com.github.avrokotlin.avro4k/AvroSchema { // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema|null[0]
+        constructor <init>(kotlin.collections/List<com.github.avrokotlin.avro4k/ResolvedSchema>) // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.<init>|<init>(kotlin.collections.List<com.github.avrokotlin.avro4k.ResolvedSchema>){}[0]
+        constructor <init>(kotlin/Array<out com.github.avrokotlin.avro4k/ResolvedSchema>...) // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.<init>|<init>(kotlin.Array<out|com.github.avrokotlin.avro4k.ResolvedSchema>...){}[0]
+
+        final val isNullable // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.isNullable|{}isNullable[0]
+            final fun <get-isNullable>(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.isNullable.<get-isNullable>|<get-isNullable>(){}[0]
+        final val isSimpleNullableType // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.isSimpleNullableType|{}isSimpleNullableType[0]
+            final fun <get-isSimpleNullableType>(): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.isSimpleNullableType.<get-isSimpleNullableType>|<get-isSimpleNullableType>(){}[0]
+        final val simpleName // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.simpleName|{}simpleName[0]
+            final fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+        final val types // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.types|{}types[0]
+            final fun <get-types>(): kotlin.collections/List<com.github.avrokotlin.avro4k/ResolvedSchema> // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.types.<get-types>|<get-types>(){}[0]
+
+        final fun component1(): kotlin.collections/List<com.github.avrokotlin.avro4k/ResolvedSchema> // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.component1|component1(){}[0]
+        final fun copy(kotlin.collections/List<com.github.avrokotlin.avro4k/ResolvedSchema> = ...): com.github.avrokotlin.avro4k/AvroSchema.UnionSchema // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.copy|copy(kotlin.collections.List<com.github.avrokotlin.avro4k.ResolvedSchema>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.equals|equals(kotlin.Any?){}[0]
+        final fun getIndexOrNull(kotlin/String): kotlin/Int? // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.getIndexOrNull|getIndexOrNull(kotlin.String){}[0]
+        final fun hashCode(): kotlin/Int // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.UnionSchema.toString|toString(){}[0]
+    }
+
+    sealed class NamedSchema : com.github.avrokotlin.avro4k/ResolvedSchema, com.github.avrokotlin.avro4k/WithDoc { // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema|null[0]
+        abstract val aliases // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema.aliases|{}aliases[0]
+            abstract fun <get-aliases>(): kotlin.collections/Set<com.github.avrokotlin.avro4k/Name> // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema.aliases.<get-aliases>|<get-aliases>(){}[0]
+        abstract val name // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema.name|{}name[0]
+            abstract fun <get-name>(): com.github.avrokotlin.avro4k/Name // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema.name.<get-name>|<get-name>(){}[0]
+        open val fullName // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema.fullName|{}fullName[0]
+            open fun <get-fullName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema.fullName.<get-fullName>|<get-fullName>(){}[0]
+        open val simpleName // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema.simpleName|{}simpleName[0]
+            open fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.NamedSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
+    }
+
+    sealed class PrimitiveSchema : com.github.avrokotlin.avro4k/ResolvedSchema // com.github.avrokotlin.avro4k/AvroSchema.PrimitiveSchema|null[0]
+
+    final object Companion // com.github.avrokotlin.avro4k/AvroSchema.Companion|null[0]
+}
+
+sealed class com.github.avrokotlin.avro4k/ResolvedSchema : com.github.avrokotlin.avro4k/AvroSchema, com.github.avrokotlin.avro4k/WithProps // com.github.avrokotlin.avro4k/ResolvedSchema|null[0]
+
+final object com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer : com.github.avrokotlin.avro4k.serializer/AvroSerializer<kotlin.time/Instant> { // com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer|null[0]
+    final fun deserializeAvro(com.github.avrokotlin.avro4k/AvroDecoder): kotlin.time/Instant // com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer.deserializeAvro|deserializeAvro(com.github.avrokotlin.avro4k.AvroDecoder){}[0]
+    final fun deserializeGeneric(kotlinx.serialization.encoding/Decoder): kotlin.time/Instant // com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer.deserializeGeneric|deserializeGeneric(kotlinx.serialization.encoding.Decoder){}[0]
+    final fun getSchema(com.github.avrokotlin.avro4k.serializer/SchemaSupplierContext): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer.getSchema|getSchema(com.github.avrokotlin.avro4k.serializer.SchemaSupplierContext){}[0]
+    final fun serializeAvro(com.github.avrokotlin.avro4k/AvroEncoder, kotlin.time/Instant) // com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer.serializeAvro|serializeAvro(com.github.avrokotlin.avro4k.AvroEncoder;kotlin.time.Instant){}[0]
+    final fun serializeGeneric(kotlinx.serialization.encoding/Encoder, kotlin.time/Instant) // com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer.serializeGeneric|serializeGeneric(kotlinx.serialization.encoding.Encoder;kotlin.time.Instant){}[0]
+}
+
+final object com.github.avrokotlin.avro4k.serializer/KotlinUuidSerializer : com.github.avrokotlin.avro4k.serializer/AvroSerializer<kotlin.uuid/Uuid> { // com.github.avrokotlin.avro4k.serializer/KotlinUuidSerializer|null[0]
+    final fun deserializeAvro(com.github.avrokotlin.avro4k/AvroDecoder): kotlin.uuid/Uuid // com.github.avrokotlin.avro4k.serializer/KotlinUuidSerializer.deserializeAvro|deserializeAvro(com.github.avrokotlin.avro4k.AvroDecoder){}[0]
+    final fun deserializeGeneric(kotlinx.serialization.encoding/Decoder): kotlin.uuid/Uuid // com.github.avrokotlin.avro4k.serializer/KotlinUuidSerializer.deserializeGeneric|deserializeGeneric(kotlinx.serialization.encoding.Decoder){}[0]
+    final fun getSchema(com.github.avrokotlin.avro4k.serializer/SchemaSupplierContext): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k.serializer/KotlinUuidSerializer.getSchema|getSchema(com.github.avrokotlin.avro4k.serializer.SchemaSupplierContext){}[0]
+    final fun serializeAvro(com.github.avrokotlin.avro4k/AvroEncoder, kotlin.uuid/Uuid) // com.github.avrokotlin.avro4k.serializer/KotlinUuidSerializer.serializeAvro|serializeAvro(com.github.avrokotlin.avro4k.AvroEncoder;kotlin.uuid.Uuid){}[0]
+    final fun serializeGeneric(kotlinx.serialization.encoding/Encoder, kotlin.uuid/Uuid) // com.github.avrokotlin.avro4k.serializer/KotlinUuidSerializer.serializeGeneric|serializeGeneric(kotlinx.serialization.encoding.Encoder;kotlin.uuid.Uuid){}[0]
+}
+
+final val com.github.avrokotlin.avro4k.serializer/decimal // com.github.avrokotlin.avro4k.serializer/decimal|@com.github.avrokotlin.avro4k.serializer.ElementLocation{}decimal[0]
+    final fun (com.github.avrokotlin.avro4k.serializer/ElementLocation).<get-decimal>(): com.github.avrokotlin.avro4k/AvroDecimal? // com.github.avrokotlin.avro4k.serializer/decimal.<get-decimal>|<get-decimal>@com.github.avrokotlin.avro4k.serializer.ElementLocation(){}[0]
+final val com.github.avrokotlin.avro4k.serializer/fixed // com.github.avrokotlin.avro4k.serializer/fixed|@com.github.avrokotlin.avro4k.serializer.ElementLocation{}fixed[0]
+    final fun (com.github.avrokotlin.avro4k.serializer/ElementLocation).<get-fixed>(): com.github.avrokotlin.avro4k/AvroFixed? // com.github.avrokotlin.avro4k.serializer/fixed.<get-fixed>|<get-fixed>@com.github.avrokotlin.avro4k.serializer.ElementLocation(){}[0]
+final val com.github.avrokotlin.avro4k.serializer/stringable // com.github.avrokotlin.avro4k.serializer/stringable|@com.github.avrokotlin.avro4k.serializer.ElementLocation{}stringable[0]
+    final fun (com.github.avrokotlin.avro4k.serializer/ElementLocation).<get-stringable>(): com.github.avrokotlin.avro4k/AvroStringable? // com.github.avrokotlin.avro4k.serializer/stringable.<get-stringable>|<get-stringable>@com.github.avrokotlin.avro4k.serializer.ElementLocation(){}[0]
+final val com.github.avrokotlin.avro4k/isNullable // com.github.avrokotlin.avro4k/isNullable|@com.github.avrokotlin.avro4k.AvroSchema{}isNullable[0]
+    final fun (com.github.avrokotlin.avro4k/AvroSchema).<get-isNullable>(): kotlin/Boolean // com.github.avrokotlin.avro4k/isNullable.<get-isNullable>|<get-isNullable>@com.github.avrokotlin.avro4k.AvroSchema(){}[0]
+final val com.github.avrokotlin.avro4k/nullable // com.github.avrokotlin.avro4k/nullable|@com.github.avrokotlin.avro4k.AvroSchema{}nullable[0]
+    final fun (com.github.avrokotlin.avro4k/AvroSchema).<get-nullable>(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/nullable.<get-nullable>|<get-nullable>@com.github.avrokotlin.avro4k.AvroSchema(){}[0]
+
+final fun (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/schema(kotlinx.serialization/KSerializer<*>): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/schema|schema@com.github.avrokotlin.avro4k.Avro(kotlinx.serialization.KSerializer<*>){}[0]
+final fun (com.github.avrokotlin.avro4k/AvroFixed).com.github.avrokotlin.avro4k.serializer/createSchema(com.github.avrokotlin.avro4k.serializer/ElementLocation): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k.serializer/createSchema|createSchema@com.github.avrokotlin.avro4k.AvroFixed(com.github.avrokotlin.avro4k.serializer.ElementLocation){}[0]
+final fun (com.github.avrokotlin.avro4k/AvroSchema).com.github.avrokotlin.avro4k/toJsonElement(kotlin.collections/MutableSet<kotlin/String> = ...): kotlinx.serialization.json/JsonElement // com.github.avrokotlin.avro4k/toJsonElement|toJsonElement@com.github.avrokotlin.avro4k.AvroSchema(kotlin.collections.MutableSet<kotlin.String>){}[0]
+final fun (com.github.avrokotlin.avro4k/AvroSchema.Companion).com.github.avrokotlin.avro4k/fromJsonElement(kotlinx.serialization.json/JsonElement, kotlin.collections/MutableMap<kotlin/String, com.github.avrokotlin.avro4k/AvroSchema> = ...): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/fromJsonElement|fromJsonElement@com.github.avrokotlin.avro4k.AvroSchema.Companion(kotlinx.serialization.json.JsonElement;kotlin.collections.MutableMap<kotlin.String,com.github.avrokotlin.avro4k.AvroSchema>){}[0]
+final fun (com.github.avrokotlin.avro4k/AvroSchema.Companion).com.github.avrokotlin.avro4k/fromJsonString(kotlin/String, kotlin.collections/MutableMap<kotlin/String, com.github.avrokotlin.avro4k/AvroSchema> = ...): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/fromJsonString|fromJsonString@com.github.avrokotlin.avro4k.AvroSchema.Companion(kotlin.String;kotlin.collections.MutableMap<kotlin.String,com.github.avrokotlin.avro4k.AvroSchema>){}[0]
+final fun (com.github.avrokotlin.avro4k/AvroStringable).com.github.avrokotlin.avro4k.serializer/createSchema(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k.serializer/createSchema|createSchema@com.github.avrokotlin.avro4k.AvroStringable(){}[0]
+final fun <#A: kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/decodeFromSource(com.github.avrokotlin.avro4k/AvroSchema, kotlinx.serialization/DeserializationStrategy<#A>, kotlinx.io/Source): #A // com.github.avrokotlin.avro4k/decodeFromSource|decodeFromSource@com.github.avrokotlin.avro4k.Avro(com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.DeserializationStrategy<0:0>;kotlinx.io.Source){0§<kotlin.Any?>}[0]
+final fun <#A: kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/encodeToSink(com.github.avrokotlin.avro4k/AvroSchema, kotlinx.serialization/SerializationStrategy<#A>, #A, kotlinx.io/Sink) // com.github.avrokotlin.avro4k/encodeToSink|encodeToSink@com.github.avrokotlin.avro4k.Avro(com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.SerializationStrategy<0:0>;0:0;kotlinx.io.Sink){0§<kotlin.Any?>}[0]
+final fun <#A: kotlin/Any?> (com.github.avrokotlin.avro4k/AvroSingleObject).com.github.avrokotlin.avro4k/encodeToByteArray(com.github.avrokotlin.avro4k/AvroSchema, kotlinx.serialization/SerializationStrategy<#A>, #A): kotlin/ByteArray // com.github.avrokotlin.avro4k/encodeToByteArray|encodeToByteArray@com.github.avrokotlin.avro4k.AvroSingleObject(com.github.avrokotlin.avro4k.AvroSchema;kotlinx.serialization.SerializationStrategy<0:0>;0:0){0§<kotlin.Any?>}[0]
+final fun com.github.avrokotlin.avro4k/Avro(com.github.avrokotlin.avro4k/Avro = ..., kotlin/Function1<com.github.avrokotlin.avro4k/AvroBuilder, kotlin/Unit>): com.github.avrokotlin.avro4k/Avro // com.github.avrokotlin.avro4k/Avro|Avro(com.github.avrokotlin.avro4k.Avro;kotlin.Function1<com.github.avrokotlin.avro4k.AvroBuilder,kotlin.Unit>){}[0]
+final inline fun <#A: reified kotlin/Annotation> (com.github.avrokotlin.avro4k.serializer/ElementLocation).com.github.avrokotlin.avro4k.serializer/findAnnotation(): #A? // com.github.avrokotlin.avro4k.serializer/findAnnotation|findAnnotation@com.github.avrokotlin.avro4k.serializer.ElementLocation(){0§<kotlin.Annotation>}[0]
+final inline fun <#A: reified kotlin/Annotation> (kotlinx.serialization.descriptors/SerialDescriptor).com.github.avrokotlin.avro4k.internal/findElementAnnotation(kotlin/Int): #A? // com.github.avrokotlin.avro4k.internal/findElementAnnotation|findElementAnnotation@kotlinx.serialization.descriptors.SerialDescriptor(kotlin.Int){0§<kotlin.Annotation>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/decodeFromByteArray(com.github.avrokotlin.avro4k/AvroSchema, kotlin/ByteArray): #A // com.github.avrokotlin.avro4k/decodeFromByteArray|decodeFromByteArray@com.github.avrokotlin.avro4k.Avro(com.github.avrokotlin.avro4k.AvroSchema;kotlin.ByteArray){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/decodeFromSource(com.github.avrokotlin.avro4k/AvroSchema, kotlinx.io/Source): #A // com.github.avrokotlin.avro4k/decodeFromSource|decodeFromSource@com.github.avrokotlin.avro4k.Avro(com.github.avrokotlin.avro4k.AvroSchema;kotlinx.io.Source){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/decodeFromSource(kotlinx.io/Source): #A // com.github.avrokotlin.avro4k/decodeFromSource|decodeFromSource@com.github.avrokotlin.avro4k.Avro(kotlinx.io.Source){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/encodeToByteArray(com.github.avrokotlin.avro4k/AvroSchema, #A): kotlin/ByteArray // com.github.avrokotlin.avro4k/encodeToByteArray|encodeToByteArray@com.github.avrokotlin.avro4k.Avro(com.github.avrokotlin.avro4k.AvroSchema;0:0){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/encodeToSink(#A, kotlinx.io/Sink) // com.github.avrokotlin.avro4k/encodeToSink|encodeToSink@com.github.avrokotlin.avro4k.Avro(0:0;kotlinx.io.Sink){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/encodeToSink(com.github.avrokotlin.avro4k/AvroSchema, #A, kotlinx.io/Sink) // com.github.avrokotlin.avro4k/encodeToSink|encodeToSink@com.github.avrokotlin.avro4k.Avro(com.github.avrokotlin.avro4k.AvroSchema;0:0;kotlinx.io.Sink){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/Avro).com.github.avrokotlin.avro4k/schema(): com.github.avrokotlin.avro4k/AvroSchema // com.github.avrokotlin.avro4k/schema|schema@com.github.avrokotlin.avro4k.Avro(){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/AvroSingleObject).com.github.avrokotlin.avro4k/decodeFromByteArray(kotlin/ByteArray): #A // com.github.avrokotlin.avro4k/decodeFromByteArray|decodeFromByteArray@com.github.avrokotlin.avro4k.AvroSingleObject(kotlin.ByteArray){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/AvroSingleObject).com.github.avrokotlin.avro4k/encodeToByteArray(#A): kotlin/ByteArray // com.github.avrokotlin.avro4k/encodeToByteArray|encodeToByteArray@com.github.avrokotlin.avro4k.AvroSingleObject(0:0){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (com.github.avrokotlin.avro4k/AvroSingleObject).com.github.avrokotlin.avro4k/encodeToByteArray(com.github.avrokotlin.avro4k/AvroSchema, #A): kotlin/ByteArray // com.github.avrokotlin.avro4k/encodeToByteArray|encodeToByteArray@com.github.avrokotlin.avro4k.AvroSingleObject(com.github.avrokotlin.avro4k.AvroSchema;0:0){0§<kotlin.Any?>}[0]

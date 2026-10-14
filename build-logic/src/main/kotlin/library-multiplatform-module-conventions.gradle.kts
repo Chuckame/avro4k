@@ -10,8 +10,13 @@ plugins {
 
 val libs = the<LibrariesForLibs>()
 
+@OptIn(kotlinx.validation.ExperimentalBCVApi::class)
 apiValidation {
     nonPublicMarkers += "com.github.avrokotlin.avro4k.InternalAvro4kApi"
+    // Dumps the klib ABI (js and native) next to the JVM one, so that a change visible on one platform only shows up.
+    klib {
+        enabled = true
+    }
 }
 
 kotlin {
