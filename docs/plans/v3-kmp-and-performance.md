@@ -389,6 +389,11 @@ Open gaps with no common answer:
   This is the **largest discretionary chunk of B**. If the milestone needs to shrink, OCF can stay
   JVM-only for v3.0 and land in v3.1 — nothing else depends on it.
 
+**Rescoped (user, 2026-10-14):** single-object moves to `commonMain` (its CRC-64-AVRO was already common); the object
+container **stays Apache-backed in `apache-interop` for v3.0** (Apache's `DataFileWriter`/`DataFileStream` and
+`CodecFactory`, avro4k's codec plugged in as a `DatumWriter`/`DatumReader` through the Apache encoder/decoder adapters),
+`@ExperimentalAvro4kApi`. Whether the pure Kotlin container above is worth it is decided for v3.1.
+
 ### B6. Caches → `expect`/`actual`
 
 `internal/Cache.kt`'s `WeakKeyCache` (`ConcurrentHashMap` + `WeakReference` + `ReferenceQueue`) and
@@ -645,7 +650,7 @@ jvm + js + one native target that encodes and decodes a nested data class.
 | **M1 — Cheap perf wins on `main`** | C2 (workflow memoization), C3 (collection serializer cache), C9 (fingerprint memoization, enum boxing), and the `readBytes()` offset fix from C5. No API change, no KMP dependency. | 3–4 parallel `general-purpose` in worktrees (disjoint files), then one `feature-dev:code-reviewer` | Yes — ship as **v2.x** |
 | **M2 — KMP foundation** | B0, B1, B6. Multiplatform build, `AvroSchema` in `commonMain`, identity caches. Core still compiles JVM-only internally. | sequential `general-purpose` (B0 → B1 → B6); B0 touches the build, so no parallelism | No |
 | **M3 — Decouple from Apache** | B2, B3, B4. Own codec ABI, visitors/resolvers/encoders/decoders to `commonMain`, serializer split, Jackson removed. **Re-run the M0 baseline here — this is where a regression would hide.** | `Plan` agent decomposes into units first → then `general-purpose` per unit → `feature-dev:code-reviewer` | No |
-| **M4 — Feature parity** | B5 (CRC-64-AVRO + OCF in common), B7 (downstream modules), B8 (api dump, publication, migration guide). | `general-purpose` per unit; B8 runs alone (`apiDump`) | **v3.0.0** |
+| **M4 — Feature parity** | B5 (single-object in common; OCF stays Apache-backed, see B5), B7 (downstream modules), B8 (api dump, publication, migration guide). | `general-purpose` per unit; B8 runs alone (`apiDump`) | **v3.0.0** |
 | **M5 — Structural perf** | C1 (frame-stack encoder/decoder), C4 (union branch tables), C5 (string/bytes fast paths), C6, C8. Done *after* the codec is avro4k's own so it's done once. | `Plan` agent decomposes C1 first; C1 gets a dedicated worktree and a dedicated agent | **v3.1** |
 
 M1 exists deliberately: it delivers measurable improvement to current users before the multi-month v3

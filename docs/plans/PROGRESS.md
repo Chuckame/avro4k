@@ -7,11 +7,26 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is next**. Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is in progress** (single-object in common done; B7, B8 next). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-14, later): M3 complete — next M4
+### Resume here (2026-10-14, evening): M4 started — single-object in common, container stays on Apache
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed. **B5 rescoped by the user** (decision log, 2026-10-14):
+core has no Apache dependency (true since M3-14), `AvroSingleObject` moves to `commonMain` (**done**, row below), the
+object container stays Apache-backed in `apache-interop` for v3.0, and a pure Kotlin container is weighed for v3.1.
+**v3.0's performance bar is "no real degradation from before the migration"** (met by M3-17's re-baseline); the
+structural work (encoder reuse, string/bytes fast paths, …) stays in M5 / v3.1.
+
+**Next, in order:**
+1. **B7** downstream modules (check what M3 already did before briefing), then **B8** (runs alone).
+2. M5 (decomposition first).
+
+**Issues:** the user has the paste-ready texts for backlog §1, 2, 4, 5, 7–11 (re-reproduced on `main` `6ad6c1c6` on
+2026-10-14, all nine still fail there); they open them.
+
+### Earlier (2026-10-14, later): M3 complete — next M4
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed. **M3-17 is done** (row below, `notes/m3-17.md`): the
 re-baseline against M0 shows nothing worse than M0 beyond `complex` read @1 at −3.1% (separated, under 10%); 7 of 16
@@ -302,7 +317,8 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M3 · B3 core → `commonMain`, Jackson dropped | todo | — | — | split into M3-05 … M3-15 |
 | M3 · B4 serializer split | todo | — | — | — |
 | M3 re-baseline + review | todo | — | — | **regressions hide here** |
-| M4 · B5 CRC-64-AVRO + OCF in common | todo | — | — | discretionary; may slip to v3.1 |
+| M4 · B5 `AvroSingleObject` → `commonMain` | done | `v3/m2-foundation` | this commit | Pure move (`git mv`), the code was already Apache-free (common CRC-64-AVRO since M3-10); still `@ExperimentalAvro4kApi`; JVM `.api` unchanged (same facade class). New `commonTest` `AvroSingleObjectRoundTripTest` (4: header bytes, the fingerprint the JVM computes, round trip, unknown fingerprint, bad marker/version/truncated header); the Apache-oracle tests stay in `jvmTest`. `:core:jvmTest` 1014 → 1018, jsNode/jsBrowser 201 → 205, macosArm64/iosSimulatorArm64 204 → 208, the 10 no-runner binaries link; ACC clean. Not benchmarked (user: not a core part of the library) |
+| M4 · B5 object container | deferred | — | — | **stays Apache-backed in `apache-interop` for v3.0** (Apache's file framing and codecs, avro4k's codec through the Apache encoder/decoder adapters); a pure Kotlin container is weighed for v3.1 (user, 2026-10-14) |
 | M4 · B7 downstream modules | todo | — | — | — |
 | M4 · B8 apiDump, publication, migration guide | todo | — | — | runs alone (`apiDump`) |
 | M5 decomposition (`Plan` agent) | todo | — | — | C1 first |
@@ -312,7 +328,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5 · C6 polymorphic decode allocations | todo | — | — | — |
 | M5 · C8 `ReorderingCompositeEncoder` without closures | todo | — | — | — |
 
-Status values: `todo` · `in progress` · `blocked` · `done`.
+Status values: `todo` · `in progress` · `blocked` · `done` · `deferred`.
 
 ## Decision log
 
@@ -329,6 +345,7 @@ Records *why* a unit was done the way it was, so a later session does not re-dec
 | 2026-09-19 | A2 | ~5 s of JVM/harness overhead per benchmark method, so `-Pbench` narrowing is mandatory in practice; the full 48-benchmark alloc matrix is not something to run casually. |
 | 2026-09-20 | A3 | C1 (per-structure encoder/decoder allocation) and C2 (`resolveFields` per record instance) **cannot be told apart from outside the library** — they happen in the same call with no public seam, so the nested-record family measures their sum. Attributing a change to one of them needs async-profiler `-e alloc` or a temporary core-side counter. |
 | 2026-09-20 | A3 | Escape analysis puts a floor under two families: nested `write` at depth 1 reports ~0 B/op and polymorphic at `shapeCount=10` under-reports the `Pair` by ~3x. Read those at depth 3/8 and at 1000 respectively, or the numbers mislead. |
+| 2026-10-14 | M4 · B5 | **User: core keeps no Apache Avro dependency** (Apache only in `apache-interop` and the Confluent module, which M3-14 already achieved). **Single-object moves to common code; the object container does not** — complex and performance-sensitive, it stays Apache-backed in `apache-interop`, experimental, and whether a pure Kotlin version is worth it is decided for v3.1. Single-object is **not benchmarked** for now (not a core part of the library). **v3.0's performance goal: no real degradation from before the migration**; the bigger improvements (encoder/decoder reuse, string/bytes fast paths) stay in M5. |
 | 2026-10-11 | M3-22 | **User answers to the design's §5** (`notes/m3-22.md`): (1) schema JSON parsing gets its own family, `AvroSchemaParseException`; (2) **no path** on decoding errors in this unit (only generation and validation carry one); (4) stable base `AvroSerializationException`, families `@ExperimentalAvro4kApi`; (5) end of input maps to `AvroMalformedDataException` for every input, `Source` included (cause: the `EOFException`; migration item: check `source.exhausted()`). (3) the `OutOfMemoryError` from a claimed collection count: the agent's 4,096-item chunking is **rejected** (each extra merge copies the whole collection for `Array` and primitive arrays, whose `toBuilder()` copies: quadratic); instead, after reading Apache 1.12.2's four guards, the user chose **guards 1 and 2 only**: (1) the total count of one collection across its blocks is checked (no `.toInt()` truncation, negative/overflow rejected); (2) a block above **1,024** items is not pre-sized: its decoder returns `decodeSequentially() = false`, so kotlinx grows the collection as items arrive instead of `ensureCapacity(count)` up front (blocks ≤ 1,024 keep the sequential path). Guards 3 (count × min bytes vs bytes left) and 4 (zero-byte item cap) are **deferred**: [`notes/backlog-decoding-hardening.md`](notes/backlog-decoding-hardening.md). Cause of the OOM, for the record: kotlinx's `AbstractCollectionSerializer.merge` calls `checkCapacity(decodeCollectionSize())` before reading any item; lists, arrays and primitive arrays pre-size, sets and maps do not. |
 | 2026-10-10 | M3-25, M3-26 | **User decisions.** (1) **Merge `AvroFormatDecoder` into `AvroDecoder`**: public `val avro: Avro` on `AvroDecoder`, and on `AvroEncoder` for symmetry (as kotlinx-serialization's `JsonDecoder.json`/`JsonEncoder.json`) → new unit M3-25, before M3-14. (2) **Generated files using `Uuid` get `@file:OptIn(kotlin.uuid.ExperimentalUuidApi::class)`** so they compile below Kotlin 2.4, **through a generic mechanism** users can also use for their own file annotations / opt-ins → new unit M3-26 (kotlin-generator + gradle-plugin, design reviewed by the orchestrator against the shape in the decomposition). |
 | 2026-10-10 | M3-24 | **User answers after M3-24:** (1) `AvroDecoder.currentWriterSchema: ResolvedSchema` (requested by the user directly to the agent) confirmed, merged. (2) `AbstractAnySerializer` stays `@ExperimentalAvro4kApi` public. (3) `AvroFormatDecoder` (`@InternalAvro4kApi`) accepted; the user asked why it is not merged into `AvroDecoder` — pending, see Resume here. |
