@@ -721,7 +721,196 @@ Read with care: the JVM's cold time is class loading and interpretation, and nat
 platform is pathologically slow on the same work. Real non-JVM numbers need the multiplatform common benchmarks the
 plan calls for, which do not exist yet.
 
+## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
+
+The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than
+at the M0 baseline, and how far is it from Apache?** Same protocol as the "M3 so far" run below, which this section
+supersedes as the current state. That section stays for its JIT investigation of `simple` write @25.
+
+| | |
+|---|---|
+| Date | 2026-10-14 |
+| Machine | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37 |
+| Power | AC power, Low Power Mode off, checked before every invocation and polled every 5–15 s during it; never dropped |
+| Sleep | Held off by one `caffeinate -dimsu` over the whole script; the macOS power log shows no sleep or dark wake during any kept invocation (see *Discarded* below) |
+| Load | Every invocation started once the 1-min load average was below 3 (2.29–2.98 at the starts) |
+| Base ("M0") | `4508a13`, in a separate worktree: Apache Avro 1.12.1, Kotlin 2.3.21, Jackson 2.21.3, kotlinx-io 0.8.2 |
+| Head ("now") | `bc38bbc2` (code = `ccc6c407`): Apache Avro **1.12.2**, Kotlin **2.4.20**, Jackson 2.22.3, kotlinx-io 0.9.1. kotlinx-serialization 1.11.0 and JMH 1.37 on both sides |
+
+**What was compared.** Since the "M3 so far" run, `git diff bd99294 bc38bbc2 -- benchmark/src` adds only the class-trust
+setup Apache 1.12.2 needs (`internal/apache/ApacheAvro.kt`, see *M3-22* above). Every end-to-end `@Benchmark` body is
+unchanged since M0, as established there. The six per-workload tasks, 3 invocations per side alternated (base, head ×
+3), 1 fork × 5 × 1 s warmup × 5 × 3 s measurement, escape analysis on, so 3 forks per row and side. Then EA-off
+allocation once per side (`benchmarkAlloc -Pbench='\.Avro4k'`, 1 fork, 5 × 1 s + 5 × 1 s,
+`-jvmArgsAppend -XX:-DoEscapeAnalysis`), then the micro suite once on head. "sep" = all three "now" invocations are above
+(or below) all three "M0" ones.
+
+**Discarded: a first run that slept.** The first attempt held `caffeinate -i` per Gradle invocation only. Between two
+invocations, after the display had turned off, macOS idle-slept (03:00), then stayed in sleep or dark wake for the rest of
+the run. Round 1 and M0's round 2, measured before that, are kept. Everything after was measured again under one
+`caffeinate` over the whole script, with a check of `pmset -g log` after each invocation. In the discarded data the median
+row was unmoved, but single rows moved by up to ±30%.
+
+**Apache is not a noise reference this time: its version differs between the sides.** Apache `SpecificData` moved
+between sides by **−31.6% to +18.4%**, with all three invocations agreeing on each side (median spread within a side:
+3.4%). The cause is Apache 1.12.1 → 1.12.2, checked directly: M0's tree with only Apache bumped to 1.12.2 (and head's
+class-trust setup) reproduces head's Apache numbers (3 forks each, same session):
+
+| Apache `SpecificData` | M0 tree, 1.12.1 | M0 tree, 1.12.2 | head, 1.12.2 |
+|---|---:|---:|---:|
+| `simple` read @1 | 7,824,819 | 5,285,748 | 5,463,299 |
+| `complex` read @1 | 636,860 | 755,334 | 752,999 |
+| `lists` read @100 | 13,913 | 12,424 | 11,941 |
+
+So this run has no same-code reference for drift. The verdicts below rest on separation across the 3 alternated
+invocations per side. On the last run with the same Apache version on both sides, Apache's drift stayed within ±3.3%.
+Jackson's version also differs, so it is not a reference either. Kotlin 2.4.20 compiles avro4k's head side. It is part of
+the tree M3 ends with, and its share in avro4k's deltas is not separated out.
+
+### avro4k, M0 → end of M3, and its distance to Apache
+
+ops/s, mean of 3 invocations per side. Verdicts: under 10% and not separated = **same**; separated but under 10% =
+**slightly better/worse**. **÷ Apache** = avro4k divided by Apache `SpecificData` (generated classes, fast reader on),
+three ways: M0 against Apache 1.12.1 in the M0 runs; now against the same Apache 1.12.1 (the M0 runs, so avro4k's own
+progress against a fixed rival); now against Apache 1.12.2 in the head runs (what a user comparing today sees).
+
+`simple`: one flat record of primitives, × `recordCount`
+
+| | avro4k M0 | avro4k now | Δ | sep | verdict | ÷ Apache M0 (1.12.1) | now ÷ 1.12.1 | now ÷ 1.12.2 |
+|---|---:|---:|---:|:-:|---|---:|---:|---:|
+| read @1 | 3,643,575 | 4,386,068 | **+20.4%** | Y | **better** | 0.46× | 0.55× | 0.81× ¹ |
+| read @25 | 200,475 | 215,053 | +7.3% | n | same | 0.57× | 0.61× | 0.62× |
+| read @500 | 10,994 | 11,459 | +4.2% | n | same | 0.66× | 0.69× | 0.68× |
+| write @1 | 5,066,292 | 4,778,252 | −5.7% | n | same ² | 0.72× | 0.68× | 0.70× |
+| write @25 | 290,934 | 316,077 | +8.6% | n | same ² | 1.25× | 1.36× | 1.35× |
+| write @500 | 13,746 | 16,004 | **+16.4%** | Y | **better** | 1.32× | 1.54× | 1.50× |
+
+`complex`: nested records, unions, a sealed (polymorphic) field, maps, logical types, × `clientCount`
+
+| | avro4k M0 | avro4k now | Δ | sep | verdict | ÷ Apache M0 (1.12.1) | now ÷ 1.12.1 | now ÷ 1.12.2 |
+|---|---:|---:|---:|:-:|---|---:|---:|---:|
+| read @1 | 353,543 | 342,579 | −3.1% | Y | slightly worse ³ | 0.57× | 0.55× | 0.46× ¹ |
+| read @15 | 24,806 | 25,527 | +2.9% | n | same | 0.51× | 0.52× | 0.56× |
+| read @200 | 1,800 | 1,875 | +4.2% | Y | slightly better | 0.52× | 0.54× | 0.58× |
+| write @1 | 624,538 | 672,071 | +7.6% | Y | slightly better | 0.84× | 0.90× | 0.90× |
+| write @15 | 37,451 | 40,471 | +8.1% | Y | slightly better | 0.90× | 0.97× | 0.95× |
+| write @200 | 2,572 | 2,937 | **+14.2%** | Y | **better** | 0.91× | 1.04× | 1.01× |
+
+`lists`: 1 wrapper × `entryCount` entries × 100 longs
+
+| | avro4k M0 | avro4k now | Δ | sep | verdict | ÷ Apache M0 (1.12.1) | now ÷ 1.12.1 | now ÷ 1.12.2 |
+|---|---:|---:|---:|:-:|---|---:|---:|---:|
+| read @100 | 6,268 | 7,514 | **+19.9%** | Y | **better** | 0.45× | 0.54× | 0.61× |
+| read @10,000 | 54.7 | 76.2 | **+39.3%** | Y | **better** | 0.45× | 0.62× | 0.57× |
+| write @100 | 5,906 | 7,893 | **+33.6%** | Y | **better** | 0.71× | 0.95× | 0.87× |
+| write @10,000 | 67.6 | 84.2 | **+24.6%** | Y | **better** | 0.73× | 0.91× | 1.00× |
+
+1. Apache 1.12.2 itself is 32% slower than 1.12.1 on `simple` read @1 and 18% faster on `complex` read @1 (table
+   above), so the "now ÷ 1.12.2" ratio of these two rows moves for reasons that have nothing to do with avro4k. Read the
+   "now ÷ 1.12.1" column for avro4k's own progress.
+2. `simple` write @1 and @25 are still **bimodal on head** (see *The two JIT-sensitive rows* in the "M3 so far" section).
+   @25: 354k, 357k, **237k** (M0: 288–293k). @1: 4.88M, 4.83M, 4.62M (M0: 4.83–5.23M), and this time no fork reached
+   the fast mode the "M3 so far" run saw once (6.74M). Neither row is separated.
+3. `complex` read @1: head 345k, 335k, 348k, the same level as the "M3 so far" head (345–349k). This time all three M0
+   invocations ran fast (350–356k), without the slow mode that hit one of them last time (306k). The −3.1% is below the
+   10% threshold. The EA-off single invocation is −4.8% with 6% fewer B/op. This row stays the reference for the
+   frame-stack decoder.
+
+For reference, every library in the "now" runs (mean of 3). Apache and Jackson run their newer versions here:
+
+`simple`
+
+| | read @1 | read @25 | read @500 | write @1 | write @25 | write @500 |
+|---|---:|---:|---:|---:|---:|---:|
+| **avro4k** (now) | 4,386,068 | 215,053 | 11,459 | 4,778,252 | 316,077 | 16,004 |
+| Apache Specific 1.12.2 | 5,416,388 | 345,302 | 16,731 | 6,808,749 | 233,883 | 10,640 |
+| Apache Reflect 1.12.2 | 2,030,766 | 131,663 | 6,655 | 2,902,101 | 112,618 | 5,317 |
+| Jackson 2.22.3 | 1,306,154 | 68,233 | 3,457 | 2,014,153 | 113,251 | 5,026 |
+| _Apache Generic, fast reader_ | 6,252,712 | 243,673 | 11,914 | — | — | — |
+
+`complex`
+
+| | read @1 | read @15 | read @200 | write @1 | write @15 | write @200 |
+|---|---:|---:|---:|---:|---:|---:|
+| **avro4k** (now) | 342,579 | 25,527 | 1,875 | 672,071 | 40,471 | 2,937 |
+| Apache Specific 1.12.2 | 738,352 | 45,797 | 3,251 | 745,703 | 42,574 | 2,907 |
+| Apache Reflect 1.12.2 | 324,422 | 20,151 | 1,372 | 344,801 | 21,414 | 1,496 |
+| Jackson 2.22.3 | 386,030 | 21,236 | 1,588 | 484,708 | 26,238 | 1,789 |
+| _Apache Generic, fast reader_ | 932,326 | 55,485 | 3,952 | — | — | — |
+
+`lists`
+
+| | read @100 | read @10,000 | write @100 | write @10,000 |
+|---|---:|---:|---:|---:|
+| **avro4k** (now) | 7,514 | 76.2 | 7,893 | 84.2 |
+| Apache Specific 1.12.2 | 12,346 | 132.8 | 9,049 | 84.4 |
+| Apache Reflect 1.12.2 | 5,122 | 51.9 | 3,430 | 35.0 |
+| Jackson 2.22.3 | 7,852 | 78.7 | 5,703 | 58.6 |
+| _Apache Generic, fast reader_ | 12,201 | 125.8 | — | — |
+
+avro4k beats Apache `ReflectData` on every row, and Jackson on every row except three reads: `complex` read @1 (Jackson
+13% faster) and both `lists` reads (Jackson 3–5% faster). This is the same picture as in the "M3 so far" run.
+
+### Allocation per operation, escape analysis off (B/op, lower is better)
+
+One invocation per side; the per-iteration error is below 20 B/op on every row. This is the allocation JS and native see.
+
+| | read M0 → now | Δ | write M0 → now | Δ |
+|---|---|---:|---|---:|
+| `simple` @1 | 976 → 688 | **−30%** | 536 → 224 | **−58%** |
+| `simple` @25 | 13,328 → 8,624 | **−35%** | 5,144 → 2,144 | **−58%** |
+| `simple` @500 | 258,441 → 166,321 | **−36%** | 96,345 → 40,144 | **−58%** |
+| `complex` @1 | 6,280 → 5,888 | −6% | 2,168 → 1,816 | **−16%** |
+| `complex` @15 | 135,216 → 129,024 | −5% | 30,776 → 26,552 | **−14%** |
+| `complex` @200 | 1,808,620 → 1,729,100 | −4% | 409,811 → 356,570 | **−13%** |
+| `lists` @100 | 312,377 → 301,769 | −3% | 21,353 → 9,841 | **−54%** |
+| `lists` @10,000 | 31,160,919 → 30,249,588 | −3% | 2,080,696 → 960,324 | **−54%** |
+
+No row allocates more than at M0. Since the "M3 so far" run, reads allocate a further 16 B less per decoded collection
+(the hardening removed a closure, see *M3-22*): from −16 B on `simple` @1 to −0.9% on `complex` @200. Writes are
+unchanged (within 40 B).
+
+### Micro-benchmarks and the watch list (head only, one invocation)
+
+The micro suite ran once on head (1 fork, 5 × 1 s): it has no M0 counterpart in this run (several micro-benchmarks do not
+exist at M0), so it is checked against the last per-unit measurement of each row instead:
+
+| Row | now | last measured | |
+|---|---:|---:|---|
+| `Polymorphic.writeConcrete` @1000 (EA on) | 45,070 | 47,203 (M3-11+12 "after": slow mode ~45k, fast ~53k) | in its slow mode, no worse |
+| `Collection.readLongs` @100k | 515 | 518.0 (M3-22 "after") | same |
+| `SchemaInference.coldInference` | 476,342 | 483,360 (M3-11+12) | same |
+| `Polymorphic.readConcrete` @10 | 3.16M | 3.26M (M3-11+12) | same (noisy row) |
+| `NestedRecord.write` @depth 8 | 9.11M | 8.93M (M3-11+12) | same |
+
+Watch list from the per-unit A/Bs, all settled:
+- `complex` read @1 (bimodal since M3-02): no slow fork on either side in this run. Head is at its "M3 so far" level and
+  −3.1% from an all-fast M0. See note 3.
+- `simple` write @25 (M3-11+12's −15%): still bimodal, one slow fork of three. Its cause (JIT compilation order against an
+  oversized per-value encode path) is analysed below, and its fix is the encoder work after M3.
+- `Polymorphic.writeConcrete` @1000 EA on: in the slow mode M3-11+12 described, not lower.
+- `complex` read @15 EA off (M3-22's −6.9%): +8.5% in this run's EA-off invocation. EA on, the same as M0 (+2.9%).
+- `readLongs` @100k: 515, the same as M3-22's "after" (and M0's 511).
+
+### Verdict, in plain words
+
+- **M3 ends with nothing worse than M0 beyond one row at −3%.** 7 of 16 end-to-end rows are better (+14% to +39%: all
+  of `lists`, `simple` read @1 and write @500, `complex` write @200), 3 slightly better, 5 the same. `complex` read @1 is
+  slightly worse (−3.1%, separated, under the 10% threshold; head is where it was in the "M3 so far" run). Allocation
+  went down on every row (reads −3% to −36%, writes −13% to −58%), and allocation is what JS and native pay.
+- **Against a fixed Apache (1.12.1), avro4k gained on every row except `simple` write @1** (bimodal) and `complex` read
+  @1. Writes are at or above Apache from medium sizes up (`simple` 1.36×/1.54×, `complex` 0.97×/1.04×, `lists`
+  0.95×/0.91×). Reads are still about half to two thirds of Apache's speed (0.52–0.69×). The remaining gaps (small
+  payloads, reads) are what the frame-stack encoder and decoder, union branch tables and the string/bytes decode fast
+  paths after M3 target.
+- **Apache 1.12.2 changed Apache's own speed by −32% to +18% on some rows.** Any avro4k-vs-Apache claim must name the
+  Apache version.
+
 ## Results — cumulative: M0 baseline vs M3 so far (4508a13 vs bd99294)
+
+> [!NOTE]
+> Superseded as the current state by *M3 complete* above (2026-10-14). Kept for its JIT investigation of
+> `simple` write @25 and as the record of the M3 tree at `bd99294`.
 
 The per-unit A/Bs above each compare one step with the step before it. This section answers the
 cumulative question instead: **is avro4k faster than it was at the M0 baseline, and how far is it from
