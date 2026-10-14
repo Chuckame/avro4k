@@ -130,101 +130,127 @@ internal class KotlinxIoDecoder(
     }
 }
 
-@OptIn(InternalIoApi::class, UnsafeIoApi::class)
-private fun Source.readVarInt(): Int {
-    // This ensures having at least one byte available to read
-    // There are 3 outcomes:
-    // 1. There are already all the bytes of the varint available in the buffer: fast mode
-    // 2. There are no bytes available in the buffer, so it triggers a read of a full segment, retrieving much more than 1 byte if more available, finally reading the varint in fast mode
-    // 3. There is only one byte available in the buffer, while the varint has 2 bytes across segments, so the read will be done in slow mode
-    require(1.toLong())
+/**
+ * Reads a zig-zag varint int, throwing an EOFException at the end of the input.
+ *
+ * Most ints, lengths, indexes and counts take a single byte, and that case is all this function handles itself: it
+ * stays small enough to be inlined into every caller by a JIT or an optimizing compiler, while the longer encodings,
+ * whose unrolled decoding is large, are read out of line by [readVarIntTail].
+ */
+internal fun Source.readVarInt(): Int {
+    val first = readByte().toInt()
+    if (first >= 0) {
+        return decodeZigZag(first)
+    }
+    return readVarIntTail(first)
+}
 
-    // We do not really iterate, we just want to peek the first segment
+/** Reads a zig-zag varint long, throwing an EOFException at the end of the input. Kept small as [readVarInt]. */
+internal fun Source.readVarLong(): Long {
+    val first = readByte().toInt()
+    if (first >= 0) {
+        return decodeZigZag(first).toLong()
+    }
+    return readVarLongTail(first)
+}
+
+/**
+ * Reads the bytes of a varint int following its [first] byte, already read.
+ *
+ * When the head segment holds every byte the varint may still need, they are decoded straight from its array, then
+ * skipped. Otherwise the varint may be split across segments, or not yet loaded from the underlying source, and is
+ * read byte by byte.
+ */
+@OptIn(InternalIoApi::class, UnsafeIoApi::class)
+private fun Source.readVarIntTail(first: Int): Int {
+    // We do not really iterate, we just want to peek the head segment, if any
     UnsafeBufferOperations.forEachSegment(buffer) { ctx, segment ->
         // TODO: start in fast mode, finish in slow mode if the varint is split across segments
-        if (segment.size < MAX_VARINT_INT_BYTES) {
-            // Slow mode: the int may be split across segments
-            return decodeVarInt { readByte() }
+        if (segment.size >= MAX_VARINT_INT_BYTES - 1) {
+            ctx.withData(segment) { bytes, offset, _ ->
+                var len = 0
+                val result = decodeVarIntTail(first) { bytes[offset + len++] }
+                skip(len.toLong())
+                return result
+            }
         }
-        ctx.withData(segment) { buf, offset, _ ->
-            // Fast mode: we have all the bytes in the current segment
-            var len = 0
-            val result = decodeVarInt { buf[offset + len++] }
-            skip(len.toLong())
-            return result
-        }
+        return readVarIntTailByteByByte(first)
     }
-    error("Unreachable")
+    return readVarIntTailByteByByte(first)
 }
 
+/** The long counterpart of [readVarIntTail]. */
 @OptIn(InternalIoApi::class, UnsafeIoApi::class)
-private fun Source.readVarLong(): Long {
-    // Ensures at least one byte is available, as readVarInt does: at the end of the input it throws an EOFException,
-    // where `request` would return false and leave the segment loop below with nothing to read
-    require(1.toLong())
-    // We do not really iterate, we just want to peek the first segment
+private fun Source.readVarLongTail(first: Int): Long {
+    // We do not really iterate, we just want to peek the head segment, if any
     UnsafeBufferOperations.forEachSegment(buffer) { ctx, segment ->
-        if (segment.size < MAX_VARINT_LONG_BYTES) {
-            // the long can be split across segments
-            return decodeVarLong { readByte() }
+        if (segment.size >= MAX_VARINT_LONG_BYTES - 1) {
+            ctx.withData(segment) { bytes, offset, _ ->
+                var len = 0
+                val result = decodeVarLongTail(first) { bytes[offset + len++] }
+                skip(len.toLong())
+                return result
+            }
         }
-        ctx.withData(segment) { bytes, offset, _ ->
-            var len = 0
-            val result = decodeVarLong { bytes[offset + len++] }
-            skip(len.toLong())
-            return result
-        }
+        return readVarLongTailByteByByte(first)
     }
-    error("Unreachable")
+    return readVarLongTailByteByByte(first)
 }
 
-private inline fun decodeVarInt(readByte: () -> Byte): Int {
+private fun Source.readVarIntTailByteByByte(first: Int): Int = decodeVarIntTail(first) { readByte() }
+
+private fun Source.readVarLongTailByteByByte(first: Int): Long = decodeVarLongTail(first) { readByte() }
+
+/** Decodes the bytes of a varint int following its [first] byte, whose continuation bit is set. */
+private inline fun decodeVarIntTail(
+    first: Int,
+    readByte: () -> Byte,
+): Int {
     var b = readByte().toInt()
-    var varint = b and 0x7F
+    var varint = (first and 0x7F) + ((b and 0x7F) shl 7)
     if (b < 0) {
         b = readByte().toInt()
-        varint += ((b and 0x7F) shl 7)
+        varint += ((b and 0x7F) shl 14)
         if (b < 0) {
             b = readByte().toInt()
-            varint += ((b and 0x7F) shl 14)
+            varint += ((b and 0x7F) shl 21)
             if (b < 0) {
                 b = readByte().toInt()
-                varint += ((b and 0x7F) shl 21)
                 if (b < 0) {
-                    b = readByte().toInt()
-                    if (b < 0) {
-                        throw AvroMalformedDataException("Invalid varint encoding: more bytes than expected")
-                    }
-                    varint += (b shl 28)
+                    throw AvroMalformedDataException("Invalid varint encoding: more bytes than expected")
                 }
+                varint += (b shl 28)
             }
         }
     }
     return decodeZigZag(varint)
 }
 
-private inline fun decodeVarLong(readByte: () -> Byte): Long {
+/** Decodes the bytes of a varint long following its [first] byte, whose continuation bit is set. */
+private inline fun decodeVarLongTail(
+    first: Int,
+    readByte: () -> Byte,
+): Long {
     var b: Int = readByte().toInt()
-    var i = b and 0x7F
+    var i = (first and 0x7F) + ((b and 0x7F) shl 7)
     if (b < 0) {
         b = readByte().toInt()
-        i += ((b and 0x7F) shl 7)
+        i += ((b and 0x7F) shl 14)
         if (b < 0) {
             b = readByte().toInt()
-            i += ((b and 0x7F) shl 14)
+            i += ((b and 0x7F) shl 21)
             if (b < 0) {
-                b = readByte().toInt()
-                i += ((b and 0x7F) shl 21)
-                if (b < 0) {
-                    return decodeVarLong2(i.toLong(), readByte)
-                }
+                return decodeVarLong2(i.toLong(), readByte)
             }
         }
     }
     return decodeZigZag(i).toLong()
 }
 
-private inline fun decodeVarLong2(lo: Long, readByte: () -> Byte): Long {
+private inline fun decodeVarLong2(
+    lo: Long,
+    readByte: () -> Byte,
+): Long {
     // then next 28 bits (altogether 8 bytes)
     var lo = lo
     var b: Int = readByte().toInt()

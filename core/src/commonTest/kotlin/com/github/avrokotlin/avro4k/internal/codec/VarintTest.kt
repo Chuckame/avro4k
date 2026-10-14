@@ -1,8 +1,15 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
+import com.github.avrokotlin.avro4k.AvroMalformedDataException
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import kotlinx.io.Buffer
+import kotlinx.io.EOFException
+import kotlinx.io.RawSource
+import kotlinx.io.UnsafeIoApi
+import kotlinx.io.buffered
 import kotlinx.io.readByteArray
+import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlin.test.Test
 
 class VarintTest {
@@ -63,6 +70,140 @@ class VarintTest {
         bytes.toList() shouldBe listOf<Byte>(0x55, 0x80.toByte(), 0x01) + List(MAX_VARINT_LONG_BYTES - 1) { 0x55 }
     }
 
+    @Test
+    fun `every int length is read from the segment array and consumes exactly its bytes`() {
+        for ((value, encoded) in INT_VECTORS) {
+            // the trailer leaves enough room after the first byte for the rest of any varint
+            val source = Buffer().apply { write(encoded + TRAILER) }
+            KotlinxIoDecoder(source).readInt() shouldBe value
+            source.readByteArray() shouldBe TRAILER
+        }
+    }
+
+    @Test
+    fun `every long length is read from the segment array and consumes exactly its bytes`() {
+        for ((value, encoded) in LONG_VECTORS) {
+            val source = Buffer().apply { write(encoded + TRAILER) }
+            KotlinxIoDecoder(source).readLong() shouldBe value
+            source.readByteArray() shouldBe TRAILER
+        }
+    }
+
+    @Test
+    fun `an int split across two segments is read whole at every split position`() {
+        for ((value, encoded) in INT_VECTORS) {
+            for (bytesInFirstSegment in 0..encoded.size) {
+                val source = sourceSplitAt(encoded, bytesInFirstSegment)
+                KotlinxIoDecoder(source).readInt() shouldBe value
+                source.readByteArray() shouldBe TRAILER
+            }
+        }
+    }
+
+    @Test
+    fun `a long split across two segments is read whole at every split position`() {
+        for ((value, encoded) in LONG_VECTORS) {
+            for (bytesInFirstSegment in 0..encoded.size) {
+                val source = sourceSplitAt(encoded, bytesInFirstSegment)
+                KotlinxIoDecoder(source).readLong() shouldBe value
+                source.readByteArray() shouldBe TRAILER
+            }
+        }
+    }
+
+    @Test
+    fun `a varint arriving one byte at a time from the underlying source is read whole`() {
+        for ((value, encoded) in INT_VECTORS) {
+            KotlinxIoDecoder(OneByteAtATime(encoded).buffered()).readInt() shouldBe value
+        }
+        for ((value, encoded) in LONG_VECTORS) {
+            KotlinxIoDecoder(OneByteAtATime(encoded).buffered()).readLong() shouldBe value
+        }
+    }
+
+    @Test
+    fun `an int of more than 5 bytes is malformed`() {
+        val tooLong = bytes(0x80, 0x80, 0x80, 0x80, 0x80, 0x01)
+        // from the segment array, byte by byte, and across a segment boundary
+        shouldThrow<AvroMalformedDataException> { KotlinxIoDecoder(Buffer().apply { write(tooLong + TRAILER) }).readInt() }
+        shouldThrow<AvroMalformedDataException> { KotlinxIoDecoder(OneByteAtATime(tooLong).buffered()).readInt() }
+        for (bytesInFirstSegment in 1..MAX_VARINT_INT_BYTES) {
+            val source = sourceSplitAt(tooLong, bytesInFirstSegment)
+            shouldThrow<AvroMalformedDataException> { KotlinxIoDecoder(source).readInt() }
+        }
+    }
+
+    @Test
+    fun `a long of more than 10 bytes is malformed`() {
+        val tooLong = bytes(0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01)
+        shouldThrow<AvroMalformedDataException> { KotlinxIoDecoder(Buffer().apply { write(tooLong + TRAILER) }).readLong() }
+        shouldThrow<AvroMalformedDataException> { KotlinxIoDecoder(OneByteAtATime(tooLong).buffered()).readLong() }
+        for (bytesInFirstSegment in 1..MAX_VARINT_LONG_BYTES) {
+            val source = sourceSplitAt(tooLong, bytesInFirstSegment)
+            shouldThrow<AvroMalformedDataException> { KotlinxIoDecoder(source).readLong() }
+        }
+    }
+
+    @Test
+    fun `the input ending inside a varint is an end of input`() {
+        shouldThrow<EOFException> { KotlinxIoDecoder(Buffer()).readInt() }
+        shouldThrow<EOFException> { KotlinxIoDecoder(Buffer()).readLong() }
+        for ((_, encoded) in INT_VECTORS) {
+            for (size in 1 until encoded.size) {
+                val truncated = encoded.copyOf(size)
+                shouldThrow<EOFException> { KotlinxIoDecoder(Buffer().apply { write(truncated) }).readInt() }
+                shouldThrow<EOFException> { KotlinxIoDecoder(OneByteAtATime(truncated).buffered()).readInt() }
+            }
+        }
+        for ((_, encoded) in LONG_VECTORS) {
+            for (size in 1 until encoded.size) {
+                val truncated = encoded.copyOf(size)
+                shouldThrow<EOFException> { KotlinxIoDecoder(Buffer().apply { write(truncated) }).readLong() }
+                shouldThrow<EOFException> { KotlinxIoDecoder(OneByteAtATime(truncated).buffered()).readLong() }
+            }
+        }
+    }
+
+    /**
+     * A source whose head segment is full and ends with the first [bytesInFirstSegment] bytes of [encoded], the rest
+     * of it starting the next segment, followed by [TRAILER]. Positioned at the start of [encoded].
+     */
+    @OptIn(UnsafeIoApi::class)
+    private fun sourceSplitAt(
+        encoded: ByteArray,
+        bytesInFirstSegment: Int,
+    ): Buffer {
+        val filler = ByteArray(SEGMENT_SIZE - bytesInFirstSegment) { 0x2A }
+        val source = Buffer().apply { write(filler + encoded + TRAILER) }
+        var firstSegmentSize = -1
+        UnsafeBufferOperations.forEachSegment(source) { _, segment ->
+            if (firstSegmentSize == -1) firstSegmentSize = segment.size
+        }
+        // the test only means something if the buffer is laid out as expected
+        firstSegmentSize shouldBe SEGMENT_SIZE
+        source.skip(filler.size.toLong())
+        return source
+    }
+
+    /** Hands its bytes over one by one, so that the buffer reading from it never holds more than one byte ahead. */
+    private class OneByteAtATime(
+        private val bytes: ByteArray,
+    ) : RawSource {
+        private var position = 0
+
+        override fun readAtMostTo(
+            sink: Buffer,
+            byteCount: Long,
+        ): Long {
+            if (position == bytes.size) return -1
+            sink.writeByte(bytes[position++])
+            return 1
+        }
+
+        override fun close() {
+        }
+    }
+
     private fun assertIntRoundTrip(
         value: Int,
         expectedLength: Int,
@@ -84,6 +225,12 @@ class VarintTest {
     }
 
     companion object {
+        /** The size of a kotlinx-io segment. */
+        private const val SEGMENT_SIZE = 8192
+
+        /** Read after a varint to check that it consumed exactly its own bytes. */
+        private val TRAILER = ByteArray(MAX_VARINT_LONG_BYTES + 1) { (it + 1).toByte() }
+
         private fun bytes(vararg values: Int) = ByteArray(values.size) { values[it].toByte() }
 
         val INT_VECTORS: List<Pair<Int, ByteArray>> =

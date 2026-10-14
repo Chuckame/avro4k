@@ -24,21 +24,26 @@ internal class KotlinxIoEncoder(
         sink.writeByte(if (value) 1 else 0)
     }
 
-    @OptIn(DelicateIoApi::class, UnsafeIoApi::class)
+    /**
+     * Most ints, lengths and indexes take a single byte, and that case is all this function writes itself: it stays
+     * small enough to be inlined into every caller, while the longer encodings are written out of line.
+     */
     override fun writeInt(value: Int) {
-        sink.writeToInternalBuffer { buffer ->
-            UnsafeBufferOperations.writeToTail(buffer, MAX_VARINT_INT_BYTES) { bytes, offset, _ ->
-                encodeZigZagInt(value, bytes, offset)
-            }
+        val zigZag = (value shl 1) xor (value shr 31)
+        if (zigZag and 0x7F.inv() == 0) {
+            sink.writeByte(zigZag.toByte())
+        } else {
+            writeVarInt(value)
         }
     }
 
-    @OptIn(DelicateIoApi::class, UnsafeIoApi::class)
+    /** Kept small as [writeInt]. */
     override fun writeLong(value: Long) {
-        sink.writeToInternalBuffer { buffer ->
-            UnsafeBufferOperations.writeToTail(buffer, MAX_VARINT_LONG_BYTES) { bytes, offset, _ ->
-                encodeZigZagLong(value, bytes, offset)
-            }
+        val zigZag = (value shl 1) xor (value shr 63)
+        if (zigZag and 0x7FL.inv() == 0L) {
+            sink.writeByte(zigZag.toByte())
+        } else {
+            writeVarLong(value)
         }
     }
 
@@ -115,5 +120,23 @@ internal class KotlinxIoEncoder(
 
     private fun writeZero() {
         sink.writeByte(0)
+    }
+
+    @OptIn(DelicateIoApi::class, UnsafeIoApi::class)
+    private fun writeVarInt(value: Int) {
+        sink.writeToInternalBuffer { buffer ->
+            UnsafeBufferOperations.writeToTail(buffer, MAX_VARINT_INT_BYTES) { bytes, offset, _ ->
+                encodeZigZagInt(value, bytes, offset)
+            }
+        }
+    }
+
+    @OptIn(DelicateIoApi::class, UnsafeIoApi::class)
+    private fun writeVarLong(value: Long) {
+        sink.writeToInternalBuffer { buffer ->
+            UnsafeBufferOperations.writeToTail(buffer, MAX_VARINT_LONG_BYTES) { bytes, offset, _ ->
+                encodeZigZagLong(value, bytes, offset)
+            }
+        }
     }
 }
