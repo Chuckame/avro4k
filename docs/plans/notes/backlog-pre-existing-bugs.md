@@ -200,7 +200,7 @@ template format), which does not escape `$`.
 
 ## 12. A failed root-string or root-bytes read poisons the next read on the same thread (confluent)
 
-**Repro (main, v3):** `SpecificAvro4kKafkaDeserializer<Rec>` (`Rec(val value: String)`), registry mock. First
+**Repro (main, v3; re-checked on `main` `6ad6c1c6` on 2026-10-15):** `SpecificAvro4kKafkaDeserializer<Rec>` (`Rec(val value: String)`), registry mock. First
 `deserialize` a truncated payload of a root `string` message (`GenericAvro4kKafkaSerializer().serialize("t", "hello")` minus its last 3 bytes)
 → `SerializationException`. Then `deserialize` a valid `Rec` payload on the same thread → `ClassCastException: Rec cannot be cast to String`.
 
