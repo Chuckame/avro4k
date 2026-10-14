@@ -28,6 +28,14 @@ the rare long-tail decoding back into the entry point, twice (in-segment array p
   the byte-by-byte function.
 - **`readVarIntTailByteByByte` / `readVarLongTailByteByByte`** (private, non-inline): the cross-segment slow path, one
   copy each instead of the copy pasted in every entry point.
+- **Long tail split in two** (follow-up asked by the coordinator before benchmarking): `readVarLongTail` and
+  `readVarLongTailByteByByte` decode only the 2nd to 4th bytes (the lengths ≥ 64, block counts and small values that
+  do not fit in one byte); when the 4th byte has its continuation bit set, the 28 bits decoded so far go to the
+  non-inline `readVarLongHighFromArray(lo, bytes, offset, consumed)` (decodes the 5th to 10th bytes from the array,
+  then skips every byte read from it) or `readVarLongHighByteByByte(lo)`. `decodeVarLongTail` takes the hand-off as a
+  second lambda; in the array path it returns non-locally, so the skip happens exactly once, in the high function.
+  `readVarIntTail` (295) was left whole: it is already under 325, and an int has no high part worth splitting off
+  (only a 5th byte).
 - **`decodeVarIntTail` / `decodeVarLongTail`**: the old `decodeVarInt` / `decodeVarLong` taking the first byte as a
   parameter; same arithmetic, same unrolling, `decodeVarLong2` unchanged. Messages unchanged:
   `"Invalid varint encoding: more bytes than expected"` (int), `"Invalid varlong encoding: more bytes than expected"`
@@ -61,22 +69,25 @@ Other decoders: `AvroBinaryDecoder` is abstract, `ValidatingAvroBinaryDecoder` o
 | `KotlinxIoDecoderKt.readVarLong(Source)` | 951 | **28** |
 | `KotlinxIoDecoderKt.access$readVarInt` / `access$readVarLong` | 4 each | gone |
 | `readVarIntTail(Source, int)` (new, out of line) | — | 295 |
-| `readVarLongTail(Source, int)` (new, out of line) | — | 558 |
+| `readVarLongTail(Source, int)` (new, out of line) | — | 558 first cut → **270** after the split |
+| `readVarLongHighFromArray(Source, long, byte[], int, int)` (new, 5–10 bytes) | — | 318 |
 | `readVarIntTailByteByByte(Source, int)` (new, cold) | — | 134 |
-| `readVarLongTailByteByByte(Source, int)` (new, cold) | — | 336 |
+| `readVarLongTailByteByByte(Source, int)` (new, cold) | — | 336 first cut → 116 after the split |
+| `readVarLongHighByteByByte(Source, long)` (new, cold) | — | 230 |
 | `KotlinxIoEncoder.writeInt(int)` | 270 | **35** |
 | `KotlinxIoEncoder.writeLong(long)` | 272 | **39** |
 | `KotlinxIoEncoder.writeVarInt(int)` / `writeVarLong(long)` (new, out of line) | — | 270 / 272 |
 | `VarintKt.encodeZigZagInt` / `encodeZigZagLong` | 128 / 315 | unchanged |
 
-(The unused JVM bodies of the `private inline` lambda helpers, `decodeVarIntTail` 132, `decodeVarLongTail` 350,
-`decodeVarLong2` 243, are emitted but never called, as before.)
+(The unused JVM bodies of the `private inline` lambda helpers, `decodeVarIntTail` 132, `decodeVarLongTail` 350 then
+125 after the split, `decodeVarLong2` 243, are emitted but never called, as before.)
 
 `readVarInt`/`readVarLong` are now under `MaxInlineSize` (35), so HotSpot inlines them even before they are hot;
-`writeInt`/`writeLong` sit just above it and far under `FreqInlineSize`, so they are inlined once hot; `readVarIntTail` (295) is under `FreqInlineSize` and can be inlined when hot. `readVarLongTail` (558) stays a call
-for every multi-byte long (2-byte lengths of strings of 64+ bytes, timestamps): one call per value, as Apache's
-`innerLongDecode`. Splitting its 5-to-10-byte part out of line would bring it under 325, at the cost of a third level;
-not done here (see open points).
+`writeInt`/`writeLong` sit just above it and far under `FreqInlineSize`, so they are inlined once hot;
+`readVarIntTail` (295) and, after the split, `readVarLongTail` (270) are under `FreqInlineSize` and can be inlined
+when hot, so a 2-to-4-byte long (string lengths of 64+ bytes, block counts) no longer costs a call. Longs of 5 bytes
+or more (timestamps) take one call into `readVarLongHighFromArray` (318, itself under 325), as Apache's
+`innerLongDecode`.
 
 ## Tests added (`core/src/commonTest/.../internal/codec/VarintTest.kt`, +8, all common)
 
@@ -98,6 +109,13 @@ not done here (see open points).
 Checked that they bite: removing the head-segment size guard fails 5 of them (split, malformed, EOF); `skip(len - 1)`
 fails 4 (array and split). All 14 `VarintTest` tests also pass against the original decoder (behaviour preserved).
 
+No test added for the long split: the hand-off between the 4th and 5th bytes is already crossed by every 5-to-10-byte
+long vector, from the array (`every long length is read from the segment array…`, with the trailer checking the skip),
+byte by byte (the vector and boundary tests decode a buffer holding only the varint, so the head segment is too short
+for the array path; the one-byte-at-a-time source), across a segment boundary at every position, and by the malformed
+and truncated-input tests. Handing the wrong `consumed` count to `readVarLongHighFromArray` fails 4 tests (array, split,
+vectors, boundaries).
+
 ## Acceptance
 
 | Step | Result |
@@ -108,6 +126,7 @@ fails 4 (array and split). All 14 `VarintTest` tests also pass against the origi
 | 10 cross-compiled native `TestBinaries` | green |
 
 Counts before → after: jvmTest 1018 → 1026, jsNode/jsBrowser 205 → 213, macosArm64/iosSimulatorArm64 208 → 216.
+All four steps re-run after the long split, same counts, all green.
 
 No benchmark was run (serialized by the orchestrator).
 
@@ -127,8 +146,5 @@ No pre-existing bug found.
 
 ## Open points
 
-- `readVarLongTail` is 558 bytes: splitting its 5-to-10-byte part out of line (as Apache's `innerLongDecode`) would
-  make 2-to-4-byte longs inlinable when hot. Worth it only if the benchmarks show multi-byte longs (lengths ≥ 64,
-  timestamps) as a hotspot.
 - The "start in the array, finish byte by byte" TODO for a varint split across segments is kept; it only affects
   varints whose bytes straddle a segment boundary.
