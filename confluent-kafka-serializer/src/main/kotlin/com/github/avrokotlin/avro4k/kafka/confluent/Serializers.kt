@@ -201,6 +201,8 @@ internal object GenericFixedKSerializer : AvroSerializer<GenericFixed>(GenericFi
 internal class GenericRecordKSerializer(
     private val anySerializer: AnySerializer,
 ) : AvroSerializer<IndexedRecord>(IndexedRecord::class.qualifiedName!!) {
+    // Keyed by equality on purpose: Apache's Schema caches its hash code and `equals` starts with an identity check, so a
+    // schema the registry client hands back again costs a hash lookup; and equal schemas parsed apart share a descriptor.
     private val cache: Cache<Schema, SerialDescriptor> = WeakKeyCache()
 
     override fun serializeAvro(encoder: AvroEncoder, value: IndexedRecord) {

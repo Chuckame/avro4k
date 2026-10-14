@@ -197,3 +197,18 @@ template format), which does not escape `$`.
 **Fix sketch:** `%S`, or escape `$` as `${'$'}` before `%P`; golden test with a `$` in a doc, a default and a prop.
 
 **Issue:** *Generated code does not compile when the schema contains a dollar sign*.
+
+## 12. A failed root-string or root-bytes read poisons the next read on the same thread (confluent)
+
+**Repro (main, v3):** `SpecificAvro4kKafkaDeserializer<Rec>` (`Rec(val value: String)`), registry mock. First
+`deserialize` a truncated payload of a root `string` message (`GenericAvro4kKafkaSerializer().serialize("t", "hello")` minus its last 3 bytes)
+→ `SerializationException`. Then `deserialize` a valid `Rec` payload on the same thread → `ClassCastException: Rec cannot be cast to String`.
+
+**Cause:** `getDatumReader` stores the writer schema in the deserializer's `ThreadLocal` for a root STRING/BYTES schema,
+and only `deserialize` clears it, after `super.deserialize` returned. When that throws, the stale schema stays and the next
+message of the thread is wrapped as if it were a root string. The code is identical on `main`.
+
+**Fix sketch:** clear the `ThreadLocal` in a `try/finally` around `super.deserialize` (or read and clear it before calling it); test a failed read followed by a valid one.
+
+**Issue:** *Specific deserializer throws ClassCastException after a failed root string/bytes read* — a bad record then
+breaks every following message of that consumer thread.

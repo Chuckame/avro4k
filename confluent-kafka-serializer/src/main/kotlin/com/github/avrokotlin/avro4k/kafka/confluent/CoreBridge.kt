@@ -21,8 +21,11 @@ import org.apache.avro.generic.GenericFixed
  * This module lives in Apache's and Confluent's world: the schema registry, `GenericData.Record`, `DatumReader` and
  * `DatumWriter` all speak `org.apache.avro.Schema`, and so does this module's own public API. Core's public API is
  * `AvroSchema`-typed, so the helpers below convert with apache-interop's cached `toAvro4k()` / `toApacheSchema()`; the
- * call sites stay Apache-typed. Some of them run per value (the generic serializers' writer schema): an identity-cache
- * lookup each, accepted until this module itself reads `AvroSchema`.
+ * call sites stay Apache-typed. Some of them run per value (the generic serializers' writer schema): once a schema is
+ * converted, that is one identity lookup in a copy-on-write table plus a reference read, with no allocation, no hashing
+ * and no schema comparison. The writer schema nodes handed to the decoder are the ones converted from the registry's
+ * Apache schemas, which are paired with them, so a value never triggers a conversion: hoisting it per writer schema
+ * would only add state to keep in step with core's own writer-schema caches.
  *
  * Rule: no other file of this module calls a schema-typed core entry point directly (`Avro.schema`, `currentWriterSchema`,
  * `decodeFixed`, the Apache encoder/decoder entry points, …) or spells core's schema type in an override. Nothing
