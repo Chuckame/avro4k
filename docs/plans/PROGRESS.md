@@ -21,8 +21,10 @@ end-to-end rows better (+14% to +39%), 3 slightly better, 5 the same; EA-off all
 
 **Next, in order:**
 1. **M4** (B5 OCF + single-object in common, B7 downstream modules, B8 API dump/publication/migration guide; B8 runs
-   alone). Before briefing any unit: `gh issue list -R avro-kotlin/avro4k --milestone V3 --state open` (#365 to confirm
-   with the user; the GitHub MCP server failed to connect in the last session, the `gh` CLI is the fallback).
+   alone). Before briefing any unit: `gh issue list -R avro-kotlin/avro4k --milestone V3 --state open` (the GitHub MCP
+   server failed to connect in the last session, the `gh` CLI works). **#365** (GenericData without a registry: Glue,
+   Parquet, Axon users of `encodeToGenericData`/`decodeFromGenericData`) is **confirmed by the user (2026-10-14) as still
+   in the V3 pipe**: it stays open, and the GenericData APIs in `apache-interop` stay supported.
 2. Then M5 (decomposition first). Its reference rows: `complex` read @1 and the bimodal `simple` write @1/@25.
 
 **Open user decisions:** the model's own JSON parser rejects an alias equal to the schema's name (Apache accepts it),
