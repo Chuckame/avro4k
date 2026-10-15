@@ -6,6 +6,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToByteArray
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 internal class DecodeFromByteBufferTest : StringSpec({
     val value = SimpleRecord(name = "alice", age = 42)
@@ -99,7 +100,37 @@ internal class DecodeFromByteBufferTest : StringSpec({
         shouldThrow<Exception> { Avro.decodeFromByteBuffer<SimpleRecord>(buffer) }
         buffer.position() shouldBe encoded.size
     }
+
+    "fails on a value truncated by the limit, without reading the array past it, and restores the position" {
+        val prefix = byteArrayOf(0x00, 0x00, 0x00, 0x00, 42)
+        // The limit cuts the name string short while the array still holds its last bytes
+        val buffer = ByteBuffer.wrap(prefix + encoded).position(prefix.size).limit(prefix.size + 3)
+
+        shouldThrow<AvroMalformedDataException> { Avro.decodeFromByteBuffer<SimpleRecord>(buffer) }
+        buffer.position() shouldBe prefix.size
+    }
+
+    "fails on a direct ByteBuffer ending in the middle of a varint, and restores the position" {
+        val buffer = ByteBuffer.allocateDirect(encoded.size).put(encoded).flip().limit(encoded.size - 1)
+
+        shouldThrow<AvroMalformedDataException> { Avro.decodeFromByteBuffer<SimpleRecord>(buffer) }
+        buffer.position() shouldBe 0
+    }
+
+    "reads floats and doubles whatever the ByteBuffer's byte order" {
+        val numbers = Numbers(float = 1.5f, double = -2.25e300)
+        val bytes = Avro.encodeToByteArray(numbers)
+
+        Avro.decodeFromByteBuffer<Numbers>(ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)) shouldBe numbers
+        Avro.decodeFromByteBuffer<Numbers>(ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)) shouldBe numbers
+        val direct = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.LITTLE_ENDIAN).put(bytes).flip()
+        Avro.decodeFromByteBuffer<Numbers>(direct) shouldBe numbers
+        direct.order() shouldBe ByteOrder.LITTLE_ENDIAN
+    }
 }) {
+    @Serializable
+    private data class Numbers(val float: Float, val double: Double)
+
     @Serializable
     private data class SimpleRecord(val name: String, val age: Int)
 }

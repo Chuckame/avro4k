@@ -117,3 +117,93 @@ internal fun checkBinaryLength(length: Long): Int {
     }
     return length.toInt()
 }
+
+/** Decodes the bytes of a varint int following its [first] byte, whose continuation bit is set. */
+internal inline fun decodeVarIntTail(
+    first: Int,
+    readByte: () -> Byte,
+): Int {
+    var b = readByte().toInt()
+    var varint = (first and 0x7F) + ((b and 0x7F) shl 7)
+    if (b < 0) {
+        b = readByte().toInt()
+        varint += ((b and 0x7F) shl 14)
+        if (b < 0) {
+            b = readByte().toInt()
+            varint += ((b and 0x7F) shl 21)
+            if (b < 0) {
+                b = readByte().toInt()
+                if (b < 0) {
+                    throw AvroMalformedDataException("Invalid varint encoding: more bytes than expected")
+                }
+                varint += (b shl 28)
+            }
+        }
+    }
+    return decodeZigZag(varint)
+}
+
+/** Decodes the bytes of a varint long following its [first] byte, whose continuation bit is set. */
+internal inline fun decodeVarLongTail(
+    first: Int,
+    readByte: () -> Byte,
+): Long {
+    var b: Int = readByte().toInt()
+    var i = (first and 0x7F) + ((b and 0x7F) shl 7)
+    if (b < 0) {
+        b = readByte().toInt()
+        i += ((b and 0x7F) shl 14)
+        if (b < 0) {
+            b = readByte().toInt()
+            i += ((b and 0x7F) shl 21)
+            if (b < 0) {
+                return decodeVarLong2(i.toLong(), readByte)
+            }
+        }
+    }
+    return decodeZigZag(i).toLong()
+}
+
+internal inline fun decodeVarLong2(
+    lo: Long,
+    readByte: () -> Byte,
+): Long {
+    // then next 28 bits (altogether 8 bytes)
+    var lo = lo
+    var b: Int = readByte().toInt()
+    var i = b and 0x7F
+    if (b < 0) {
+        i = i and 0x7F
+        b = readByte().toInt()
+        i += ((b and 0x7F) shl 7)
+        if (b < 0) {
+            b = readByte().toInt()
+            i += ((b and 0x7F) shl 14)
+            if (b < 0) {
+                b = readByte().toInt()
+                i += ((b and 0x7F) shl 21)
+                if (b < 0) {
+                    // Ok 56-bits gone... still going strong!
+                    lo = lo or ((i.toLong()) shl 28)
+                    b = readByte().toInt()
+                    i = b and 0x7F
+                    if (b < 0) {
+                        b = readByte().toInt()
+                        if (b < 0) {
+                            throw AvroMalformedDataException("Invalid varlong encoding: more bytes than expected")
+                        }
+                        i = i or (b shl 7)
+                    }
+                    lo = lo or ((i.toLong()) shl 56)
+                    return decodeZigZag(lo)
+                }
+            }
+        }
+    }
+    lo = lo or ((i.toLong()) shl 28)
+    return decodeZigZag(lo)
+}
+
+internal fun decodeZigZag(varint: Int): Int = (varint ushr 1) xor (-(varint and 1))
+
+internal fun decodeZigZag(varint: Long): Long = (varint ushr 1) xor (-(varint and 1))
