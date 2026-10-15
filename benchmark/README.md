@@ -721,6 +721,82 @@ Read with care: the JVM's cold time is class loading and interpretation, and nat
 platform is pathologically slow on the same work. Real non-JVM numbers need the multiplatform common benchmarks the
 plan calls for, which do not exist yet.
 
+## Results — varint reads and writes small enough to inline (9740fb08 vs bfe074e9)
+
+**Is the varint split (one-byte case inline, longer encodings out of line) faster?** Writes: slightly, and `simple`
+write @25 stops being bimodal. Reads: **no, they are slower**, and the cause is understood (below). The read half is
+therefore reworked before this change counts as done; the rework is measured in its own section.
+
+| | |
+|---|---|
+| Date | 2026-10-15 (00:37 → 04:29) |
+| Machine | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37 |
+| Power | AC power, Low Power Mode off, checked before every invocation and polled every 10 s during it; never dropped |
+| Sleep | One `caffeinate -dimsu` over the whole script; `pmset -g log` shows no sleep or dark wake during any invocation; nothing discarded |
+| Load | Every invocation started once the 1-min load average was below 3 (2.34–2.99 at the starts) |
+| Base | `9740fb08`, head `bfe074e9`: they differ only in `KotlinxIoDecoder.kt`, `KotlinxIoEncoder.kt` and tests. Same dependencies on both sides |
+
+**Method.** The six per-workload tasks, 3 invocations per side alternated (base, head × 3), 1 fork × 5 × 1 s warmup ×
+5 × 3 s measurement. Then EA-off allocation once per side (`benchmarkAlloc -Pbench='\.Avro4k'`,
+`-XX:-DoEscapeAnalysis`), the micro suite once per side, and the two JIT-sensitive rows at 9 forks per side
+(3 alternated invocations × 3 forks, 5 × 1 s warmup, 15 × 1 s measurement). "sep" = all three head invocations are above
+(or below) all three base ones.
+
+**Noise floor.** Apache, Jackson and their versions are identical on both sides, so they are the reference: 64 rows,
+median within-side spread 2.7%, largest between-side drift −7.0% (`simple` read @500, Apache reflect), every other row
+within ±6.8%.
+
+### avro4k end to end, base → head
+
+ops/s, mean of 3 invocations per side. Allocation per operation (EA off) is byte-for-byte identical on every row.
+
+| workload | param | read base | read head | Δ | sep | write base | write head | Δ | sep |
+|---|---:|---:|---:|---:|:-:|---:|---:|---:|:-:|
+| `simple` | 1 | 4,056,579 | 3,846,609 | −5.2% | n | 4,826,706 | 4,962,159 | +2.8% | n |
+| `simple` | 25 | 223,293 | 213,378 | −4.4% | n | 273,730 | 304,581 | +11.3% | n |
+| `simple` | 500 | 11,771 | 10,483 | **−10.9%** | Y | 15,837 | 16,036 | +1.3% | n |
+| `complex` | 1 | 350,899 | 276,095 | **−21.3%** | Y | 668,300 | 677,858 | +1.4% | n |
+| `complex` | 15 | 25,031 | 23,720 | −5.2% | Y | 40,651 | 42,157 | +3.7% | Y |
+| `complex` | 200 | 1,842 | 1,835 | −0.4% | n | 2,861 | 3,006 | +5.1% | Y |
+| `lists` | 100 | 7,499 | 5,653 | **−24.6%** ¹ | Y | 8,043 | 7,652 | −4.9% | n |
+| `lists` | 10000 | 75.7 | 73.7 | −2.6% | Y | 82.5 | 76.0 | −7.9% | Y |
+
+¹ Bimodal on head: 7,120 / 4,895 / 4,943 against 7,469–7,519 on base.
+
+**Per fork, the JIT-sensitive rows** (9 forks per side, sorted, ops/s):
+
+| | base | head |
+|---|---|---|
+| `complex` read @1 | 286k ×5, 295k, 299k, 334k, 340k | 265k–281k (all nine) |
+| `simple` write @1 | 4.87M–4.98M ×8, 6.74M | 4.93M–5.12M ×8, 5.94M |
+| `simple` write @25 | 232k–240k ×5, 350k–354k ×4 | 333k–338k (all nine) |
+
+Head's `complex` read @1 is below base's slow forks (−7%), not just missing its fast ones. `simple` write @25 always
+settles in the fast mode on head: the bimodal row seen since M3-02 was the old `writeLong` being too big to inline.
+
+**Micro suite, largest moves** (one invocation per side): reads `FieldOrderMicroBenchmark.read` **−39% to −41%** on all
+three field orders, `readLongs` @10 −30% (@1000 +16%), `PolymorphicMicroBenchmark.readConcrete` −9% / −20%,
+`StringFieldMicroBenchmark.readNullable` +18%; writes `writeLongs` @1000 **+67%**, `writeConcrete` @10 **+39%**,
+`NestedRecordMicroBenchmark.write` depth 3 +12%. Field-order *writes* and the schema, lookup and inference micros: within ±7%.
+
+### Why reads got slower
+
+`-XX:+PrintInlining` on `FieldOrderMicroBenchmark.read` (its record has several multi-byte longs), base against head:
+
+- Base: `readVarLong` (952 bytes) is never inlined ("hot method too big"). Each long costs a call, and the generated
+  `deserialize` stays compact.
+- Head: the one-byte `readVarLong` (29 bytes) is inlined as intended. But the out-of-line tail was itself split into pieces
+  each under HotSpot's 325-byte `FreqInlineSize` (`readVarLongTail` 271, `readVarLongHighFromArray` 319, plus
+  `Buffer.skip` 200). As soon as multi-byte longs are frequent, every piece is "inline (hot)" at every call site
+  (15–17 sites). The compiled `deserialize` then reaches C2's `DesiredMethodLimit`, and
+  `AbstractInterceptingDecoder.decodeLongElement`, `endStructure` and the record's constructor are no longer inlined
+  ("size > DesiredMethodLimit"), which they were on base.
+
+The tail was cut under the inlining threshold on purpose. That cut is what backfires, so it is undone: the rework keeps
+the one-byte fast path and puts each type's whole multi-byte decoding back in one out-of-line function, the plain
+fast-path/slow-path shape. The write side has no such sub-split (`writeVarInt` and `writeVarLong` are single functions)
+and keeps its gains, except `lists` write @10000 (−7.9%, separated), which the rework's A/B re-checks.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than
