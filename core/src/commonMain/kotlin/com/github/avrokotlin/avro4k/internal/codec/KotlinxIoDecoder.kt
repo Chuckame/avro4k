@@ -7,7 +7,6 @@ import kotlinx.io.UnsafeIoApi
 import kotlinx.io.readByteArray
 import kotlinx.io.readDoubleLe
 import kotlinx.io.readFloatLe
-import kotlinx.io.readString
 import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlinx.io.unsafe.withData
 
@@ -43,8 +42,29 @@ internal class KotlinxIoDecoder(
         return source.readDoubleLe()
     }
 
+    /**
+     * Decodes with the standard library's [decodeToString] rather than kotlinx-io's own UTF-8 decoder: on the JVM, it is
+     * the JDK's decoder, as with Apache Avro, which skips the intermediate `CharArray` kotlinx-io fills, and keeps
+     * ASCII and Latin-1 strings one byte per character. When the head segment holds the whole string, it is decoded
+     * straight from the segment's array.
+     */
+    @OptIn(InternalIoApi::class, UnsafeIoApi::class)
     override fun readString(): String {
-        return source.readString(readLength().toLong())
+        val length = readLength()
+        source.require(length.toLong())
+        // We do not really iterate, we just want to peek the head segment, if any
+        UnsafeBufferOperations.forEachSegment(source.buffer) { ctx, segment ->
+            if (segment.size >= length) {
+                ctx.withData(segment) { bytes, offset, _ ->
+                    val result = bytes.decodeToString(offset, offset + length)
+                    source.skip(length.toLong())
+                    return result
+                }
+            }
+            return source.readByteArray(length).decodeToString()
+        }
+        // Only an empty string leaves no segment to peek
+        return ""
     }
 
     override fun readStringBytes(): ByteArray {

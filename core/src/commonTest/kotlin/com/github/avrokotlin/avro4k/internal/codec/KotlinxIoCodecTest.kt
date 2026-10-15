@@ -3,6 +3,7 @@ package com.github.avrokotlin.avro4k.internal.codec
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import kotlinx.io.Buffer
+import kotlinx.io.EOFException
 import kotlinx.io.readByteArray
 import kotlinx.serialization.SerializationException
 import kotlin.test.Test
@@ -290,6 +291,47 @@ class KotlinxIoCodecTest {
         written("\uD800𐀀") shouldBe listOf(0x0a, 0x3f, 0xf0, 0x90, 0x80, 0x80)
         written("😀") shouldBe listOf(0x08, 0xf0, 0x9f, 0x98, 0x80)
         written("é€") shouldBe listOf(0x0a, 0xc3, 0xa9, 0xe2, 0x82, 0xac)
+    }
+
+    /**
+     * Malformed UTF-8 decodes as the JVM decodes it, as Apache Avro does: one replacement character per byte of an
+     * overlong or out-of-range sequence, one for a sequence cut short.
+     *
+     * Not pinned here: an encoded surrogate (`ED A0 80`) is one replacement character on the JVM, three on JS and native.
+     */
+    @Test
+    fun `a malformed string is decoded as the JVM decodes it`() {
+        fun read(vararg utf8: Int): String {
+            val buffer = Buffer()
+            KotlinxIoEncoder(buffer).writeString(bytes(*utf8))
+            return KotlinxIoDecoder(buffer).readString()
+        }
+        read(0xc0, 0x80) shouldBe "��"
+        read(0xc1, 0xbf) shouldBe "��"
+        read(0xf4, 0x90, 0x80, 0x80) shouldBe "����"
+        read(0xf8, 0x88, 0x80, 0x80) shouldBe "����"
+        read(0xe2, 0x82, 0x41) shouldBe "�A"
+        read(0x41, 0xff, 0x42) shouldBe "A�B"
+        read(0xf0, 0x9f, 0x98) shouldBe "�"
+        read(0x80) shouldBe "�"
+    }
+
+    @Test
+    fun `a string split across buffer segments is decoded whole`() {
+        // 10,000 bytes: longer than a segment, so the head segment never holds the whole string
+        val value = "é".repeat(5000)
+        val buffer = Buffer()
+        KotlinxIoEncoder(buffer).writeString(value)
+        KotlinxIoDecoder(buffer).readString() shouldBe value
+        buffer.exhausted() shouldBe true
+    }
+
+    @Test
+    fun `a string longer than the remaining input is the end of the input`() {
+        val buffer = Buffer()
+        KotlinxIoEncoder(buffer).writeString("hello")
+        val truncated = Buffer().apply { write(buffer.readByteArray().copyOf(4)) }
+        shouldThrow<EOFException> { KotlinxIoDecoder(truncated).readString() }
     }
 
     private fun bytes(vararg values: Int) = ByteArray(values.size) { values[it].toByte() }
