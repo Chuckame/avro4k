@@ -160,6 +160,10 @@ internal fun Source.readVarLong(): Long {
  * When the head segment holds every byte the varint may still need, they are decoded straight from its array, then
  * skipped. Otherwise the varint may be split across segments, or not yet loaded from the underlying source, and is
  * read byte by byte.
+ *
+ * All of the multi-byte decoding stays in this one function. Split into smaller functions, those got inlined into every
+ * caller as soon as multi-byte values were frequent, making the callers too big to be inlined in turn, which made
+ * reads slower than with no fast path at all.
  */
 @OptIn(InternalIoApi::class, UnsafeIoApi::class)
 private fun Source.readVarIntTail(first: Int): Int {
@@ -174,18 +178,12 @@ private fun Source.readVarIntTail(first: Int): Int {
                 return result
             }
         }
-        return readVarIntTailByteByByte(first)
+        return decodeVarIntTail(first) { readByte() }
     }
-    return readVarIntTailByteByByte(first)
+    return decodeVarIntTail(first) { readByte() }
 }
 
-/**
- * The long counterpart of [readVarIntTail].
- *
- * Only the 2nd to 4th bytes are decoded here, keeping this function small enough to be inlined when hot: those cover the
- * lengths, counts and small values that do not fit in one byte. The 5th to 10th bytes, whose unrolled decoding is as
- * large again, are decoded out of line by [readVarLongHighFromArray].
- */
+/** The long counterpart of [readVarIntTail], all of the multi-byte decoding in one function for the same reason. */
 @OptIn(InternalIoApi::class, UnsafeIoApi::class)
 private fun Source.readVarLongTail(first: Int): Long {
     // We do not really iterate, we just want to peek the head segment, if any
@@ -193,41 +191,15 @@ private fun Source.readVarLongTail(first: Int): Long {
         if (segment.size >= MAX_VARINT_LONG_BYTES - 1) {
             ctx.withData(segment) { bytes, offset, _ ->
                 var len = 0
-                val result =
-                    decodeVarLongTail(first, { bytes[offset + len++] }) { lo ->
-                        return readVarLongHighFromArray(lo, bytes, offset, len)
-                    }
+                val result = decodeVarLongTail(first) { bytes[offset + len++] }
                 skip(len.toLong())
                 return result
             }
         }
-        return readVarLongTailByteByByte(first)
+        return decodeVarLongTail(first) { readByte() }
     }
-    return readVarLongTailByteByByte(first)
+    return decodeVarLongTail(first) { readByte() }
 }
-
-/**
- * Decodes the 5th to 10th bytes of a varint long from [bytes], [consumed] bytes after [offset], then skips every byte
- * of the varint read from [bytes]. [lo] holds the 28 bits of the first 4 bytes.
- */
-private fun Source.readVarLongHighFromArray(
-    lo: Long,
-    bytes: ByteArray,
-    offset: Int,
-    consumed: Int,
-): Long {
-    var len = consumed
-    val result = decodeVarLong2(lo) { bytes[offset + len++] }
-    skip(len.toLong())
-    return result
-}
-
-private fun Source.readVarIntTailByteByByte(first: Int): Int = decodeVarIntTail(first) { readByte() }
-
-private fun Source.readVarLongTailByteByByte(first: Int): Long = decodeVarLongTail(first, { readByte() }) { lo -> readVarLongHighByteByByte(lo) }
-
-/** The byte-by-byte counterpart of [readVarLongHighFromArray]. */
-private fun Source.readVarLongHighByteByByte(lo: Long): Long = decodeVarLong2(lo) { readByte() }
 
 /** Decodes the bytes of a varint int following its [first] byte, whose continuation bit is set. */
 private inline fun decodeVarIntTail(
@@ -254,14 +226,10 @@ private inline fun decodeVarIntTail(
     return decodeZigZag(varint)
 }
 
-/**
- * Decodes the 2nd to 4th bytes of a varint long following its [first] byte, whose continuation bit is set, and hands the
- * 28 bits decoded so far to [readHigh] when the 4th byte has its continuation bit set too.
- */
+/** Decodes the bytes of a varint long following its [first] byte, whose continuation bit is set. */
 private inline fun decodeVarLongTail(
     first: Int,
     readByte: () -> Byte,
-    readHigh: (lo: Long) -> Long,
 ): Long {
     var b: Int = readByte().toInt()
     var i = (first and 0x7F) + ((b and 0x7F) shl 7)
@@ -272,7 +240,7 @@ private inline fun decodeVarLongTail(
             b = readByte().toInt()
             i += ((b and 0x7F) shl 21)
             if (b < 0) {
-                return readHigh(i.toLong())
+                return decodeVarLong2(i.toLong(), readByte)
             }
         }
     }

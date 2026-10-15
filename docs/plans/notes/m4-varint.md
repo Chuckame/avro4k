@@ -148,3 +148,26 @@ No pre-existing bug found.
 
 - The "start in the array, finish byte by byte" TODO for a varint split across segments is kept; it only affects
   varints whose bytes straddle a segment boundary.
+
+## A/B result and rework (2026-10-15)
+
+The A/B of `9740fb08` vs `bfe074e9` (`benchmark/README.md` → "Results — varint reads and writes small enough to
+inline") came out **mixed**. Writes got slightly better, and `simple` write @25 now settles in its fast mode on all 9
+forks. Reads got **slower**: `complex` read @1 −21% end to end and −7% per fork, `lists` read @100 −25% (bimodal),
+`simple` read @500 −11%, and the field-order read micro −39%.
+
+**Cause, from `-XX:+PrintInlining` on the field-order read:** the out-of-line tail had been cut into pieces under
+HotSpot's 325-byte `FreqInlineSize` (`readVarLongTail` 271, `readVarLongHighFromArray` 319, plus `Buffer.skip` 200),
+on purpose, so that the 2–4-byte case could inline when hot. With multi-byte longs frequent, every piece was
+"inline (hot)" at all 15–17 call sites. The compiled `deserialize` then reached C2's `DesiredMethodLimit`, and
+`decodeLongElement`, `endStructure` and the record constructor stopped being inlined.
+
+**Rework:** keep the one-byte fast path (`readVarInt` 27, `readVarLong` 28). Each type's whole multi-byte decoding,
+array mode and byte by byte, now sits in one function: `readVarIntTail` 556 and `readVarLongTail` 1223 bytes.
+`readVarLongHighFromArray` and the `…ByteByByte` helpers are gone. This is the plain fast-path/slow-path shape, with no
+sizing to a JIT threshold (locked decision 6). The inlining log confirms the `DesiredMethodLimit` misses are gone.
+Tests unchanged and green: jvm 1026, js 213, macOS native 216. The write side is untouched. Its A/B must re-check
+`lists` write @10000 (−7.9%, separated).
+
+**Lesson for later units:** do not cut a slow path into pieces sized under an inlining threshold. When the slow path
+is hot, those pieces inline at every call site and push the callers past the compiler's budget.
