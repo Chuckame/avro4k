@@ -171,3 +171,29 @@ Tests unchanged and green: jvm 1026, js 213, macOS native 216. The write side is
 
 **Lesson for later units:** do not cut a slow path into pieces sized under an inlining threshold. When the slow path
 is hot, those pieces inline at every call site and push the callers past the compiler's budget.
+
+## Second A/B and revert of the read half (2026-10-16)
+
+The rework's A/B (`benchmark/README.md` → "Results — varint rework and JDK string decoding", base `9740fb08`, varint
+`6f78f0a8`, 3 alternated invocations per side) shows **reads still slower than before the fast path**, by about as much
+as the first cut: `simple` read @500 −28%, `complex` read @1 −19% (all nine forks below all nine base forks), `lists`
+read −11% / −13%, `FieldOrderMicroBenchmark.read` −24% to −26%, `readLongs` @100000 −12%, all separated. Writes:
+`complex` +3% to +5%, `simple` write @25 in its fast mode on 9/9 forks, but `lists` write @10000 −11% (separated).
+
+**Cause, from `-XX:+PrintInlining` on the field-order read** (eight random longs, so 10-byte varints): no
+`DesiredMethodLimit` miss any more, so the rework fixed what it targeted. What remains is structural: the inlined
+one-byte path is kotlinx-io's `Buffer.readByte` (68 bytes, inlined hot at 55 sites, its `recycleHead` left out of line),
+and a multi-byte varint then calls the tail, which peeks the head segment again and `skip`s the rest. Two buffer updates
+per multi-byte varint, where base does one call: `require(1)`, one peek, the decoding, one `skip`.
+
+**Revert of the read half** (the plan's fallback): `Source.readVarInt` / `readVarLong` are back to base's shape, the
+whole varint decoded in one function from the head segment's array (or byte by byte when it may be split), with one
+`skip`. They use the shared `decodeVarIntTail` / `decodeVarLongTail` of `Varint.kt` after their own first-byte check, so
+`ByteBufferDecoder` is unchanged. JVM bytecode: `readVarInt` 516, `readVarLong` 983 (base 486 / 951), never inlined, as
+on base. The write half is kept. Tests unchanged and green: jvm 1032, js 216, macOS / iOS simulator 219, apache-interop
+575, Confluent 80, kotlin-generator 155, `apiCheck` and `actionsBeforeCommit` green. Its A/B against base: next section
+of `benchmark/README.md`.
+
+**Lesson:** a one-byte fast path only pays when reading one byte is a plain array access. kotlinx-io's
+`Buffer.readByte` updates the segment bookkeeping; splitting a varint read into "first byte" and "the rest" doubles that
+bookkeeping for every multi-byte value.

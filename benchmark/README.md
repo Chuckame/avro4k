@@ -797,6 +797,123 @@ the one-byte fast path and puts each type's whole multi-byte decoding back in on
 fast-path/slow-path shape. The write side has no such sub-split (`writeVarInt` and `writeVarLong` are single functions)
 and keeps its gains, except `lists` write @10000 (−7.9%, separated), which the rework's A/B re-checks.
 
+## Results — varint rework and JDK string decoding (9740fb08 vs 6f78f0a8 vs 9de25315)
+
+**Does the reworked varint read (one-byte case inline, the whole multi-byte decoding in one out-of-line function) fix
+the read regression?** No: reads are still slower than before the fast path, by about as much as the first cut.
+**Is decoding strings with the JDK's UTF-8 decoder faster?** End to end, yes: every read that decodes strings is
+faster or the same, with 18–22% less allocation. In isolation, short non-ASCII strings are much slower.
+
+| | |
+|---|---|
+| Date | 2026-10-15 23:46 → 2026-10-16 06:40 |
+| Machine | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37 |
+| Power | AC power, Low Power Mode off, checked before every invocation and polled every 10 s during it; never dropped |
+| Sleep | One `caffeinate -dimsu` over the whole script; `pmset -g log` shows no sleep or dark wake during any invocation; nothing discarded |
+| Load | Every invocation started once the 1-min load average was below 3 (2.15–2.98 at the starts) |
+| Sides | **base** `9740fb08` (before the varint fast path); **varint** `6f78f0a8` (fast path reworked); **head** `9de25315` (varint + JDK string decoding `9a63c731` + in-place `ByteBuffer` decoding). `StringDecodeMicroBenchmark` (added by `9a63c731`) copied uncommitted into base and varint: `benchmark/src` identical on all three sides. Same resolved runtime dependencies on all three sides (Apache 1.12.2, kotlinx-io 0.9.1, kotlinx-serialization 1.11.0) |
+
+The in-place `ByteBuffer` decoding is not exercised here (every benchmark decodes a `ByteArray`); it only moved the
+varint tail decoders to `Varint.kt` as `inline` functions, and the decoder's bytecode is unchanged by that move
+(`readVarIntTail` 556 bytes on both varint and head). So **varint → head isolates the string change**.
+
+**Method.** As the previous section: the six per-workload tasks, 3 invocations per side, each round in a different
+order (base/varint/head, varint/head/base, head/base/varint), 1 fork × 5 × 1 s warmup × 5 × 3 s measurement; the string
+and varint micros (`StringFieldMicroBenchmark.read*`, `StringDecodeMicroBenchmark.read`, `FieldOrderMicroBenchmark.read`,
+`CollectionMicroBenchmark.readLongs`) 3 rounds × 3 forks per side, escape analysis on; the two JIT-sensitive rows at
+9 forks per side; EA-off allocation and the full micro suite once per side. "sep" = every invocation of one side is
+above (or below) every invocation of the other.
+
+**Noise floor.** Apache and Jackson read rows: within ±2% between sides on all but two, `lists` read @100 Apache
+specific (−10.4% base → varint, separated) and the bimodal `simple` read @25 Apache generic with the fast reader
+(+21.6% then −19.2%). Median within-side spread 3.1–3.4%.
+
+### avro4k end to end
+
+ops/s, mean of 3 invocations per side.
+
+| workload | param | base | varint | head | base → varint | sep | varint → head | sep | base → head | sep |
+|---|---:|---:|---:|---:|---:|:-:|---:|:-:|---:|:-:|
+| `simple` read | 1 | 4,182,000 | 3,760,000 | 3,733,000 | −10.1% | Y | −0.7% | n | −10.7% | n |
+| `simple` read | 25 | 213,660 | 191,842 | 200,926 | −10.2% | n | +4.7% | n | −6.0% | n |
+| `simple` read | 500 | 12,072 | 8,685 | 9,403 | **−28.1%** | Y | +8.3% | n | **−22.1%** | Y |
+| `complex` read | 1 | 343,705 | 277,297 | 392,961 | **−19.3%** | Y | **+41.7%** | Y | **+14.3%** | Y |
+| `complex` read | 15 | 26,456 | 24,030 | 28,581 | −9.2% | Y | **+18.9%** | Y | +8.0% | Y |
+| `complex` read | 200 | 1,863 | 1,819 | 2,086 | −2.4% | n | **+14.7%** | Y | **+11.9%** | Y |
+| `lists` read | 100 | 7,573 | 6,734 | 6,754 | **−11.1%** | Y | +0.3% | n | **−10.8%** | Y |
+| `lists` read | 10000 | 76.8 | 67.1 | 67.5 | **−12.7%** | Y | +0.6% | n | **−12.2%** | Y |
+| `simple` write | 1 | 4,919,000 | 5,062,000 | 5,304,000 | +2.9% | n | +4.8% | n | +7.8% | n |
+| `simple` write | 25 | 316,765 | 337,645 | 338,245 | +6.6% | n | +0.2% | n | +6.8% | n |
+| `simple` write | 500 | 15,986 | 16,017 | 16,200 | +0.2% | n | +1.1% | n | +1.3% | n |
+| `complex` write | 1 | 686,346 | 693,466 | 693,601 | +1.0% | n | +0.0% | n | +1.1% | n |
+| `complex` write | 15 | 41,530 | 42,766 | 42,406 | +3.0% | Y | −0.8% | n | +2.1% | Y |
+| `complex` write | 200 | 2,926 | 3,057 | 3,077 | +4.5% | Y | +0.7% | n | +5.2% | Y |
+| `lists` write | 100 | 7,954 | 7,803 | 7,344 | −1.9% | n | −5.9% | n | −7.7% | Y |
+| `lists` write | 10000 | 85.5 | 76.0 | 75.7 | **−11.1%** | Y | −0.4% | n | **−11.5%** | Y |
+
+**Per fork, the JIT-sensitive rows** (9 forks per side, sorted, ops/s):
+
+| | base | varint | head |
+|---|---|---|---|
+| `complex` read @1 | 295k, 297k, 332k–368k ×7 | 272k–276k (all nine) | 380k–409k (all nine) |
+| `simple` write @1 | 4.86M–5.00M ×8, 5.54M | 4.96M–5.16M ×8, 5.93M | 4.92M–5.11M ×6, 5.81M–6.07M ×3 |
+| `simple` write @25 | 236k–245k ×3, 351k–363k ×6 | 332k–358k (all nine) | 332k–361k (all nine) |
+
+Every varint fork of `complex` read @1 is below every base fork, and every head fork above. `simple` write @25 stays in
+its fast mode on every fork once the varint writes are inlinable, as in the previous A/B.
+
+**Allocation per operation, escape analysis off:** byte-for-byte identical base → varint on every row. varint → head,
+every read that decodes strings allocates less: `simple` read 688 → 616 / 8,624 → 6,824 / 166,321 → 130,321 B/op
+(@1/@25/@500), `complex` read 5,888 → 4,472 / 129,024 → 106,024 / 1,729,100 → 1,415,459 (@1/@15/@200); `lists` reads
+and every write unchanged.
+
+### The string and varint micros (3 rounds × 3 forks per side, escape analysis on)
+
+| benchmark | base | varint | head | base → varint | sep | varint → head | sep |
+|---|---:|---:|---:|---:|:-:|---:|:-:|
+| `FieldOrderMicroBenchmark.read` matching | 8.453M | 6.250M | 6.307M | **−26.1%** | Y | +0.9% | n |
+| `FieldOrderMicroBenchmark.read` reversed | 9.681M | 7.253M | 7.252M | **−25.1%** | Y | −0.0% | n |
+| `FieldOrderMicroBenchmark.read` swapped | 8.143M | 6.204M | 6.250M | **−23.8%** | Y | +0.7% | n |
+| `CollectionMicroBenchmark.readLongs` 10 | 5.187M | 4.533M | 4.416M | −12.6% | n | −2.6% | n |
+| `CollectionMicroBenchmark.readLongs` 1000 | 64,067 | 62,685 | 63,040 | −2.2% | n | +0.6% | n |
+| `CollectionMicroBenchmark.readLongs` 100000 | 519.2 | 458.2 | 458.7 | **−11.7%** | Y | +0.1% | n |
+| `StringDecodeMicroBenchmark.read` ascii, 16 | 3.783M | 2.528M | 3.184M | **−33.2%** | Y | **+26.0%** | Y |
+| `StringDecodeMicroBenchmark.read` ascii, 256 | 1.154M | 1.111M | 2.655M | −3.7% | Y | **+139.0%** | Y |
+| `StringDecodeMicroBenchmark.read` latin1, 16 | 3.131M | 2.982M | 1.653M | −4.8% | Y | **−44.5%** | Y |
+| `StringDecodeMicroBenchmark.read` latin1, 256 | 477,477 | 468,059 | 617,005 | −2.0% | Y | **+31.8%** | Y |
+| `StringDecodeMicroBenchmark.read` cjk, 16 | 2.368M | 2.307M | 1.785M | −2.5% | Y | **−22.6%** | Y |
+| `StringDecodeMicroBenchmark.read` cjk, 256 | 261,586 | 262,072 | 227,407 | +0.2% | n | **−13.2%** | Y |
+| `StringFieldMicroBenchmark.readNonNull` | 2.764M | 2.791M | 2.550M | +1.0% | n | −8.6% | n |
+| `StringFieldMicroBenchmark.readNullable` | 2.003M | 1.679M | 2.213M | −16.1% | Y | **+31.8%** | Y |
+
+The full micro suite (one invocation per side) agrees; its other large moves are writes: `writeLongs` @1000 +67%
+varint → head on one invocation (and +16% then −15% @100000), `PolymorphicMicroBenchmark.writeConcrete` @10 −27%
+base → varint, `NestedRecordMicroBenchmark.write` depth 3 +10%.
+
+### Why varint reads are still slower
+
+`-XX:+PrintInlining` on `FieldOrderMicroBenchmark.read`, whose record holds eight random longs (10-byte varints):
+
+- No `DesiredMethodLimit` or node-count miss on either side this time: the rework did remove the first cut's problem.
+- Base: `readVarLong` (952 bytes) is a call ("hot method too big"), and does `require(1)`, one peek of the head segment,
+  the decoding, and one `Buffer.skip`.
+- Varint: `readVarLong` (29 bytes) is inlined, and with it kotlinx-io's `Buffer.readByte` (68 bytes, "inline (hot)" at
+  55 sites, its `recycleHead` call left out of line). A multi-byte varint then calls `readVarLongTail` (1224 bytes),
+  which peeks the head segment again and skips the rest: **two buffer updates per multi-byte varint** where base does
+  one. The one-byte case saves a call but does not make up for it, even on rows where most varints are one byte.
+
+So the fast path does not pay with kotlinx-io's `Buffer`: its `readByte` is not a plain array read. The read half goes
+back to base's shape, the whole varint decoded in one function; the write half keeps its fast path (`simple` write @25
+always in its fast mode). Measured in the next section.
+
+### The string decoding, in plain words
+
+End to end, the JDK's decoder is a clear gain on `complex` reads (+15% to +42%), neutral elsewhere, and cuts
+read allocation by about a fifth. The JDK decodes ASCII with an intrinsic and stores ASCII and Latin-1 strings one byte
+per character, which is where long ASCII (+139%) and long Latin-1 (+32%) win. Short Latin-1 (−45%), short CJK (−23%)
+and long CJK (−13%) lose against kotlinx-io's own decoder; the benchmark workloads hold only ASCII strings, so those
+losses do not show end to end. They are a real cost for data made mostly of short non-ASCII strings.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than
