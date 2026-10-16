@@ -1,10 +1,11 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.Buffer
 import com.github.avrokotlin.avro4k.internal.EnumResolver
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.PolymorphicResolver
 import com.github.avrokotlin.avro4k.internal.RecordResolver
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
+import com.github.avrokotlin.avro4k.internal.decodeWithValidation
 import com.github.avrokotlin.avro4k.internal.defaultSerializersModule
 import com.github.avrokotlin.avro4k.internal.schema.ValueVisitor
 import kotlinx.io.Buffer
@@ -161,9 +162,9 @@ public sealed class Avro(
         deserializer: DeserializationStrategy<T>,
         bytes: ByteArray,
     ): T {
-        val source = Buffer(bytes)
-        val result = decodeFromSource(writerSchema, deserializer, source)
-        if (!source.exhausted()) {
+        val decoder = ByteArrayDecoder(bytes)
+        val result = decodeWithValidation(writerSchema, deserializer, decoder)
+        if (!decoder.isExhausted) {
             throw AvroMalformedDataException("Not all bytes were consumed during deserialization")
         }
         return result
