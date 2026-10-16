@@ -11,7 +11,27 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-16, 08:10): varint done (reads reverted), strings slower than base on short strings
+### Resume here (2026-10-16, later): ByteArray decoder candidates built, their A/B waits for an idle machine on AC
+
+**User (2026-10-16): code may be shaped for the JIT, and a JVM implementation beside a non-JVM one is allowed**
+(locked decision 6 relaxed, decision log). The read varint is central; Apache keeps `readLong` small for the JIT on a
+plain `byte[] buf; int pos` cursor, which every avro4k shape so far lacked (they all read through kotlinx-io's `Buffer`).
+
+- **Candidate v1, branch `v3/bytearray-decoder` (`f9c3f34c`, not merged, not measured):** `ByteArrayDecoder`
+  (`commonMain`) for `Avro.decodeFromByteArray`: the array and a position, no kotlinx-io; one-byte varint inline
+  (`readInt` 41, `readLong` 42 bytes of JVM bytecode), the rest out of line. +13 common tests; jvm 1045, js 229, native
+  232, other modules and `apiCheck` green.
+- **Candidate v2 (uncommitted, scratchpad worktree `v2`):** v1 + Apache's shape: `readInt` fully unrolled (256 bytes),
+  `readLong` decoding bytes 1–4 itself (168 bytes) and 5–10 out of line (`readVarLongHigh`, as `innerLongDecode`).
+  jvm 1045 and jsNode 229 green.
+- **Driver ready:** `…/82651032-…/scratchpad/ab4/driver.sh` (sides head `fe8debc1`, v1, v2; string/varint micros 3 × 3
+  forks, the three read workloads 3 alternated rounds with Apache/Jackson as noise reference, `complex` read @1 9 forks;
+  about 3.5 h; worktrees `head`, `v1`, `v2` prebuilt). Analysis: `ab4/analyze.py ab4/raw`. Start it with `nohup` on AC
+  power, machine idle. Then: keep the faster of v1/v2 (or neither), commit it with its numbers, merge the branch.
+- Next after that: the same cursor for streams (`KotlinxIoDecoder` keeping the head segment's array and position), and
+  the string decision below.
+
+### Earlier (2026-10-16, 08:10): varint done (reads reverted), strings slower than base on short strings
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
 
