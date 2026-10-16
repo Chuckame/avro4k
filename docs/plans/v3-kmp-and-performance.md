@@ -15,6 +15,9 @@
 4. Benchmarks: **multiplatform common benchmarks + the existing JVM-only comparison suite** (both).
 5. **Stay on kotlinx-serialization compile-time serializers.** No reflection fallback, no new codegen.
 6. **Every perf change must be platform-neutral.** No `Unsafe`, no `ClassValue`, no JIT-shape tricks.
+   *Relaxed by the user on 2026-10-16:* code may be shaped to help the JIT (e.g. a small hot method and its rare
+   part out of line, as Apache's `readLong`/`innerLongDecode`); if that makes the common code dirty, a JVM-specific
+   implementation next to a non-JVM one is allowed. `Unsafe` and `ClassValue` stay excluded.
 7. Prior art is *cherry-picked*, never merged wholesale: branches `kmp` (best), `kmp-bak`,
    `feat/multiplatform` (reference only). `kmp` is 5+ months stale.
 
