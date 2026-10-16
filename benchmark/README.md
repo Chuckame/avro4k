@@ -914,6 +914,62 @@ per character, which is where long ASCII (+139%) and long Latin-1 (+32%) win. Sh
 and long CJK (−13%) lose against kotlinx-io's own decoder; the benchmark workloads hold only ASCII strings, so those
 losses do not show end to end. They are a real cost for data made mostly of short non-ASCII strings.
 
+## Results — varint reads back to one function (9740fb08 vs 9de25315 + the revert)
+
+**Does reverting the read half of the varint fast path bring reads back to base?** Yes for the varint-heavy rows. What
+is left below base on `simple` reads comes from the string decoding, which is also slower than base on short ASCII
+strings.
+
+| | |
+|---|---|
+| Date | 2026-10-16 06:46 → 08:03 |
+| Machine, power, sleep | As the previous section; AC power and Low Power Mode checked before every invocation and polled every 10 s; no sleep or dark wake; nothing discarded |
+| Load | Every invocation started once the 1-min load average was below 3 (2.41–2.96 at the starts) |
+| Sides | **base** `9740fb08`; **revert** `9de25315` with the read half of the varint change reverted (the commit that adds this section) |
+
+**Method, shortened** (the machine had to be released): the string and varint micros as in the previous section
+(3 rounds × 3 forks per side); end to end, **avro4k read rows only** (`avro4k-read` configuration, 3 alternated
+invocations per side, same JMH settings as the per-workload tasks), so there is no Apache/Jackson noise reference in this
+run; `complex` read @1 at 3 forks per side. Writes are not re-measured: the revert does not touch them. Allocation is not
+re-measured: the varint code allocated exactly the same on every row in the previous section.
+
+### avro4k reads end to end, base → revert
+
+| workload | param | base | revert | Δ | sep | before the revert (base → head, previous section) |
+|---|---:|---:|---:|---:|:-:|---:|
+| `simple` | 1 | 4,244,000 | 3,804,000 | −10.4% | n | −10.7% |
+| `simple` | 25 | 231,568 | 213,249 | −7.9% | Y | −6.0% |
+| `simple` | 500 | 11,522 | 10,158 | **−11.8%** | Y | −22.1% |
+| `complex` | 1 | 346,839 | 389,117 | **+12.2%** | Y | +14.3% |
+| `complex` | 15 | 25,215 | 28,239 | **+12.0%** | Y | +8.0% |
+| `complex` | 200 | 1,875 | 2,051 | **+9.4%** | Y | +11.9% |
+| `lists` | 100 | 7,524 | 7,488 | −0.5% | Y | −10.8% |
+| `lists` | 10000 | 76.3 | 75.4 | −1.2% | n | −12.2% |
+
+`complex` read @1 per fork: base 340k, 345k, 370k; revert 369k, 381k, 404k.
+
+### The string and varint micros, base → revert (3 rounds × 3 forks per side)
+
+| benchmark | base | revert | Δ | sep |
+|---|---:|---:|---:|:-:|
+| `FieldOrderMicroBenchmark.read` matching / reversed / swapped | 8.506M / 9.592M / 8.129M | 8.409M / 9.686M / 7.988M | −1.1% / +1.0% / −1.7% | n / n / Y |
+| `CollectionMicroBenchmark.readLongs` 10 / 1000 / 100000 | 4.946M / 70,403 / 519.8 | 5.244M / 64,724 / 523.7 | +6.0% / −8.1% / +0.7% | n / n / n |
+| `StringDecodeMicroBenchmark.read` ascii 16 / 256 | 3.877M / 1.151M | 3.158M / 2.985M | **−18.5%** / **+159%** | Y / Y |
+| `StringDecodeMicroBenchmark.read` latin1 16 / 256 | 3.158M / 478,857 | 1.693M / 625,056 | **−46.4%** / +30.5% | Y / Y |
+| `StringDecodeMicroBenchmark.read` cjk 16 / 256 | 2.389M / 264,976 | 1.834M / 226,556 | **−23.2%** / −14.5% | Y / Y |
+| `StringFieldMicroBenchmark.readNonNull` / `readNullable` | 2.758M / 2.031M | 2.421M / 2.162M | **−12.2%** / +6.5% | Y / Y |
+
+### Verdict, in plain words
+
+- **Varint reads:** back to base. The field-order micro (10-byte longs) went from −25% to within ±2%, `readLongs`
+  @100000 from −12% to +0.7%, `lists` reads end to end from −11%/−13% to −0.5%/−1.2%. The varint *writes* keep their
+  fast path and its gains (previous section).
+- **Strings:** the JDK's decoder wins on long strings (ASCII 256 +159%, Latin-1 256 +31%, `complex` reads +9% to
+  +12%) but is **slower than base on short strings, ASCII included** (16 ASCII characters −18.5%, `readNonNull` −12%),
+  which is what keeps `simple` reads 8–12% below base. The previous section measured short ASCII at +26%, but against the
+  varint side, itself −33% on that row; against base it is a loss. Short strings are common in real data (names, ids,
+  enums as strings), so this is a regression against v3.0's bar ("no real degradation"), to be decided by the user.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than

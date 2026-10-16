@@ -1,7 +1,7 @@
 # M4 — Strings decoded by the JDK, `ByteBuffer` decoded in place
 
 **Outcome:** both committed on 2026-10-15 (`9a63c731`, `9de25315`), measured on 2026-10-16. Internal code only, no API
-change. Strings: a net gain end to end, with a real cost on short non-ASCII strings and one new cross-platform
+change. Strings: faster on long strings, **slower than base on short ones, ASCII included** (`simple` reads −8% to −12%) and one new cross-platform
 divergence on malformed input (open points below). `ByteBuffer`: not covered by any benchmark.
 
 ## Strings (`9a63c731`)
@@ -26,11 +26,20 @@ the input is an end of input.
   then the JDK for ASCII and kotlinx-io for anything else. No loss on any content (Latin-1 16 +7%, CJK 16 +7%, CJK 256
   0%), but much smaller ASCII gains (16: +10%, 256: +35%), since the scan is a plain loop where the JDK's is intrinsic.
 
+### Against base, once the varint reads were reverted (2026-10-16)
+
+The numbers above compare against the varint side, itself 33% slower than base on short ASCII strings. Against base
+(`9740fb08` → `9de25315` + the varint revert, `benchmark/README.md` → "Results — varint reads back to one function"):
+**short strings are slower than before, ASCII included** — 16 ASCII characters −18.5%, `StringFieldMicroBenchmark.readNonNull`
+−12%, Latin-1 16 −46%, CJK 16 −23% — while long strings win (ASCII 256 +159%, Latin-1 256 +31%). End to end:
+`complex` reads +9% to +12%, **`simple` reads −8% to −12%** (@500 −11.8%, separated). So this change, as committed, is
+a regression for data made of short strings.
+
 ### Open points (for the user)
 
-1. **Short non-ASCII strings are slower** (Latin-1 −45%, CJK −23% at 16 characters). Keep as is (the common case,
-   ASCII, gains most, and end to end it is a gain), or look for a variant without the loss, in M5's string fast paths
-   (C5).
+1. **Short strings are slower than base** (16 characters: ASCII −18.5%, Latin-1 −46%, CJK −23%; `simple` reads end to
+   end −8% to −12%), long strings much faster. Options: keep kotlinx-io's decoder for short strings and the JDK's above
+   a length threshold (to measure), revert the change, or keep it and look again in M5's string fast paths (C5).
 2. **New cross-platform divergence on malformed input:** an encoded surrogate (`ED A0 80`) decodes to one replacement
    character on the JVM and to three on JS and native (noted in the test's KDoc, not pinned). Before this change,
    kotlinx-io's decoder gave the same result on every platform. Only invalid UTF-8 is affected; Avro requires valid UTF-8.

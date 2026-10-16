@@ -153,70 +153,71 @@ internal class KotlinxIoDecoder(
 /**
  * Reads a zig-zag varint int, throwing an EOFException at the end of the input.
  *
- * Most ints, lengths, indexes and counts take a single byte, and that case is all this function handles itself: it
- * stays small enough to be inlined into every caller by a JIT or an optimizing compiler, while the longer encodings,
- * whose unrolled decoding is large, are read out of line by [readVarIntTail].
+ * When the head segment holds every byte the varint may need, they are decoded straight from its array, then skipped
+ * at once. Otherwise the varint may be split across segments, and is read byte by byte.
+ *
+ * The one-byte case is not split off into a smaller function: reading that first byte with [Source.readByte] updates
+ * the buffer once, and a longer varint then updates it a second time when its remaining bytes are skipped, which made
+ * reads of multi-byte values much slower than decoding the whole varint here and updating the buffer once.
  */
+@OptIn(InternalIoApi::class, UnsafeIoApi::class)
 internal fun Source.readVarInt(): Int {
+    // This ensures having at least one byte available to read
+    // There are 3 outcomes:
+    // 1. There are already all the bytes of the varint available in the buffer: fast mode
+    // 2. There are no bytes available in the buffer, so it triggers a read of a full segment, retrieving much more than 1 byte if more available, finally reading the varint in fast mode
+    // 3. There is only one byte available in the buffer, while the varint has 2 bytes across segments, so the read will be done in slow mode
+    require(1L)
+    // We do not really iterate, we just want to peek the head segment
+    UnsafeBufferOperations.forEachSegment(buffer) { ctx, segment ->
+        // TODO: start in fast mode, finish in slow mode if the varint is split across segments
+        if (segment.size < MAX_VARINT_INT_BYTES) {
+            // Slow mode: the int may be split across segments
+            return decodeVarInt { readByte() }
+        }
+        ctx.withData(segment) { bytes, offset, _ ->
+            // Fast mode: we have all the bytes in the current segment
+            var len = 0
+            val result = decodeVarInt { bytes[offset + len++] }
+            skip(len.toLong())
+            return result
+        }
+    }
+    error("Unreachable")
+}
+
+/** The long counterpart of [readVarInt], the whole varint decoded in one function for the same reason. */
+@OptIn(InternalIoApi::class, UnsafeIoApi::class)
+internal fun Source.readVarLong(): Long {
+    require(1L)
+    // We do not really iterate, we just want to peek the head segment
+    UnsafeBufferOperations.forEachSegment(buffer) { ctx, segment ->
+        if (segment.size < MAX_VARINT_LONG_BYTES) {
+            // Slow mode: the long may be split across segments
+            return decodeVarLong { readByte() }
+        }
+        ctx.withData(segment) { bytes, offset, _ ->
+            var len = 0
+            val result = decodeVarLong { bytes[offset + len++] }
+            skip(len.toLong())
+            return result
+        }
+    }
+    error("Unreachable")
+}
+
+private inline fun decodeVarInt(readByte: () -> Byte): Int {
     val first = readByte().toInt()
     if (first >= 0) {
         return decodeZigZag(first)
     }
-    return readVarIntTail(first)
+    return decodeVarIntTail(first, readByte)
 }
 
-/** Reads a zig-zag varint long, throwing an EOFException at the end of the input. Kept small as [readVarInt]. */
-internal fun Source.readVarLong(): Long {
+private inline fun decodeVarLong(readByte: () -> Byte): Long {
     val first = readByte().toInt()
     if (first >= 0) {
         return decodeZigZag(first).toLong()
     }
-    return readVarLongTail(first)
-}
-
-/**
- * Reads the bytes of a varint int following its [first] byte, already read.
- *
- * When the head segment holds every byte the varint may still need, they are decoded straight from its array, then
- * skipped. Otherwise the varint may be split across segments, or not yet loaded from the underlying source, and is
- * read byte by byte.
- *
- * All of the multi-byte decoding stays in this one function. Split into smaller functions, those got inlined into every
- * caller as soon as multi-byte values were frequent, making the callers too big to be inlined in turn, which made
- * reads slower than with no fast path at all.
- */
-@OptIn(InternalIoApi::class, UnsafeIoApi::class)
-private fun Source.readVarIntTail(first: Int): Int {
-    // We do not really iterate, we just want to peek the head segment, if any
-    UnsafeBufferOperations.forEachSegment(buffer) { ctx, segment ->
-        // TODO: start in fast mode, finish in slow mode if the varint is split across segments
-        if (segment.size >= MAX_VARINT_INT_BYTES - 1) {
-            ctx.withData(segment) { bytes, offset, _ ->
-                var len = 0
-                val result = decodeVarIntTail(first) { bytes[offset + len++] }
-                skip(len.toLong())
-                return result
-            }
-        }
-        return decodeVarIntTail(first) { readByte() }
-    }
-    return decodeVarIntTail(first) { readByte() }
-}
-
-/** The long counterpart of [readVarIntTail], all of the multi-byte decoding in one function for the same reason. */
-@OptIn(InternalIoApi::class, UnsafeIoApi::class)
-private fun Source.readVarLongTail(first: Int): Long {
-    // We do not really iterate, we just want to peek the head segment, if any
-    UnsafeBufferOperations.forEachSegment(buffer) { ctx, segment ->
-        if (segment.size >= MAX_VARINT_LONG_BYTES - 1) {
-            ctx.withData(segment) { bytes, offset, _ ->
-                var len = 0
-                val result = decodeVarLongTail(first) { bytes[offset + len++] }
-                skip(len.toLong())
-                return result
-            }
-        }
-        return decodeVarLongTail(first) { readByte() }
-    }
-    return decodeVarLongTail(first) { readByte() }
+    return decodeVarLongTail(first, readByte)
 }

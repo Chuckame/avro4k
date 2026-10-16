@@ -191,8 +191,10 @@ whole varint decoded in one function from the head segment's array (or byte by b
 `skip`. They use the shared `decodeVarIntTail` / `decodeVarLongTail` of `Varint.kt` after their own first-byte check, so
 `ByteBufferDecoder` is unchanged. JVM bytecode: `readVarInt` 516, `readVarLong` 983 (base 486 / 951), never inlined, as
 on base. The write half is kept. Tests unchanged and green: jvm 1032, js 216, macOS / iOS simulator 219, apache-interop
-575, Confluent 80, kotlin-generator 155, `apiCheck` and `actionsBeforeCommit` green. Its A/B against base: next section
-of `benchmark/README.md`.
+575, Confluent 80, kotlin-generator 155, `apiCheck` and `actionsBeforeCommit` green. Its A/B against base (`benchmark/README.md` →
+"Results — varint reads back to one function", 2026-10-16, shortened: micros + avro4k read rows): **reads back to
+base** — field-order micro within ±2% (was −25%), `readLongs` @100000 +0.7% (was −12%), `lists` reads −0.5% / −1.2%
+(was −11% / −13%). **Outcome: done** — writes keep the fast path, reads are base's shape.
 
 **Lesson:** a one-byte fast path only pays when reading one byte is a plain array access. kotlinx-io's
 `Buffer.readByte` updates the segment bookkeeping; splitting a varint read into "first byte" and "the rest" doubles that
