@@ -7,11 +7,30 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is in progress** (single-object in common done; B7, B8 next). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is in progress** (B5 single-object, B7, B8 and the `ByteArray` decoder done). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-16, later): ByteArray decoder candidates built, their A/B waits for an idle machine on AC
+### Resume here (2026-10-17): ByteArray decoder done — v2 (Apache's varint shape) kept and merged
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. `v3/bytearray-decoder` merged
+(`71fbf366`), v2 committed on top. A/B (09:15 → 10:47, shortened so the machine was free at 11:30, nothing
+discarded): both candidates beat head (`fe8debc1`) on every avro4k read row, `simple` reads by about a third, and tie
+each other; v2 is faster on the varint micros. Numbers: `benchmark/README.md` → "Results — a ByteArray read with a plain
+position"; findings and open points: [`notes/m4-bytearray-decoder.md`](notes/m4-bytearray-decoder.md).
+
+**Next, in order:**
+1. **`readLongs` @10 below head** (v2 −12.9%, separated): look with `PrintInlining`/a profile (needs the machine).
+2. **The same cursor for streams**: `KotlinxIoDecoder` keeping the head segment's array and position
+   (`decodeFromSource`, `AvroSingleObject.decodeFromByteArray`).
+3. **User decision on the string decoding** — its data moved: with the plain cursor, 16-character ASCII (4.41M vs
+   3.88M ops/s) and CJK (2.47M vs 2.39M) are above the pre-varint base, Latin-1 still well below (1.80M vs 3.16M);
+   different days, indicative.
+4. M5 (decomposition first).
+
+**Open user questions** unchanged (from B8 and the string decision below).
+
+### Earlier (2026-10-16, later): ByteArray decoder candidates built, their A/B waits for an idle machine on AC
 
 **User (2026-10-16): code may be shaped for the JIT, and a JVM implementation beside a non-JVM one is allowed**
 (locked decision 6 relaxed, decision log). The read varint is central; Apache keeps `readLong` small for the JIT on a
@@ -376,6 +395,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M4 · strings decoded by the JDK | done, regression on short strings — user decision | `v3/m2-foundation` | `9a63c731` | `KotlinxIoDecoder.readString` decodes with `decodeToString` (the JDK's decoder on the JVM), from the head segment when it holds the string. +3 common tests. **A/B (2026-10-16, `6f78f0a8` → `9de25315`): `complex` read +42% @1 / +19% @15 / +15% @200, read allocation −18% to −22%, rest within noise; micro: ASCII +26% / +139%, Latin-1 −45% (16 chars) / +32% (256), CJK −23% / −13%.** **Against base (after the varint revert): short strings slower, ASCII included (16 chars −18.5%), `simple` reads −8% to −12%.** Open: length threshold / revert / keep for C5; malformed surrogate now 1 replacement char on the JVM, 3 on JS/native. See [`notes/m4-strings-and-bytebuffer.md`](notes/m4-strings-and-bytebuffer.md) |
 | M4 · `ByteBuffer` decoded in place | done | `v3/m2-foundation` | `9de25315` | `decodeFromByteBuffer` reads heap, direct and read-only buffers directly (`ByteBufferDecoder`, `jvmMain`) instead of copying their remaining bytes; position restored on failure; varint tails shared through `Varint.kt`. +2 JVM tests. Not benchmarked (no benchmark decodes a `ByteBuffer`). See [`notes/m4-strings-and-bytebuffer.md`](notes/m4-strings-and-bytebuffer.md) |
 | M4 · B8 apiDump, publication, migration guide | done | `v3/m2-foundation` | `aca939a7`, `23f04dc8`, `0c89058e`, `8106b4f7` | API review `main` → v3: 14 classes + 3 members removed, 8 classes moved to `apache-interop` (same package/names), 27 signatures changed (mostly `Schema` → `AvroSchema`), 2 members added to `AvroDecoder`/`AvroEncoder` (`avro`), new `AvroSchema` model, exceptions, public `AnySerializer`; Confluent and generator `.api` unchanged. **klib ABI dump enabled** (`core/api/core.klib.api`, js + 17 native targets, BCV 0.18.2). **Maven users were broken and are fixed**: the root `avro4k-core` POM had no classes and no `avro4k-core-jvm` (reproduced with real Maven runs); the root POM now depends on `avro4k-core-jvm` and the BOM manages it, guarded by `checkMavenRootPom` in `check`. Workflows: release and snapshot publish on `macos-latest` (Apple targets need a Mac; never run, nothing pushed). `Migrating-from-v2.md` written, README platform note/setup updated. Open questions for the user in [`notes/m4-b8.md`](notes/m4-b8.md) (end) |
+| M4 · `ByteArray` decoded with a plain position | done | `v3/m2-foundation` | `f9c3f34c` (merged), this commit | `decodeFromByteArray` reads through `ByteArrayDecoder` (`commonMain`): array + position, no kotlinx-io copy, Apache's varint shape (`readInt` whole int when 5 bytes are left, `readLong` bytes 1–4 inline, 5–10 out of line). +13 common tests; jvm 1045, jsNode 229, macosArm64 232. **A/B 2026-10-17 (head `fe8debc1`, v1 one-byte-inline `f9c3f34c`, v2 Apache shape; shortened, avro4k reads only): both candidates beat head on every read row (`simple` +28% to +32%, `complex` +7% to +14%, `lists` +4% to +8% for v2), tie each other end to end; v2 kept, faster on varint micros (field order +6–13% over v1). Open: `readLongs` @10 below head (−12.9%).** See [`notes/m4-bytearray-decoder.md`](notes/m4-bytearray-decoder.md) |
 | v3.0.0 · README final pass | todo | — | — | **user (2026-10-15): update the README just before the v3.0.0 release**, once benchmark numbers and the 3.1 container decision are final (B8 did a first pass) |
 | M5 decomposition (`Plan` agent) | todo | — | — | C1 first |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |

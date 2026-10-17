@@ -970,6 +970,76 @@ re-measured: the varint code allocated exactly the same on every row in the prev
   varint side, itself −33% on that row; against base it is a loss. Short strings are common in real data (names, ids,
   enums as strings), so this is a regression against v3.0's bar ("no real degradation"), to be decided by the user.
 
+## Results — a ByteArray read with a plain position (fe8debc1 vs two candidates)
+
+**Is `Avro.decodeFromByteArray` faster when the decoder reads the array with a position, as Apache Avro's
+`BinaryDecoder` does, instead of through a kotlinx-io `Buffer`?** Yes, on every end-to-end read row: `simple` +28% to
++32%, `complex` +7% to +14%, `lists` +4% to +8%. Of the two candidate shapes, the one kept (Apache's varint shape) and
+the smaller one are tied end to end; the kept one is faster on the varint micros.
+
+| | |
+|---|---|
+| Date | 2026-10-17 09:15 → 10:47 |
+| Machine, power, sleep | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37; AC power and Low Power Mode checked before every invocation and polled every 10 s; one `caffeinate -dimsu` over the whole script, no sleep or dark wake; nothing discarded |
+| Load | Every invocation started once the 1-min load average was below 3 (2.02–2.95 at the starts) |
+| Sides | **head** `fe8debc1` (reads through a kotlinx-io `Buffer`); **v1** `f9c3f34c` (a `ByteArrayDecoder` reading the array with a position; the one-byte varint read inline, every longer one out of line); **v2** v1 + Apache's varint shape (`readInt` decodes the whole int when 5 bytes are left, `readLong` its first 4 bytes when 10 are left, bytes 5–10 out of line, as `BinaryDecoder.readLong`/`innerLongDecode`) — **v2 is the commit that adds this section**. `benchmark/src` identical and the same resolved runtime dependencies on all three sides |
+
+**Method, shortened** (the machine had to be released at 11:30): end to end, **avro4k read rows only** (`avro4k-read`
+configuration, same JMH settings as the per-workload tasks), 3 invocations per side, each round in a different order
+(head/v1/v2, v1/v2/head, v2/head/v1), so there is no Apache/Jackson noise reference; `complex` read @1 at 3 forks per
+side per round (9 forks); the string and varint micros 3 rounds × **2 forks** per side, escape analysis on. Writes are
+not re-measured (untouched). Allocation is not measured: head copied the whole input into a `Buffer` on every call,
+the candidates read the array itself. "sep" = every invocation of one side is above (or below) every invocation of the
+other.
+
+### avro4k reads end to end
+
+| workload | param | head | v1 | v2 | head → v1 | head → v2 | v1 → v2 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `simple` | 1 | 3.803M | 4.990M | 4.870M | **+31.2%** Y | **+28.0%** Y | −2.4% n |
+| `simple` | 25 | 217,508 | 265,321 | 286,952 | **+22.0%** Y | **+31.9%** Y | +8.2% n |
+| `simple` | 500 | 10,476 | 14,168 | 13,832 | **+35.2%** Y | **+32.0%** Y | −2.4% n |
+| `complex` | 1 | 387,357 | 410,926 | 413,019 | +6.1% Y | +6.6% Y | +0.5% n |
+| `complex` | 15 | 28,740 | 32,504 | 32,160 | **+13.1%** Y | **+11.9%** Y | −1.1% n |
+| `complex` | 200 | 2,035 | 2,354 | 2,326 | **+15.6%** Y | **+14.3%** Y | −1.2% n |
+| `lists` | 100 | 7,325 | 7,857 | 7,595 | +7.3% Y | +3.7% Y | −3.3% Y |
+| `lists` | 10000 | 74.8 | 80.4 | 81.0 | +7.5% Y | +8.3% n | +0.8% n |
+
+`complex` read @1 per fork (9 per side): head 356k–387k (mean 375k), v1 402k–418k (mean 409k), v2 401k–429k
+(mean 411k): every candidate fork above every head fork.
+
+### The string and varint micros (3 rounds × 2 forks per side, escape analysis on)
+
+| benchmark | head | v1 | v2 | head → v1 | head → v2 | v1 → v2 |
+|---|---:|---:|---:|---:|---:|---:|
+| `FieldOrderMicroBenchmark.read` matching | 8.326M | 10.341M | 11.431M | +24.2% Y | **+37.3%** Y | +10.5% Y |
+| `FieldOrderMicroBenchmark.read` reversed | 9.481M | 11.401M | 12.107M | +20.2% Y | **+27.7%** Y | +6.2% Y |
+| `FieldOrderMicroBenchmark.read` swapped | 7.909M | 10.025M | 11.358M | +26.7% Y | **+43.6%** Y | +13.3% Y |
+| `CollectionMicroBenchmark.readLongs` 10 | 5.304M | 3.795M | 4.622M | **−28.5%** Y | **−12.9%** Y | +21.8% Y |
+| `CollectionMicroBenchmark.readLongs` 1000 | 67,744 | 97,423 | 108,081 | +43.8% Y | **+59.5%** Y | +10.9% Y |
+| `CollectionMicroBenchmark.readLongs` 100000 | 518.0 | 546.7 | 502.0 | +5.5% Y | −3.1% n | −8.2% Y |
+| `StringDecodeMicroBenchmark.read` ascii 16 / 256 | 3.130M / 2.978M | 4.497M / 4.765M | 4.414M / 4.740M | +43.7% / +60.0% | **+41.0%** / **+59.2%** | −1.9% / −0.5% |
+| `StringDecodeMicroBenchmark.read` latin1 16 / 256 | 1.623M / 622,544 | 1.734M / 665,560 | 1.796M / 668,058 | +6.8% / +6.9% | +10.6% / +7.3% | +3.6% / +0.4% |
+| `StringDecodeMicroBenchmark.read` cjk 16 / 256 | 1.829M / 225,085 | 2.472M / 229,964 | 2.468M / 231,586 | +35.2% / +2.2% | **+35.0%** / +2.9% | −0.1% / +0.7% |
+| `StringFieldMicroBenchmark.readNonNull` / `readNullable` | 2.407M / 2.152M | 3.196M / 2.684M | 3.025M / 2.630M | +32.8% / +24.7% | **+25.7%** / **+22.2%** | −5.4% / −2.0% |
+
+String rows: every head → candidate delta is separated except Latin-1 16 (n on both); every v1 → v2 delta is within
+noise except `readNullable` (−2.0%, separated).
+
+### Verdict, in plain words
+
+- **Kept: v2**, Apache's varint shape. End to end it ties v1 (one separated row, `lists` @100, −3.3%); on the varint
+  micros it is 6–13% faster than v1 on 10-byte longs (field order) and 11–22% on `readLongs` @10/@1000, slower on
+  `readLongs` @100000 (−8%). Both candidates beat head on every end-to-end row, by up to a third on `simple` reads.
+- **Short strings against the pre-varint base** (`9740fb08`, measured on 2026-10-16 in the sections above, so a
+  different day — indicative only): `simple` read @1 4.244M then, 4.870M now; ASCII 16 3.877M then, 4.414M now; CJK 16
+  2.389M then, 2.468M now; **Latin-1 16 3.158M then, 1.796M now — still well below**. Part of the short-string loss
+  of the JDK string decoding was the `Buffer` around it; the Latin-1 loss is the JDK decoder's own.
+- **Open: `readLongs` @10 is below head** (v1 −28.5%, v2 −12.9%, separated, steady across forks). That row is mostly the
+  fixed cost of one call (10 one-to-ten-byte longs); the end-to-end rows with the smallest payloads (`simple` @1,
+  `complex` @1) do not show it. Not investigated yet (it needs the machine).
+- Streams (`decodeFromSource`) still read through kotlinx-io; giving them the same cursor is the next step.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than
