@@ -75,7 +75,7 @@ class VarintTest {
         for ((value, encoded) in INT_VECTORS) {
             // the trailer leaves enough room after the first byte for the rest of any varint
             val source = Buffer().apply { write(encoded + TRAILER) }
-            KotlinxIoDecoder(source).readInt() shouldBe value
+            KotlinxIoDecoder(source).readAndRelease { readInt() } shouldBe value
             source.readByteArray() shouldBe TRAILER
         }
     }
@@ -84,7 +84,7 @@ class VarintTest {
     fun `every long length is read from the segment array and consumes exactly its bytes`() {
         for ((value, encoded) in LONG_VECTORS) {
             val source = Buffer().apply { write(encoded + TRAILER) }
-            KotlinxIoDecoder(source).readLong() shouldBe value
+            KotlinxIoDecoder(source).readAndRelease { readLong() } shouldBe value
             source.readByteArray() shouldBe TRAILER
         }
     }
@@ -94,7 +94,7 @@ class VarintTest {
         for ((value, encoded) in INT_VECTORS) {
             for (bytesInFirstSegment in 0..encoded.size) {
                 val source = sourceSplitAt(encoded, bytesInFirstSegment)
-                KotlinxIoDecoder(source).readInt() shouldBe value
+                KotlinxIoDecoder(source).readAndRelease { readInt() } shouldBe value
                 source.readByteArray() shouldBe TRAILER
             }
         }
@@ -105,7 +105,7 @@ class VarintTest {
         for ((value, encoded) in LONG_VECTORS) {
             for (bytesInFirstSegment in 0..encoded.size) {
                 val source = sourceSplitAt(encoded, bytesInFirstSegment)
-                KotlinxIoDecoder(source).readLong() shouldBe value
+                KotlinxIoDecoder(source).readAndRelease { readLong() } shouldBe value
                 source.readByteArray() shouldBe TRAILER
             }
         }
@@ -293,3 +293,6 @@ class VarintTest {
         fun writeLongWithKotlinxIo(value: Long): ByteArray = Buffer().also { KotlinxIoEncoder(it).writeLong(value) }.readByteArray()
     }
 }
+
+/** Reads with [read], then consumes from the source what was read, so that the source can be checked after it. */
+private inline fun <T> KotlinxIoDecoder.readAndRelease(read: KotlinxIoDecoder.() -> T): T = read().also { release() }

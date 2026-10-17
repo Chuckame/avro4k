@@ -60,6 +60,7 @@ class AvroSchemaSkipTest {
         val decoder = KotlinxIoDecoder(buffer)
         decoder.skip(schema)
         decoder.readLong() shouldBe SENTINEL
+        decoder.release()
         buffer.exhausted() shouldBe true
     }
 

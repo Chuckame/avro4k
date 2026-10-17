@@ -1,7 +1,8 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.Buffer
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
+import com.github.avrokotlin.avro4k.internal.decodeWithValidation
 import com.github.avrokotlin.avro4k.internal.endOfInputError
 import com.github.avrokotlin.avro4k.internal.parsingFingerprintCrc64AvroBytes
 import kotlinx.io.Buffer
@@ -9,7 +10,6 @@ import kotlinx.io.EOFException
 import kotlinx.io.Sink
 import kotlinx.io.Source
 import kotlinx.io.readByteArray
-import kotlinx.io.readLongLe
 import kotlinx.serialization.BinaryFormat
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
@@ -72,30 +72,46 @@ public class AvroSingleObject(
         deserializer: DeserializationStrategy<T>,
         source: Source,
     ): T {
-        val fingerprint =
-            try {
-                if (source.readByte() != MAGIC_BYTE) {
-                    throw AvroMalformedDataException("Not a valid single-object avro format, bad magic byte")
-                }
-                if (source.readByte() != FORMAT_VERSION) {
-                    throw AvroMalformedDataException("Not a valid single-object avro format, bad version byte")
-                }
-                source.readLongLe()
-            } catch (e: EOFException) {
-                throw endOfInputError(e)
-            }
-        val writerSchema =
-            schemaRegistry(fingerprint) ?: throw AvroSerializationException("schema not found for the given object's schema fingerprint 0x${fingerprint.toString(16)}")
-
-        return avro.decodeFromSource(writerSchema, deserializer, source)
+        val fingerprint = readHeader { source.readByte() }
+        return avro.decodeFromSource(writerSchema(fingerprint), deserializer, source)
     }
 
     public override fun <T> decodeFromByteArray(
         deserializer: DeserializationStrategy<T>,
         bytes: ByteArray,
     ): T {
-        return decodeFromSource(deserializer, Buffer(bytes))
+        var index = 0
+        val fingerprint =
+            readHeader {
+                if (index == bytes.size) {
+                    throw EOFException("The input ended in the single-object header")
+                }
+                bytes[index++]
+            }
+        return avro.decodeWithValidation(writerSchema(fingerprint), deserializer, ByteArrayDecoder(bytes, index))
     }
+
+    /** Reads the marker and the version, then returns the writer schema's fingerprint, read little-endian. */
+    private inline fun readHeader(readByte: () -> Byte): Long {
+        try {
+            if (readByte() != MAGIC_BYTE) {
+                throw AvroMalformedDataException("Not a valid single-object avro format, bad magic byte")
+            }
+            if (readByte() != FORMAT_VERSION) {
+                throw AvroMalformedDataException("Not a valid single-object avro format, bad version byte")
+            }
+            var fingerprint = 0L
+            for (i in 0 until 8) {
+                fingerprint = fingerprint or ((readByte().toLong() and 0xFF) shl (8 * i))
+            }
+            return fingerprint
+        } catch (e: EOFException) {
+            throw endOfInputError(e)
+        }
+    }
+
+    private fun writerSchema(fingerprint: Long): AvroSchema =
+        schemaRegistry(fingerprint) ?: throw AvroSerializationException("schema not found for the given object's schema fingerprint 0x${fingerprint.toString(16)}")
 
     override fun <T> encodeToByteArray(
         serializer: SerializationStrategy<T>,
