@@ -2,14 +2,17 @@ package com.github.avrokotlin.benchmark.complex
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
+import com.github.avrokotlin.avro4k.decodeFromSource
 import com.github.avrokotlin.avro4k.encodeToSink
 import com.github.avrokotlin.benchmark.internal.Clients
 import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import kotlinx.io.Sink
 import kotlinx.io.asSink
+import kotlinx.io.asSource
 import kotlinx.io.buffered
 import kotlinx.serialization.ExperimentalSerializationApi
+import java.io.ByteArrayInputStream
 import java.io.OutputStream
 
 internal class Avro4kBenchmark : SerializationBenchmark() {
@@ -31,6 +34,10 @@ internal class Avro4kBenchmark : SerializationBenchmark() {
 
     @Benchmark
     fun read(): Clients = Avro.decodeFromByteArray<Clients>(schema, data)
+
+    /** The same bytes read from a stream: through a kotlinx-io `Source`, segment by segment, as from a file. */
+    @Benchmark
+    fun readFromSource(): Clients = Avro.decodeFromSource<Clients>(schema, ByteArrayInputStream(data).asSource().buffered())
 
     @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
