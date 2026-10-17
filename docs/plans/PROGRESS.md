@@ -20,8 +20,8 @@ each other; v2 is faster on the varint micros. Numbers: `benchmark/README.md` �
 position"; findings and open points: [`notes/m4-bytearray-decoder.md`](notes/m4-bytearray-decoder.md).
 
 **Next, in order:**
-1. **`readLongs` @10 below head** (v2 −12.9%, separated): first probes done, three causes ruled out (note, open point 1);
-   next a per-instruction CPU profile of `CollectionLikeSerializer.readAll` (needs the machine).
+1. ~~**`readLongs` @10 below head**~~ **closed (2026-10-18): multimodal, not slower.** v2's forks land between 4.0M and
+   7.07M ops/s depending on C2's compilation order (head steady at ~5.3M); note, open point 1.
 2. **The same cursor for streams**: `KotlinxIoDecoder` keeping the head segment's array and position
    (`decodeFromSource`, `AvroSingleObject.decodeFromByteArray`).
 3. **User decision on the string decoding** — its data moved: with the plain cursor, 16-character ASCII (4.41M vs

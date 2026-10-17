@@ -25,20 +25,22 @@ each other (one separated row: `lists` @100, v1 +3.3%). v2 is faster on the vari
 
 ## Open points
 
-1. **`CollectionMicroBenchmark.readLongs` @10 is below head** (v1 −28.5%, v2 −12.9%, separated, steady across forks).
-   Mostly the fixed cost of one call (10 random longs, each a 10-byte varint, boxed into a `List<Long>`); the
-   end-to-end rows with the smallest payloads do not show it. Probes on 2026-10-17 (single forks, indicative):
-   - Steady, not bimodal: head ~5.85M, v2 ~4.0M ops/s in every iteration of one fork with `PrintInlining`. Allocation
-     is lower on v2 (536 vs 600 B/op: no `Buffer` copy).
-   - `PrintInlining`: `readLong` (169 bytes) and `readVarLongHigh` (315) inline hot; `readVarLongSlow` (450) is "too
-     big" at its `readLong` call site, which every call reaches for its last varint (the block terminator is within
-     10 bytes of the end); `decodeSerializableValue` is "already compiled into a big method" on both sides.
-   - **Ruled out:** the terminator's slow path (a one-byte fast path near the end: 4.64M, unchanged); `readVarLongHigh`
-     inlined at every site (`-XX:CompileCommand=dontinline` on it: 4.12M, unchanged); a polymorphic decoder call site
-     (each side loads a single `AvroBinaryDecoder` subclass).
-   - JMH's stack sampler only shows more time in `CollectionLikeSerializer.readAll` (the loop with `readLong`
-     inlined: v2 25% vs head 20% + 5% in `Buffer.skip`).
-   Next: per-instruction profile (async-profiler in `cpu` mode, or `-prof perfasm`-style with hsdis) on `readAll`.
+1. **Closed (2026-10-18): `CollectionMicroBenchmark.readLongs` @10 is multimodal on v2, not slower.** The A/B had it
+   below head (v1 −28.5%, v2 −12.9%, separated). Single-fork probes on 2026-10-18, v2 (`a28a84f5`) against head
+   (`fe8debc1`), size 10 only:
+   - head, 4 forks: 5.39M / 5.28M / 5.29M / 5.32M ops/s, steady (mean 5.32M).
+   - v2, 4 forks: 4.67M / 5.17M / 4.92M / 4.73M (mean 4.87M); 5 more forks with `PrintInlining`: **4.0M / 5.6M / 6.65M /
+     7.07M / 6.1M**; 1 fork with JFR: 5.41M. Each fork steady within itself, the mode is chosen per fork.
+   - `PrintInlining` of the slowest fork (4.0M) against the fastest (7.07M): the difference is C2's compilation order.
+     In the fast fork `CollectionLikeSerializer.readAll` is compiled on its own first, with `readLong` and
+     `readVarLongHigh` inlined into its loop, and its callers then find it "already compiled into a big method". In the
+     slow fork `readAll` is inlined into a larger caller compilation, where `decodeSerializableValue` hits "recursive
+     inlining is too deep".
+   - So @10 measures which compilation order a fork gets, not the varint code. The fixed cost of one call is the
+     same on both sides (same `decodeWithValidation` path, 536 vs 600 B/op). Head's single decoder path happens to land
+     in one mode. Not acted on: the larger rows (@1000 +11%/+60%) and every end-to-end read row are faster.
+   Earlier probes (2026-10-17) ruled out the terminator's slow path, `readVarLongHigh` inlining and a polymorphic call
+   site.
 2. **Short Latin-1 strings stay well below the pre-varint base** (16 chars: 3.158M then, 1.796M now; different days,
    indicative). ASCII and CJK short strings are now above that base. The string decision (threshold / revert / keep for
    C5, `notes/m4-strings-and-bytebuffer.md`) still stands, but its data moved: the `Buffer` was part of the short-string
