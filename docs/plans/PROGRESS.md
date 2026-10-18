@@ -11,7 +11,7 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-18, night): stream reads on the plain cursor — done and merged
+### Resume here (2026-10-18, night): stream reads on the plain cursor merged, M5 decomposed — waiting for the user's answers
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. Since the section below:
 - **`readLongs` @10 closed:** multimodal across forks on the `ByteArray` decoder (4.0M–7.07M ops/s, C2 compilation
@@ -22,11 +22,17 @@ batches, and its §1 rules in every brief. The current state is in the newest "R
   read from its head segment's array". `AvroSingleObject.decodeFromByteArray` and the big-decimal bytes now read
   through `ByteArrayDecoder`. `:core:jvmTest` 1048, jsNode 232, macosArm64 235.
 
+- **M5 decomposed** ([`notes/m5-decomposition.md`](notes/m5-decomposition.md), `Plan` agent, spot-checked): 12 units
+  (M5-00 … M5-11) in 5 batches of 2; C1 becomes per-level reuse of decoders/encoders (no frame stack); two new read
+  units (M5-01: one `merge` per single-block collection; M5-03: exact-match records decoded in order); about 10–12 h of
+  machine time in 3–4 overnight A/Bs. No API change expected.
+
 **Next, in order:**
-1. **User decision on the string decoding** (unchanged, see the section below, item 3).
-2. M5 (decomposition first).
-3. Optional, not scheduled: streams of large payloads stay 8–11% below the same bytes from a `ByteArray` (note, open
-   point 1).
+1. **User answers to the decomposition's §7, Q1–Q8, before any M5 unit starts** (Q1 is the string decoding decision;
+   each question has a recommended answer). Record them in the decision log.
+2. Then batch 1 (M5-00 ∥ M5-01), following §5 of the decomposition.
+3. Optional, not scheduled: streams of large payloads stay 8–11% below the same bytes from a `ByteArray`
+   (`notes/m4-stream-cursor.md`, open point 1).
 
 **Open user questions** unchanged (from B8 and the string decision).
 
@@ -418,7 +424,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M4 · `ByteArray` decoded with a plain position | done | `v3/m2-foundation` | `f9c3f34c` (merged), this commit | `decodeFromByteArray` reads through `ByteArrayDecoder` (`commonMain`): array + position, no kotlinx-io copy, Apache's varint shape (`readInt` whole int when 5 bytes are left, `readLong` bytes 1–4 inline, 5–10 out of line). +13 common tests; jvm 1045, jsNode 229, macosArm64 232. **A/B 2026-10-17 (head `fe8debc1`, v1 one-byte-inline `f9c3f34c`, v2 Apache shape; shortened, avro4k reads only): both candidates beat head on every read row (`simple` +28% to +32%, `complex` +7% to +14%, `lists` +4% to +8% for v2), tie each other end to end; v2 kept, faster on varint micros (field order +6–13% over v1). Open: `readLongs` @10 below head (−12.9%).** See [`notes/m4-bytearray-decoder.md`](notes/m4-bytearray-decoder.md) |
 | M4 · stream decoded from its head segment's array | done | `v3/m2-foundation` | `79621284` (merged by `64b89c90`), bench rows `8920310f` | `KotlinxIoDecoder` reads the head segment's array with a position, consumed on segment end or `release()` (`decodeFromSource` calls it in a `finally`). Stream reads +12% to +48% end to end, `ByteArray` reads unchanged, +16 B/op on stream reads. Single-object `decodeFromByteArray` and big-decimal bytes through `ByteArrayDecoder`. [`notes/m4-stream-cursor.md`](notes/m4-stream-cursor.md) |
 | v3.0.0 · README final pass | todo | — | — | **user (2026-10-15): update the README just before the v3.0.0 release**, once benchmark numbers and the 3.1 container decision are final (B8 did a first pass) |
-| M5 decomposition (`Plan` agent) | todo | — | — | C1 first |
+| M5 decomposition (`Plan` agent) | done | `v3/m2-foundation` | this commit | 12 units, [`notes/m5-decomposition.md`](notes/m5-decomposition.md); §7 Q1–Q8 for the user before any unit |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
