@@ -31,8 +31,11 @@ batches, and its §1 rules in every brief. The current state is in the newest "R
 1. **User answers to the decomposition's §7, Q1–Q8, before any M5 unit starts** (Q1 is the string decoding decision;
    each question has a recommended answer). Record them in the decision log.
 2. Then batch 1 (M5-00 ∥ M5-01), following §5 of the decomposition.
-3. Optional, not scheduled: streams of large payloads stay 8–11% below the same bytes from a `ByteArray`
-   (`notes/m4-stream-cursor.md`, open point 1).
+3. ~~Optional: streams of large payloads 8–11% below a `ByteArray`~~ **closed (2026-10-18, morning): the benchmark's
+   setup decodes through `ByteArrayDecoder`, leaving the decoder calls bimorphic in `readFromSource` forks.** With the
+   setup on the stream the gap reverses; same decoder on both, the stream is 2.4% below (the stream's own cost). A
+   bounds-check guard candidate changed nothing (rejected). `notes/m4-stream-cursor.md` open point 1;
+   `benchmark/README.md` → "Results — why a large stream read looked slower than a `ByteArray` read".
 
 **Open user questions** unchanged (from B8 and the string decision).
 

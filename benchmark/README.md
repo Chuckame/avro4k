@@ -1040,6 +1040,47 @@ noise except `readNullable` (−2.0%, separated).
   `complex` @1) do not show it. Not investigated yet (it needs the machine).
 - Streams (`decodeFromSource`) still read through kotlinx-io; giving them the same cursor is the next step.
 
+## Results — why a large stream read looked slower than a `ByteArray` read (diagnostic at 715e1642)
+
+**Is the stream decoder slower than the `ByteArray` decoder on large payloads (`lists` @10000 from a stream 8–11%
+below `read` in the section below)?** No: the gap comes from the benchmark's setup. `WorkloadEquivalence` decodes the
+payload once through `decodeFromByteArray` before measuring, so in a fork that measures `readFromSource` the JIT has
+already seen `ByteArrayDecoder` at every call into the decoder, and those calls stay bimorphic. When the setup decodes
+through a stream instead, the gap reverses: `read` becomes the slower one. With the setup and the measured path on the
+same decoder, the stream read is 2.4% below the `ByteArray` read, about the cost of building the stream and copying
+the 9.7 MB payload through its segments.
+
+| | |
+|---|---|
+| Date | 2026-10-18 09:47 → 10:58 |
+| Machine, power | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR), JMH 1.37; AC power and Low Power Mode checked before every invocation, one `caffeinate -dimsu` over each script; every invocation started below a 1-min load of 3 |
+| Code | `715e1642`, plus a diagnostic benchmark class not committed (below), in the `lists` package: `read` and `readFromSource` as in `Avro4kListsBenchmark`; `drainSource` builds the same stream and `skip`s every byte; `fillBuffer` writes the payload into a `Buffer` and clears it |
+
+**The cost of the stream itself** (`lists`, 3 forks, payload 96,810 B @100 and 9,680,011 B @10000): `drainSource`
+@10000 4,430 ops/s, so 0.23 ms per call against 11.8 ms for `read`; `readFromSource` @100 is not below `read` (8,196
+vs 7,882 ops/s). A JFR profile of `read` and `readFromSource` @10000 shows no time in moving from one segment to the
+next; the varint methods take the same share on both.
+
+**A candidate rejected:** guarding the varint fast path with the array's length too (`limit - p >= 10 &&
+bytes.size - p >= 10`, so the JIT could drop the bounds checks, as `ByteArrayDecoder` checks against `bytes.size`).
+4 alternated invocations per side, 2 forks each: `lists` @10000 `readFromSource` 76.4 → 75.6 ops/s, `complex`
+`readFromSource` −0.6% / +1.0% / −0.3% (@1/@15/@200), none separated.
+
+**The setup decoding through a stream** (`decodeWith` in `CoreBridge` replaced by `decodeFromSource` on a `Buffer`),
+3 alternated invocations per side, 3 forks each, `lists` @10000, mean of the 9 forks (range):
+
+| setup decodes through | `read` | `readFromSource` | stream vs `ByteArray` |
+|---|---:|---:|---:|
+| `decodeFromByteArray` (as committed) | 84.9 (84.3–85.9) | 74.1 (70.2–79.2) | −12.7% |
+| `decodeFromSource` | 76.5 (72.2–82.4) | 82.9 (79.3–86.3) | +8.4% |
+
+- **Whichever decoder the setup did not use is the slower one, by 8–13%.** Only the large payload shows it: @10000
+  the setup decodes a million longs, enough for the profile to record the other decoder class.
+- **Measured paths are unaffected by this in A/Bs:** both sides of an A/B run the same setup. The `read` rows (setup
+  and measure on `ByteArrayDecoder`) are the clean ones; the `readFromSource` rows carry the penalty at large sizes.
+- **In applications:** a JVM that decodes large payloads through both `decodeFromByteArray` and `decodeFromSource`
+  pays it too, on both paths. Apache's `BinaryDecoder`/`DirectBinaryDecoder` pair has the same property.
+
 ## Results — a stream read from its head segment's array (30c10eae vs 79621284)
 
 **Is `decodeFromSource` faster when the decoder reads the head segment's array with a position, as `ByteArrayDecoder`

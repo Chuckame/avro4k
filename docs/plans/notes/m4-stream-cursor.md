@@ -51,9 +51,15 @@ the unchanged `read` rows as control (all within noise, none separated). `readFr
 
 ## Open points
 
-1. **`lists` @10000 and `complex` from a stream stay 8–11% below the same bytes from a `ByteArray`.** Not looked at:
-   candidates are the per-segment cost (one `skip` and one `readFromHead` every 8 KiB) and the strings that straddle
-   two segments (read through `readByteArray` + `decodeToString`). Small inputs pay the fixed cost of building the
-   stream, outside avro4k.
+1. ~~**`lists` @10000 and `complex` from a stream stay 8–11% below the same bytes from a `ByteArray`.**~~ **Closed
+   (2026-10-18): a benchmark setup effect, not the decoder.** The benchmark's setup decodes the payload once through
+   `decodeFromByteArray`, so in a `readFromSource` fork every call into the decoder has seen two classes. With the setup
+   decoding through a stream, the gap reverses (`read` 76.5, `readFromSource` 82.9 ops/s @10000); with setup and
+   measure on the same decoder, the stream is 2.4% below, about the cost of building the stream and copying the
+   payload through it (`drainSource`: 0.23 ms of 11.8 ms). A guard on the array's length too, so the JIT could drop
+   the bounds checks, changed nothing (rejected). Numbers: `benchmark/README.md` → "Results — why a large stream read
+   looked slower than a `ByteArray` read". Possible follow-up, not done: have the setup decode through the path the
+   fork measures (JMH `BenchmarkParams` in `@Setup`), so the `readFromSource` rows are clean at large sizes; it would
+   shift those rows' numbers.
 2. The trailing bytes after a single object read from a `ByteArray` are still not checked (as before; the `ByteArray`
    overload of `Avro` does check them). Unchanged behaviour, not a migration item.
