@@ -8,10 +8,9 @@ import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.ResolvedSchema
-import com.github.avrokotlin.avro4k.internal.Buffer
 import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
 import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
 import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.convertForEncoding
@@ -435,8 +434,7 @@ private fun BigDecimal.toBigDecimalBytes(): ByteArray {
  * throws a `NullPointerException`), when the bytes end before the scale, or when bytes are left after it.
  */
 private fun bigDecimalFromBytes(bytes: ByteArray): BigDecimal {
-    val source = Buffer(bytes)
-    val decoder = KotlinxIoDecoder(source)
+    val decoder = ByteArrayDecoder(bytes)
     val unscaled: ByteArray
     val scale: Int
     try {
@@ -448,7 +446,7 @@ private fun bigDecimalFromBytes(bytes: ByteArray): BigDecimal {
     if (unscaled.isEmpty()) {
         throw AvroMalformedDataException("Malformed data: the unscaled value of a big-decimal is empty")
     }
-    if (!source.exhausted()) {
+    if (!decoder.isExhausted) {
         throw AvroMalformedDataException("Malformed data: bytes are left after the scale of a big-decimal")
     }
     return BigDecimal(BigInteger(unscaled), scale)

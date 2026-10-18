@@ -1040,6 +1040,56 @@ noise except `readNullable` (−2.0%, separated).
   `complex` @1) do not show it. Not investigated yet (it needs the machine).
 - Streams (`decodeFromSource`) still read through kotlinx-io; giving them the same cursor is the next step.
 
+## Results — a stream read from its head segment's array (30c10eae vs 79621284)
+
+**Is `decodeFromSource` faster when the decoder reads the head segment's array with a position, as `ByteArrayDecoder`
+reads its input, instead of through the `Source` API?** Yes, on every stream read row: `simple` +16% to +48%,
+`complex` +12% to +23%, `lists` +20% to +25%; separated on every row but `simple` @1, which is noisy on both paths
+(the `ByteArray` control too). Reads from a `ByteArray` (untouched code) do not move. Each stream read allocates 16 B
+more (the decoder's three extra fields and its array reference).
+
+| | |
+|---|---|
+| Date | 2026-10-18 01:27 → 02:35 |
+| Machine, power, sleep | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37; AC power and Low Power Mode checked before every invocation and polled every 10 s; one `caffeinate -dimsu` over the whole script, no sleep or dark wake; nothing discarded |
+| Load | Every invocation started once the 1-min load average was below 3 (2.19–2.98 at the starts) |
+| Sides | **base** `30c10eae` (`KotlinxIoDecoder` reads through the `Source` API); **new** `79621284` (the head segment's array read with a position, Apache's varint shape; the bytes read consumed from the source when the segment ends or when decoding ends) — **the merge of that commit adds this section**. `benchmark/src` identical (the `readFromSource` rows come from `8920310f`, before both) and the same resolved runtime dependencies on both sides |
+
+**Method:** end to end, **avro4k read rows only** (`avro4k-read` configuration: `read` from a `ByteArray` and the new
+`readFromSource`, which decodes the same bytes from `ByteArrayInputStream(data).asSource().buffered()`), 5 invocations
+per side, alternating which side runs first. No Apache/Jackson noise reference: the `read` rows, whose code is the same
+on both sides, are the control. Allocation: one invocation per side, 1 fork, escape analysis on. "sep" = every
+invocation of one side is above (or below) every invocation of the other.
+
+| workload | param | method | base | new | base → new | sep |
+|---|---:|---|---:|---:|---:|:---:|
+| `simple` | 1 | `readFromSource` | 3.372M | 3.928M | +16.5% | n |
+| `simple` | 25 | `readFromSource` | 180,415 | 263,837 | **+46.2%** | Y |
+| `simple` | 500 | `readFromSource` | 9,206 | 13,600 | **+47.7%** | Y |
+| `complex` | 1 | `readFromSource` | 359,755 | 401,738 | **+11.7%** | Y |
+| `complex` | 15 | `readFromSource` | 24,816 | 30,467 | **+22.8%** | Y |
+| `complex` | 200 | `readFromSource` | 1,828 | 2,178 | **+19.2%** | Y |
+| `lists` | 100 | `readFromSource` | 6,324 | 7,902 | **+24.9%** | Y |
+| `lists` | 10000 | `readFromSource` | 63.2 | 75.9 | **+20.2%** | Y |
+| `simple` | 1 | `read` (control) | 5.025M | 5.431M | +8.1% | n |
+| `simple` | 25 | `read` (control) | 258,582 | 271,055 | +4.8% | n |
+| `simple` | 500 | `read` (control) | 13,725 | 13,708 | −0.1% | n |
+| `complex` | 1 | `read` (control) | 417,669 | 417,690 | 0.0% | n |
+| `complex` | 15 | `read` (control) | 32,945 | 32,941 | 0.0% | n |
+| `complex` | 200 | `read` (control) | 2,343 | 2,356 | +0.5% | n |
+| `lists` | 100 | `read` (control) | 7,520 | 7,603 | +1.1% | n |
+| `lists` | 10000 | `read` (control) | 85.6 | 85.5 | −0.1% | n |
+
+- **A stream read now costs close to what a `ByteArray` read costs** from medium sizes on: `simple` @25/@500 within 3%
+  of `read`, `lists` @100 +4%, `complex` @15/@200 −8%, `lists` @10000 −11%. Before, stream reads were 14% to 33% below
+  `read` on every row.
+  At @1 the fixed cost of building the stream (`InputStream` adapter, `Buffer`, a pooled segment and its copy) stays:
+  `simple` @1 −28%, `complex` @1 −4%.
+- `simple` @1 is noisy on both paths: `read` 4.92M–5.31M (base) and 4.93M–5.79M (new), `readFromSource` 2.98M–3.67M
+  and 3.60M–4.45M; every new invocation of `readFromSource` but one is above every base one.
+- B/op (EA on): `readFromSource` +16 B on every row (`simple` @1 648 → 664, `complex` @1 4,344 → 4,360); `read` the
+  same to the byte.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than

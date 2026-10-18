@@ -107,11 +107,13 @@ public fun <T> Avro.decodeFromSource(
     deserializer: DeserializationStrategy<T>,
     source: Source,
 ): T {
-    return decodeWithValidation(
-        writerSchema,
-        deserializer,
-        KotlinxIoDecoder(source)
-    )
+    val decoder = KotlinxIoDecoder(source)
+    try {
+        return decodeWithValidation(writerSchema, deserializer, decoder)
+    } finally {
+        // The decoder reads ahead of the source: what it has read is consumed only now
+        decoder.release()
+    }
 }
 
 /**

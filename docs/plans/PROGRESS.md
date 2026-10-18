@@ -11,7 +11,26 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-17): ByteArray decoder done — v2 (Apache's varint shape) kept and merged
+### Resume here (2026-10-18, night): stream reads on the plain cursor — done and merged
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. Since the section below:
+- **`readLongs` @10 closed:** multimodal across forks on the `ByteArray` decoder (4.0M–7.07M ops/s, C2 compilation
+  order), not a regression (`notes/m4-bytearray-decoder.md`, open point 1).
+- **Streams done:** `KotlinxIoDecoder` reads the head segment's array with a plain position (`v3/stream-cursor` merged
+  by this commit; `notes/m4-stream-cursor.md`). New `readFromSource` benchmark rows (`8920310f`). A/B: stream reads
+  +12% to +48% (`simple` @25/@500 +46%/+48%), `ByteArray` reads unchanged; `benchmark/README.md` → "Results — a stream
+  read from its head segment's array". `AvroSingleObject.decodeFromByteArray` and the big-decimal bytes now read
+  through `ByteArrayDecoder`. `:core:jvmTest` 1048, jsNode 232, macosArm64 235.
+
+**Next, in order:**
+1. **User decision on the string decoding** (unchanged, see the section below, item 3).
+2. M5 (decomposition first).
+3. Optional, not scheduled: streams of large payloads stay 8–11% below the same bytes from a `ByteArray` (note, open
+   point 1).
+
+**Open user questions** unchanged (from B8 and the string decision).
+
+### Earlier (2026-10-17): ByteArray decoder done — v2 (Apache's varint shape) kept and merged
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. `v3/bytearray-decoder` merged
 (`71fbf366`), v2 committed on top. A/B (09:15 → 10:47, shortened so the machine was free at 11:30, nothing

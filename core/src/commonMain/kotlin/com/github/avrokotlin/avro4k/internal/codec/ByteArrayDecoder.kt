@@ -4,7 +4,8 @@ import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import kotlinx.io.EOFException
 
 /**
- * Reads Avro binary straight from a [ByteArray], with nothing between the decoder and the bytes but a position.
+ * Reads Avro binary straight from a [ByteArray], from its [startIndex] on, with nothing between the decoder and the bytes
+ * but a position.
  *
  * Reading through a kotlinx-io [kotlinx.io.Buffer] updates the buffer's segment bookkeeping on every read, even when the
  * whole input is one array. Here a read is an array access and a position update, as in Apache Avro's `BinaryDecoder`,
@@ -17,8 +18,9 @@ import kotlinx.io.EOFException
  */
 internal class ByteArrayDecoder(
     private val bytes: ByteArray,
+    startIndex: Int = 0,
 ) : AvroBinaryDecoder() {
-    private var position = 0
+    private var position = startIndex
 
     /** Whether every byte of the input has been read. */
     val isExhausted: Boolean

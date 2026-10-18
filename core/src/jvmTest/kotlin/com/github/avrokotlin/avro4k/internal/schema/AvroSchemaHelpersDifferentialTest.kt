@@ -260,8 +260,10 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
             val buffer = Buffer().apply { write(bytes + bytes) }
             val decoder = KotlinxIoDecoder(buffer)
             decoder.skip(model)
+            decoder.release()
             buffer.size shouldBe bytes.size.toLong()
             decoder.skip(model)
+            decoder.release()
             buffer.exhausted() shouldBe true
         }
     }
