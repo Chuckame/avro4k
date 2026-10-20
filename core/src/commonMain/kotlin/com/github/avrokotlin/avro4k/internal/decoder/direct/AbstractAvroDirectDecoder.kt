@@ -9,6 +9,7 @@ import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
+import com.github.avrokotlin.avro4k.internal.codec.decodeUtf8
 import com.github.avrokotlin.avro4k.internal.collectionCountError
 import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
@@ -241,7 +242,7 @@ internal abstract class AbstractAvroDirectDecoder(
     override fun decodeChar(): Char {
         return when (currentAvroSchema.type) {
             AvroSchema.Type.INT -> binaryDecoder.readInt().toChar()
-            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes().decodeToString().convertDecoded(AvroSchema.Type.STRING, "Char") { it.single() }
+            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes().decodeUtf8().convertDecoded(AvroSchema.Type.STRING, "Char") { it.single() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
@@ -250,9 +251,9 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (currentAvroSchema.type) {
             AvroSchema.Type.STRING -> binaryDecoder.readString()
 
-            AvroSchema.Type.BYTES -> binaryDecoder.readBytes().decodeToString()
+            AvroSchema.Type.BYTES -> binaryDecoder.readBytes().decodeUtf8()
 
-            AvroSchema.Type.FIXED -> binaryDecoder.readFixed(currentAvroSchema.fixedSize).decodeToString()
+            AvroSchema.Type.FIXED -> binaryDecoder.readFixed(currentAvroSchema.fixedSize).decodeUtf8()
 
             AvroSchema.Type.BOOLEAN -> binaryDecoder.readBoolean().toString()
 

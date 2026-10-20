@@ -65,11 +65,12 @@ internal class ByteBufferDecoder(
             // The array may hold more bytes after the limit, which must not be decoded as part of the string
             checkRemaining(length.toLong())
             val position = buffer.position()
-            val string = String(buffer.array(), buffer.arrayOffset() + position, length, Charsets.UTF_8)
+            val start = buffer.arrayOffset() + position
+            val string = buffer.array().decodeUtf8(start, start + length)
             buffer.position(position + length)
             return string
         }
-        return String(readExactly(length), Charsets.UTF_8)
+        return readExactly(length).decodeUtf8()
     }
 
     override fun readStringBytes(): ByteArray {

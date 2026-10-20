@@ -118,20 +118,18 @@ internal class KotlinxIoDecoder(
     }
 
     /**
-     * Decodes with the standard library's [decodeToString] rather than kotlinx-io's own UTF-8 decoder: on the JVM, it is
-     * the JDK's decoder, as with Apache Avro, which skips the intermediate `CharArray` kotlinx-io fills, and keeps
-     * ASCII and Latin-1 strings one byte per character. When the head segment holds the whole string, it is decoded
-     * straight from the segment's array.
+     * Decodes with [decodeUtf8], not kotlinx-io's `readString()` (see there why): straight from the segment's array when
+     * it holds the whole string, from a copy otherwise.
      */
     override fun readString(): String {
         val length = readLength()
         val p = position
         if (limit - p >= length) {
             position = p + length
-            return bytes.decodeToString(p, p + length)
+            return bytes.decodeUtf8(p, p + length)
         }
         release()
-        return source.readByteArray(length).decodeToString()
+        return source.readByteArray(length).decodeUtf8()
     }
 
     override fun readStringBytes(): ByteArray {

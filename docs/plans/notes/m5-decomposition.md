@@ -12,6 +12,13 @@
 > `decodeSequentially`, while the collection, record-as-map, polymorphic and JSON-default decoders do (M5-03). The open
 > questions in §7 are answered in `PROGRESS.md`'s decision log before any unit starts.
 
+> **Decisions applied (2026-10-20, `PROGRESS.md` decision log):** Q1 strings stay on the standard library's
+> `decodeToString`, never kotlinx-io's decoder → **M5-08 dropped**. Q3 → **M5-09 to v3.1**. Q4 → M5-01 and M5-03 in
+> v3.0. Q5 per-level reuse agreed; the orchestrator explains how to the user before implementing (done for decoders,
+> 2026-10-20). Q6 and Q8 → **reuse across calls and M5-10 set aside** in
+> [`backlog-after-v3.0.md`](backlog-after-v3.0.md). Batch 5 is then empty: **AB-W runs after batch 4** with AB-R, without
+> the reordering rows (`FieldOrder.write` stays as a control).
+
 Path shorthands:
 - `C` = `core/src/commonMain/kotlin/com/github/avrokotlin/avro4k`
 - `D` = `C/internal/decoder/direct`

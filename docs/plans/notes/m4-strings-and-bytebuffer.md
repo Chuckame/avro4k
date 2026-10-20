@@ -35,7 +35,16 @@ The numbers above compare against the varint side, itself 33% slower than base o
 `complex` reads +9% to +12%, **`simple` reads −8% to −12%** (@500 −11.8%, separated). So this change, as committed, is
 a regression for data made of short strings.
 
-### Open points (for the user)
+### Decided (user, 2026-10-20)
+
+**Strings are decoded by the standard library's `decodeToString` everywhere, never by kotlinx-io's decoder**, the
+common case being ASCII. One helper, `decodeUtf8` (`internal/codec/Utf8.kt`), used by every decoder, says why in its
+KDoc ([kotlinx-io#515](https://github.com/Kotlin/kotlinx-io/issues/515)). If kotlinx-io's JVM `readString()` moves to
+the JDK's decoder ([kotlinx-io#516](https://github.com/Kotlin/kotlinx-io/pull/516)), switching back is only a
+kotlinx-io update: kept in [`backlog-after-v3.0.md`](backlog-after-v3.0.md), item 4. The open points below are closed
+by this: no length threshold; the short non-ASCII cost and the malformed-surrogate divergence are known limits.
+
+### Open points (for the user) — closed 2026-10-20, see above
 
 1. **Short strings are slower than base** (16 characters: ASCII −18.5%, Latin-1 −46%, CJK −23%; `simple` reads end to
    end −8% to −12%), long strings much faster. Options: keep kotlinx-io's decoder for short strings and the JDK's above

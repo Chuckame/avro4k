@@ -94,7 +94,7 @@ internal class ByteArrayDecoder(
     override fun readString(): String {
         val length = readLength()
         val start = take(length)
-        return bytes.decodeToString(start, start + length)
+        return bytes.decodeUtf8(start, start + length)
     }
 
     override fun readStringBytes(): ByteArray {
