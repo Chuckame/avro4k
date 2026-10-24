@@ -988,8 +988,8 @@ the smaller one are tied end to end; the kept one is faster on the varint micros
 configuration, same JMH settings as the per-workload tasks), 3 invocations per side, each round in a different order
 (head/v1/v2, v1/v2/head, v2/head/v1), so there is no Apache/Jackson noise reference; `complex` read @1 at 3 forks per
 side per round (9 forks); the string and varint micros 3 rounds × **2 forks** per side, escape analysis on. Writes are
-not re-measured (untouched). Allocation is not measured: head copied the whole input into a `Buffer` on every call,
-the candidates read the array itself. "sep" = every invocation of one side is above (or below) every invocation of the
+not re-measured (untouched). Allocation is not measured: head wrapped the input in a `Buffer` on every call (one segment over the array,
+no copy, through `UnsafeBufferOperations.moveToTail`), the candidates read the array itself. "sep" = every invocation of one side is above (or below) every invocation of the
 other.
 
 ### avro4k reads end to end

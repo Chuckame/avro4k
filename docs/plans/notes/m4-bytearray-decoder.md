@@ -7,7 +7,8 @@ and a position, no kotlinx-io, Apache Avro's varint shape. Internal code only, n
 ## Why
 
 Every avro4k read went through kotlinx-io's `Buffer`, which updates its segment bookkeeping on every read, and
-`decodeFromByteArray` first copied the whole input into one. Apache's `BinaryDecoder` reads a plain `byte[] buf; int pos`,
+`decodeFromByteArray` wrapped its input in one (a single segment over the array, no copy, through
+`UnsafeBufferOperations.moveToTail`), so the gain measured below is the `Buffer` reads alone. Apache's `BinaryDecoder` reads a plain `byte[] buf; int pos`,
 which is what lets its `readInt`/`readLong` stay small and fast for the JIT. The user allowed code shaped for the JIT
 (decision log, 2026-10-16).
 

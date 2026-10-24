@@ -21,11 +21,11 @@ bookkeeping on every read (the varint read peeked the head segment, then `skip`p
 - **`decodeFromSource` calls `release()` in a `finally`**, so the source is left right after the value, failed or not,
   as before: values decoded one after the other from one source still each stop after their own bytes (new test).
 - `AvroSingleObject.decodeFromByteArray` reads its header from the array and decodes through
-  `ByteArrayDecoder(bytes, 10)` instead of copying the input into a `Buffer`; the header parsing is shared with
+  `ByteArrayDecoder(bytes, 10)` instead of wrapping the input in a `Buffer` (no copy either way); the header parsing is shared with
   `decodeFromSource` (the fingerprint read byte by byte, little-endian). Same errors as before, same lack of a check
   for trailing bytes.
 - The big-decimal bytes serializer (`JavaStdLibSerializers`) reads through `ByteArrayDecoder` (`isExhausted` for the
-  trailing-bytes check) instead of a `Buffer` copy.
+  trailing-bytes check) instead of a `Buffer` wrapping the array.
 - Internal code only: no API change, `apiCheck` green.
 
 **The contract this adds:** while a `KotlinxIoDecoder` is in use, the source lags behind what has been read, and nothing
