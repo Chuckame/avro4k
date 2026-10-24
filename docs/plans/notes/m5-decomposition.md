@@ -19,6 +19,10 @@
 > [`backlog-after-v3.0.md`](backlog-after-v3.0.md). Batch 5 is then empty: **AB-W runs after batch 4** with AB-R, without
 > the reordering rows (`FieldOrder.write` stays as a control).
 
+> **kotlinx-io leaves core before batch 1 (user, 2026-10-24, `notes/m4-no-stream-library.md`).** M5-00 writes with
+> `encodeToByteArray` instead of a `kotlinx.io.Buffer`; M5-07 encodes strings straight into the new `ByteArrayEncoder`'s
+> array instead of `sink.writeString`. `KotlinxIoEncoder` and `KotlinxIoDecoder`, cited below, no longer exist then.
+
 Path shorthands:
 - `C` = `core/src/commonMain/kotlin/com/github/avrokotlin/avro4k`
 - `D` = `C/internal/decoder/direct`

@@ -11,18 +11,28 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-24): one array-reading decoder built on a branch, its A/B waits for AC power
+### Resume here (2026-10-24, later): kotlinx-io leaves core — planned, execution in a fresh session
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
-- **Stream cursor: the user chose one decoder for both inputs** (decision log, 2026-10-24). Done on branch
-  `v3/one-cursor-decoder` (`d4aae3bf`, not merged, not measured): `ArrayCursorDecoder` reads every value from an array
-  with a position; `ByteArrayDecoder` (end of input after the array) and `KotlinxIoDecoder` (the next segment) only say
-  what follows it. 562 lines → 364. jvm 1048, jsNode 232, macosArm64 235, other modules and `apiCheck` green.
-- **Next:** a short A/B, head vs the branch, avro4k read rows (`read` and `readFromSource`) and the varint/string
-  micros. Two things could move: `ByteArrayDecoder` now bounds its reads by a field instead of `bytes.size`, and both
-  inputs share one compiled copy of each read method. Merge if neutral.
-- **Open, for the user:** keep kotlinx-io in core, switch to okio, or no stream library in core (stream support in
-  adapter modules, as kotlinx-serialization's `json-io`/`json-okio`). Batch 1 (M5-00 ∥ M5-01) does not depend on it.
+- **User: no stream library in core** (decision log, 2026-10-24). Plan: [`notes/m4-no-stream-library.md`](notes/m4-no-stream-library.md)
+  (why, the full footprint, units IO-1 … IO-4, effect on M5, two open questions).
+- The shared-decoder branch `v3/one-cursor-decoder` (`d4aae3bf`, not merged) is **not merged** if no stream input
+  remains (the plan's §6 Q1 = a); it stays as the starting point if one comes back, its base class then named
+  `BufferedDecoder`. Its A/B is dropped.
+
+**Next, in order:**
+1. **The user answers the plan's §6** (Q1: what replaces stream reading, recommended: nothing in v3.0; Q2: the
+   end-of-input cause on JS/native).
+2. IO-1 (benchmark rows, alone) → IO-2 (`ByteArrayEncoder`, two storage candidates) → IO-3 (API removal, alone) →
+   IO-4 (A/B on AC power, numbers in the merge commit).
+3. Then M5 batch 1 (M5-00 ∥ M5-01); M5-00 and M5-07 amended by the plan's §5.
+
+### Earlier (2026-10-24): one array-reading decoder built on a branch
+
+- **Stream cursor: the user chose one decoder for both inputs.** Done on branch `v3/one-cursor-decoder` (`d4aae3bf`):
+  `ArrayCursorDecoder` reads every value; `ByteArrayDecoder` and `KotlinxIoDecoder` only say what follows the array.
+  562 lines → 364; jvm 1048, jsNode 232, macosArm64 235, other modules and `apiCheck` green. Superseded the same day
+  by the removal of kotlinx-io (above).
 
 ### Earlier (2026-10-18, night): stream reads on the plain cursor merged, M5 decomposed — waiting for the user's answers
 
@@ -468,6 +478,7 @@ Records *why* a unit was done the way it was, so a later session does not re-dec
 | 2026-09-20 | A3 | C1 (per-structure encoder/decoder allocation) and C2 (`resolveFields` per record instance) **cannot be told apart from outside the library** — they happen in the same call with no public seam, so the nested-record family measures their sum. Attributing a change to one of them needs async-profiler `-e alloc` or a temporary core-side counter. |
 | 2026-09-20 | A3 | Escape analysis puts a floor under two families: nested `write` at depth 1 reports ~0 B/op and polymorphic at `shapeCount=10` under-reports the `Pair` by ~3x. Read those at depth 3/8 and at 1000 respectively, or the numbers mislead. |
 | 2026-10-16 | M4 · varint | **User relaxes locked decision 6:** shaping code to help the JIT is fine (the varint read is central, optimizing it matters); if it makes the common code dirty, a JVM implementation next to a non-JVM one is allowed. Context: Apache splits `readLong`/`innerLongDecode` for the JIT, but on its own `byte[] buf; int pos; int limit` cursor; every avro4k shape tried read through kotlinx-io's `Buffer` bookkeeping instead. Candidates, in order: a `ByteArray` decoder for `decodeFromByteArray` (array + position, Apache-shaped varints), a decoder-owned cursor over the head segment for streams, Apache's shape on the segment array. |
+| 2026-10-24 | M4 · stream library | **User: remove the stream library from core entirely** (kotlinx-io; okio would be no faster, being the same segment design). Reasons: the speed comes from reading an array with a position, not from the library; kotlinx-io is 0.x and in the public API, with `@InternalIoApi` in the fast path; removing it is breaking, so v3.0, while adding a stream entry point back later is not. The stream API (`encodeToSink`/`decodeFromSource`, `AvroSingleObject`'s too) is removed with the user's approval. **If the shared array decoder remains, its name is `BufferedDecoder`.** Plan: `notes/m4-no-stream-library.md`. |
 | 2026-10-24 | M4 · stream cursor | **User: one decoder for `ByteArray` and stream input**, not a revert to the `Source` API. The cursor's gain is the `Source` API's per-read bookkeeping (`require`, head peek, `skip` writing `Buffer.size` and `Segment.pos` on every value), measured against exactly that API: `ByteArray` +7% to +32% (the old path wrapped the array with `moveToTail`, no copy), streams +12% to +48%; kotlinx-io cannot remove that cost without changing what its API guarantees. The duplicated code was the objection, so the two decoders share one base class. The user also asks whether core should keep kotlinx-io, move to okio, or have no stream library. |
 | 2026-10-20 | M5 decomposition §7 | **User answers, second pass.** Q1: **strings are decoded by the standard library's `decodeToString` everywhere, never by kotlinx-io's decoder** (ASCII and UTF-8 are the common case); the reason is written once, in `decodeUtf8`'s KDoc (`internal/codec/Utf8.kt`, kotlinx-io#515), and switching back once kotlinx-io#516 ships is kept in `notes/backlog-after-v3.0.md` → M5-08 dropped. Q5: the design explained to the user, ok. Q6: not in v3.0 (not a fan of `ThreadLocal`), set aside. Q8: M5-10 set aside: v3.0 is about multiplatform and the breaking changes it allows; improvements without structural change can come in v3.0.x, and **the user picks and merges the set-aside items themselves** → `notes/backlog-after-v3.0.md`, maintained by the orchestrator. Still open: the user dislikes custom decoding where kotlinx-io should be fast, and asked what makes the stream cursor faster than the `Source` API. |
 | 2026-10-18 | M5 decomposition §7 | **User answers, first pass.** Q2: **yes**, multiplatform benchmarks, a minimal common set is enough (M5-00). Q3: **both parts of `fixed`/`bytes` go to v3.1**: not breaking for users of those types; `AvroDecoder` is not meant to be implemented by users, so adding members to it is not an objection. Q4: **M5-01 and M5-03 are in v3.0.** Q5: per-level reuse **agreed, but the orchestrator explains how before implementing**. Q7: no constraint, the user rewrites the git history at the end of the work (the batch merge carries the numbers). **Still open:** Q1 (strings: the user prefers ASCII/UTF-8 performance and relying on kotlinx-io to maintain less; wants pros/cons, no new benchmark), Q6 (how it differs from Q5), Q8 (what is asked). The user also asks what `KotlinxIoDecoder`'s head-segment cursor is worth against its maintenance cost. |
