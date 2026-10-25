@@ -1,6 +1,6 @@
 # M4 — JVM streams in core, and the benchmarks of the next steps
 
-**Status:** planned 2026-10-25; IO-5 done (`8ff89859`), IO-6 done (merge `19f3e5d8`, rename `dc9cf462`). **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
+**Status:** planned 2026-10-25; IO-5 done (`8ff89859`), IO-6 done (merge `19f3e5d8`, rename `dc9cf462`); IO-7 done (`9122e71e`, bench rows `64052105`), findings in §6. **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
 with java streams, it'll be an important need for JVM users": option **(b)** of `m4-stream-options.md` (§6 Q1 of
 `m4-no-stream-library.md`). `InputStream`/`OutputStream` functions in core's JVM source set, no stream library; kotlinx-io
 still leaves core (IO-3). Option (c), an `avro4k-kotlinx-io` module, is not in v3.0 and stays possible later without
@@ -214,3 +214,28 @@ the end of M3 (`benchmark/README.md`, "M3 complete"); everything since (the deco
   empty `IntArray` (expected to close part of `simple` @1's gap to one array) and a first chunk of 64 B against 256 B.
 - **M5-00, multiplatform benchmarks:** `read`, `writeToByteArray` on JS and native, where the removed kotlinx-io
   allocated an 8 KiB segment per `encodeToByteArray` call (the native gain still to measure). Streams are JVM only.
+
+## 6. IO-7 findings (2026-10-25)
+
+- **Three choices the plan left open, made toward v2:**
+  - The `Avro` and `AvroSingleObject` stream functions are in `AvroJVMExtensions.kt`, not a new `AvroJvmStreams.kt`: the
+    JVM facade class stays v2's `AvroJVMExtensionsKt`, so Java callers keep the class they called (the plan's file name
+    was a sketch).
+  - Parameters keep v2's names, `outputStream`/`inputStream` (the plan wrote `output`/`input`): named arguments of v2
+    callers still compile, and no public name changes without the user's approval.
+  - `AvroSingleObject.encodeToStream`/`decodeFromStream` carry `@ExperimentalAvro4kApi`, as v2's members did through
+    their class. `Avro`'s carry no opt-in, as `encodeToSink`/`decodeFromSource` (v2's were experimental and deprecated).
+- **Not in the plan, hardening:** `readAcross` allocates the value's array before reading only up to 1 MiB past the
+  refilled array; beyond, `InputStream.readNBytes(int)` (Java 11) reads first, growing as the stream delivers, so a
+  corrupt length allocates no more than the stream holds plus 1 MiB. kotlinx-io's `readByteArray(n)` behaved the same
+  way (`require(n)` before allocating), so this keeps v2's behaviour rather than adding a divergence. Test: a 2 GB length
+  followed by 3 bytes fails with an EOF cause.
+- **Single object:** `decodeWithHeader` reads the 10 header bytes with `readFixed(10)` on any `AvroBinaryDecoder`, so the
+  header crosses refills like any value; the `ByteArray` path keeps its own header reading (unchanged).
+- **A trap for tests:** `ByteArrayInputStream.readNBytes(b, off, len)` reads once, relying on its own `read` returning
+  every byte asked for. A subclass capping `read` (to simulate a socket) makes `readNBytes` fall short and looks like an
+  end of input. The test streams wrap a `ByteArrayInputStream` instead of extending it.
+- **Smoke B/op, on battery, 1 iteration, not measurements:** `readFromStream` `simple` @1 8,800 B vs 6,872 B at IO-5
+  (the 8 KiB array per call, what candidate B sizes from `available()`); `writeToStream` `complex` @15 80.8 KB vs
+  22.5 KB, `lists` @10000 10.3 MB vs 10 KB (IO-5's kotlinx-io segments are pooled and not counted; A holds the whole value
+  in chunks, what candidate B bounds). IO-8 measures both.
