@@ -6,12 +6,14 @@ import com.github.avrokotlin.benchmark.internal.apache.toApache
 import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import org.apache.avro.Schema
+import org.apache.avro.io.BinaryDecoder
 import org.apache.avro.io.BinaryEncoder
 import org.apache.avro.io.DatumReader
 import org.apache.avro.io.DatumWriter
 import org.apache.avro.io.DecoderFactory
 import org.apache.avro.io.Encoder
 import org.apache.avro.io.EncoderFactory
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import com.github.avrokotlin.benchmark.internal.apache.SimpleDatasClass as ApacheSimpleDatasClass
@@ -27,6 +29,9 @@ internal class ApacheAvroReflectSimpleBenchmark : SerializationSimpleBenchmark()
     lateinit var byteArrayEncoder: BinaryEncoder
 
     lateinit var reader: DatumReader<ApacheSimpleDatasClass>
+
+    /** The decoder [readFromStream] hands back to the factory on the next call, as Apache users reuse theirs. */
+    var streamDecoder: BinaryDecoder? = null
 
     /** Apache's own model, converted once here so no measured method pays for it. */
     lateinit var model: ApacheSimpleDatasClass
@@ -62,6 +67,14 @@ internal class ApacheAvroReflectSimpleBenchmark : SerializationSimpleBenchmark()
     @Benchmark
     fun read(): ApacheSimpleDatasClass {
         val decoder = DecoderFactory.get().binaryDecoder(data, null)
+        return reader.read(null, decoder)
+    }
+
+    /** The reference for avro4k's stream reads: Apache's buffered decoder over a stream created per call. */
+    @Benchmark
+    fun readFromStream(): ApacheSimpleDatasClass {
+        val decoder = DecoderFactory.get().binaryDecoder(ByteArrayInputStream(data), streamDecoder)
+        streamDecoder = decoder
         return reader.read(null, decoder)
     }
 

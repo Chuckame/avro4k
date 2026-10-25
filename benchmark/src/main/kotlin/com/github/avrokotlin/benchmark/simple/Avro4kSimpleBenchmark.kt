@@ -25,6 +25,9 @@ internal class Avro4kSimpleBenchmark : SerializationSimpleBenchmark() {
      */
     lateinit var sink: Sink
 
+    /** Discards what [writeToStream] writes. Created once: a caller's stream outlives the values written to it. */
+    val output: OutputStream = OutputStream.nullOutputStream()
+
     override fun setup() {
         sink = OutputStream.nullOutputStream().asSink().buffered()
     }
@@ -40,11 +43,30 @@ internal class Avro4kSimpleBenchmark : SerializationSimpleBenchmark() {
     @Benchmark
     fun readFromSource(): SimpleDatasClass = Avro.decodeFromSource<SimpleDatasClass>(schema, ByteArrayInputStream(data).asSource().buffered())
 
+    /**
+     * One value read from a stream created per call, as from a file or a request body: through the kotlinx-io adapters
+     * a caller holding an `InputStream` uses today.
+     */
+    @Benchmark
+    fun readFromStream(): SimpleDatasClass = Avro.decodeFromSource<SimpleDatasClass>(schema, ByteArrayInputStream(data).asSource().buffered())
+
     @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
     fun write() {
         Avro.encodeToSink(schema, clients, sink)
         sink.flush()
+    }
+
+    /**
+     * One value written to a caller's stream: through the kotlinx-io adapters, the sink created per call and flushed so
+     * that every byte reaches the stream.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @Benchmark
+    fun writeToStream() {
+        val streamSink = output.asSink().buffered()
+        Avro.encodeToSink(schema, clients, streamSink)
+        streamSink.flush()
     }
 
     /** A new array holding the encoded bytes, as most callers want them: to send, store or wrap in a message. */

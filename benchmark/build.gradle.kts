@@ -71,6 +71,13 @@ benchmark {
         register("specific") {
             include("ApacheAvroSpecific")
         }
+        // Reading and writing one value through a JVM stream, every side of a comparison running the same set: avro4k's
+        // stream rows (what is compared), its `ByteArray` rows (they must not move), and Apache reflect's rows, the same
+        // code on every side, as the noise reference.
+        register("streamab") {
+            include("""^com\.github\.avrokotlin\.benchmark\.\w+\.Avro4k\w*Benchmark\.(read|readFromStream|writeToStream|writeToByteArray)$""")
+            include("""^com\.github\.avrokotlin\.benchmark\.\w+\.ApacheAvroReflect\w*Benchmark\.(read|readFromStream|write)$""")
+        }
         // The micro-benchmark suite: attribution instruments for a single avro4k internal each,
         // deliberately runnable on its own without paying for the ~25 min end-to-end matrix.
         register("micro") {
