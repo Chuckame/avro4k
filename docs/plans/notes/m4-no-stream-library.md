@@ -1,6 +1,8 @@
 # M4 — No stream library in core: kotlinx-io removed (plan, not started)
 
-**Status:** planned 2026-10-24, to be executed in a fresh session. Decision: user, 2026-10-24 (`PROGRESS.md` decision
+**Status (2026-10-25):** IO-1, IO-2 and IO-4 done (chunks kept, `m4-bytearray-encoder.md`); §6 Q2 answered (an
+internal avro4k `EOFException`); Q1 open, both stream options compared in `m4-stream-options.md`; IO-3 waits for it.
+Planned 2026-10-24. Decision: user, 2026-10-24 (`PROGRESS.md` decision
 log). Open questions for the user are in §6; the plan below assumes the recommended answers and says what changes
 otherwise.
 
