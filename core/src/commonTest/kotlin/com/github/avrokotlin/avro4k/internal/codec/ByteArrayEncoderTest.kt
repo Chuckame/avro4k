@@ -37,6 +37,20 @@ class ByteArrayEncoderTest {
     }
 
     @Test
+    fun `a payload of several hundred kilobytes mixing values and varints comes out whole`() {
+        val chunk = ByteArray(1_000) { (it * 13).toByte() }
+        val bytes =
+            ByteArrayEncoder()
+                .apply {
+                    repeat(400) {
+                        writeFixed(chunk)
+                        writeLong(Long.MIN_VALUE + it)
+                    }
+                }.toByteArray()
+        bytes shouldBe (0 until 400).map { chunk + encodeLong(Long.MIN_VALUE + it) }.flatMap { it.asList() }.toByteArray()
+    }
+
+    @Test
     fun `a value larger than the doubled array is written whole`() {
         val large = ByteArray(5_000) { (it * 7).toByte() }
         val prefix = byteArrayOf(1, 2, 3)
