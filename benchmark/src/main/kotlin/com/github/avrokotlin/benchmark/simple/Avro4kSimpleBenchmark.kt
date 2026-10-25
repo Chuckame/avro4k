@@ -3,8 +3,10 @@ package com.github.avrokotlin.benchmark.simple
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
 import com.github.avrokotlin.avro4k.decodeFromSource
+import com.github.avrokotlin.avro4k.decodeFromStream
 import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.encodeToSink
+import com.github.avrokotlin.avro4k.encodeToStream
 import com.github.avrokotlin.benchmark.internal.SimpleDatasClass
 import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
@@ -43,12 +45,9 @@ internal class Avro4kSimpleBenchmark : SerializationSimpleBenchmark() {
     @Benchmark
     fun readFromSource(): SimpleDatasClass = Avro.decodeFromSource<SimpleDatasClass>(schema, ByteArrayInputStream(data).asSource().buffered())
 
-    /**
-     * One value read from a stream created per call, as from a file or a request body: through the kotlinx-io adapters
-     * a caller holding an `InputStream` uses today.
-     */
+    /** One value read from a stream created per call, as from a file or a request body. */
     @Benchmark
-    fun readFromStream(): SimpleDatasClass = Avro.decodeFromSource<SimpleDatasClass>(schema, ByteArrayInputStream(data).asSource().buffered())
+    fun readFromStream(): SimpleDatasClass = Avro.decodeFromStream<SimpleDatasClass>(schema, ByteArrayInputStream(data))
 
     @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
@@ -57,16 +56,10 @@ internal class Avro4kSimpleBenchmark : SerializationSimpleBenchmark() {
         sink.flush()
     }
 
-    /**
-     * One value written to a caller's stream: through the kotlinx-io adapters, the sink created per call and flushed so
-     * that every byte reaches the stream.
-     */
-    @OptIn(ExperimentalSerializationApi::class)
+    /** One value written to a caller's stream. */
     @Benchmark
     fun writeToStream() {
-        val streamSink = output.asSink().buffered()
-        Avro.encodeToSink(schema, clients, streamSink)
-        streamSink.flush()
+        Avro.encodeToStream(schema, clients, output)
     }
 
     /** A new array holding the encoded bytes, as most callers want them: to send, store or wrap in a message. */
