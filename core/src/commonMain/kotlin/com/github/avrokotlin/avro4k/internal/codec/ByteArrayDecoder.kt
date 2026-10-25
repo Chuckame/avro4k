@@ -4,14 +4,14 @@ import kotlinx.io.EOFException
 
 /**
  * Reads Avro binary straight from a [ByteArray], from its [startIndex] on, with nothing between the decoder and the bytes
- * but a position (see [ArrayCursorDecoder]).
+ * but a position (see [BufferedDecoder]).
  *
  * The array is the whole input: a value that does not fit in what is left of it is an EOFException.
  */
 internal class ByteArrayDecoder(
     bytes: ByteArray,
     startIndex: Int = 0,
-) : ArrayCursorDecoder(bytes, startIndex, bytes.size) {
+) : BufferedDecoder(bytes, startIndex, bytes.size) {
     /** Whether every byte of the input has been read. */
     val isExhausted: Boolean
         get() = position == limit

@@ -7,7 +7,7 @@ import kotlinx.io.readByteArray
 import kotlinx.io.unsafe.UnsafeBufferOperations
 
 /**
- * Reads Avro binary from a kotlinx-io [Source], straight from the array of its head segment (see [ArrayCursorDecoder]).
+ * Reads Avro binary from a kotlinx-io [Source], straight from the array of its head segment (see [BufferedDecoder]).
  *
  * The head segment's array is taken once and read with a plain position: the bytes read are only consumed from the
  * [source] when the segment has been read to its end, or by [release]. A value that does not fit in what is left of the
@@ -19,7 +19,7 @@ import kotlinx.io.unsafe.UnsafeBufferOperations
  */
 internal class KotlinxIoDecoder(
     private val source: Source,
-) : ArrayCursorDecoder(EMPTY, 0, 0) {
+) : BufferedDecoder(EMPTY, 0, 0) {
     /**
      * The index of the head segment's first byte when it was taken: the bytes from there to [position] are read, but not
      * yet consumed from the [source].

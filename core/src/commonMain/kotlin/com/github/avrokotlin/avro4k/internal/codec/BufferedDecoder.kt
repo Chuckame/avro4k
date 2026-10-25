@@ -16,7 +16,7 @@ import com.github.avrokotlin.avro4k.AvroMalformedDataException
  * of the input is a [kotlinx.io.EOFException], as from a [kotlinx.io.Source]. Every length prefix is checked by
  * [checkBinaryLength] before anything is allocated or skipped for it, and every returned array is a copy.
  */
-internal abstract class ArrayCursorDecoder(
+internal abstract class BufferedDecoder(
     /** The array being read. Never written. */
     protected var bytes: ByteArray,
     /** The index of the next byte to read in [bytes]. */
