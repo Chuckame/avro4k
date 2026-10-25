@@ -1,6 +1,6 @@
 # M4 — JVM streams in core, and the benchmarks of the next steps
 
-**Status:** planned 2026-10-25, not started. **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
+**Status:** planned 2026-10-25; IO-5 done (`8ff89859`). **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
 with java streams, it'll be an important need for JVM users": option **(b)** of `m4-stream-options.md` (§6 Q1 of
 `m4-no-stream-library.md`). `InputStream`/`OutputStream` functions in core's JVM source set, no stream library; kotlinx-io
 still leaves core (IO-3). Option (c), an `avro4k-kotlinx-io` module, is not in v3.0 and stays possible later without
@@ -47,7 +47,7 @@ stream benchmark rows switch from the kotlinx-io adapters to the new functions w
 | 3 | IO-7 | `encodeToStream`/`decodeFromStream` in `jvmMain`, one value per stream, candidate A | yes (`apiDump`) | none (IO-8) |
 | 4 | IO-3 | kotlinx-io and its API removed (`m4-no-stream-library.md`, amended in §3 below) | yes (`apiDump`) | none (IO-8) |
 | 5 | IO-7b | candidate B: one commit on a branch off IO-3 | — | none (IO-8) |
-| 6 | IO-8 | A/B: base IO-5, A = IO-3's commit, B = IO-7b | machine | **~4½ h, overnight** |
+| 6 | IO-8 | A/B: base IO-5, A = IO-3's commit, B = IO-7b | machine | **~5¼ h, overnight** |
 | 7 | IO-9 | v2 → v3: M0 against the head after IO-8 | machine | **~2¾ h** |
 
 Then M5's batch 1 (`m5-decomposition.md`), whose A/B also carries the encoder's open points (§5).
@@ -147,7 +147,7 @@ One commit on branch `v3/jvm-streams-b`, off IO-3's commit: the two policies of 
 - **Method** (as IO-4): 5 rounds × 3 sides, side order rotated each round, 1 fork × 5 × 1 s warmup × 5 × 3 s,
   escape analysis on. Then `benchmarkAlloc` once per side on the four avro4k methods, `-XX:-DoEscapeAnalysis`. AC
   power, Low Power Mode off, load below 3 at each start, one `caffeinate -dimsu` over the whole run, `pmset -g log`
-  checked on lines starting with a date. About 48 rows per invocation: ~4½ h in all.
+  checked on lines starting with a date. 56 rows per invocation (21 methods; counted at IO-5, the first estimate said 48): ~5¼ h in all.
 - **Verdict rules:**
   - read and write families decided separately: the candidate above the other on the most separated rows; a tie keeps
     A (simpler);
