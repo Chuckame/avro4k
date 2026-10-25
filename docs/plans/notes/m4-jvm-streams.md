@@ -235,7 +235,7 @@ the end of M3 (`benchmark/README.md`, "M3 complete"); everything since (the deco
 - **A trap for tests:** `ByteArrayInputStream.readNBytes(b, off, len)` reads once, relying on its own `read` returning
   every byte asked for. A subclass capping `read` (to simulate a socket) makes `readNBytes` fall short and looks like an
   end of input. The test streams wrap a `ByteArrayInputStream` instead of extending it.
-- **Smoke B/op, on battery, 1 iteration, not measurements:** `readFromStream` `simple` @1 8,800 B vs 6,872 B at IO-5
-  (the 8 KiB array per call, what candidate B sizes from `available()`); `writeToStream` `complex` @15 80.8 KB vs
-  22.5 KB, `lists` @10000 10.3 MB vs 10 KB (IO-5's kotlinx-io segments are pooled and not counted; A holds the whole value
-  in chunks, what candidate B bounds). IO-8 measures both.
+- **Smoke B/op, on battery, 1 iteration, EA on, not measurements:** `readFromStream` `simple` @1 8,800 B vs 664 B at
+  IO-5 (the 8 KiB array per call, what candidate B sizes from `available()`); `writeToStream` `complex` @15 80.8 KB vs
+  22.5 KB, `lists` @10000 10.3 MB vs 641 KB (IO-5's kotlinx-io segments are pooled and not counted; A holds the whole
+  value in chunks, what candidate B bounds). IO-8 measures both.
