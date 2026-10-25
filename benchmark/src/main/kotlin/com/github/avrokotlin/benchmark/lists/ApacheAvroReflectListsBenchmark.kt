@@ -6,17 +6,26 @@ import com.github.avrokotlin.benchmark.internal.apache.toApache
 import com.github.avrokotlin.benchmark.internal.encodeWith
 import kotlinx.benchmark.Benchmark
 import org.apache.avro.Schema
+import org.apache.avro.io.BinaryEncoder
 import org.apache.avro.io.DatumReader
 import org.apache.avro.io.DatumWriter
 import org.apache.avro.io.DecoderFactory
 import org.apache.avro.io.Encoder
 import org.apache.avro.io.EncoderFactory
+import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import com.github.avrokotlin.benchmark.internal.apache.ListWrapperDatasClass as ApacheListWrapperDatasClass
 
 internal class ApacheAvroReflectListsBenchmark : SerializationListsBenchmark() {
     lateinit var writer: DatumWriter<ApacheListWrapperDatasClass>
     lateinit var encoder: Encoder
+
+    /** Reset before each [writeToByteArray], so it only grows during the first iterations. */
+    val byteArrayOutput = ByteArrayOutputStream()
+
+    /** Apache's buffered encoder over [byteArrayOutput], created once as a reused encoder would be. */
+    lateinit var byteArrayEncoder: BinaryEncoder
+
     lateinit var reader: DatumReader<ApacheListWrapperDatasClass>
 
     /** Apache's own model, converted once here so no measured method pays for it. */
@@ -36,6 +45,7 @@ internal class ApacheAvroReflectListsBenchmark : SerializationListsBenchmark() {
         writer = reflectData.createDatumWriter(apacheSchema) as DatumWriter<ApacheListWrapperDatasClass>
         // Allocated once so that `write` only measures the encoding, not the sink construction.
         encoder = EncoderFactory.get().directBinaryEncoder(OutputStream.nullOutputStream(), null)
+        byteArrayEncoder = EncoderFactory.get().binaryEncoder(byteArrayOutput, null)
 
         @Suppress("UNCHECKED_CAST")
         reader = reflectData.createDatumReader(apacheSchema) as DatumReader<ApacheListWrapperDatasClass>
@@ -55,5 +65,14 @@ internal class ApacheAvroReflectListsBenchmark : SerializationListsBenchmark() {
     fun write() {
         writer.write(model, encoder)
         encoder.flush()
+    }
+
+    /** The reference for avro4k's `encodeToByteArray`: the encoded bytes copied into a new array. */
+    @Benchmark
+    fun writeToByteArray(): ByteArray {
+        byteArrayOutput.reset()
+        writer.write(model, byteArrayEncoder)
+        byteArrayEncoder.flush()
+        return byteArrayOutput.toByteArray()
     }
 }

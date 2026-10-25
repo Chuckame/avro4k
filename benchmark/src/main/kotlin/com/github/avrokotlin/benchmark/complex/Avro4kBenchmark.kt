@@ -3,6 +3,7 @@ package com.github.avrokotlin.benchmark.complex
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
 import com.github.avrokotlin.avro4k.decodeFromSource
+import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.encodeToSink
 import com.github.avrokotlin.benchmark.internal.Clients
 import com.github.avrokotlin.benchmark.internal.encodeWith
@@ -45,4 +46,8 @@ internal class Avro4kBenchmark : SerializationBenchmark() {
         Avro.encodeToSink(schema, clients, sink)
         sink.flush()
     }
+
+    /** A new array holding the encoded bytes, as most callers want them: to send, store or wrap in a message. */
+    @Benchmark
+    fun writeToByteArray(): ByteArray = Avro.encodeToByteArray(schema, clients)
 }
