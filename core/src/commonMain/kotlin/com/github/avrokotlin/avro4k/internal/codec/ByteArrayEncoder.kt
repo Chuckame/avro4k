@@ -6,20 +6,40 @@ import com.github.avrokotlin.avro4k.internal.encodeToUtf8
  * Writes Avro binary into an array it owns, byte for byte as Apache Avro's `BinaryEncoder` does, and hands the bytes
  * written with [toByteArray]. The mirror of [ByteArrayDecoder]: an array and a position.
  *
- * The array starts small, enough for a typical record, and doubles when full; [toByteArray] copies the bytes written
- * into an array of their exact size.
+ * The bytes go into chunks: the first one small, enough for a typical record, each next one twice the previous up to
+ * [MAX_CHUNK_SIZE], so that growing never copies what is already written. [toByteArray] copies the chunks into an array
+ * of their exact size.
  */
 internal class ByteArrayEncoder : AvroBinaryEncoder() {
-    private var bytes = ByteArray(INITIAL_CAPACITY)
+    /** The chunk being written. */
+    private var bytes = ByteArray(FIRST_CHUNK_SIZE)
     private var position = 0
 
+    /** The chunks before [bytes], none until the first one is full. */
+    private var fullChunks: ArrayList<ByteArray>? = null
+
+    /** The number of bytes written in each of [fullChunks]: a chunk can end with a few unused bytes. */
+    private var fullChunkLengths = IntArray(0)
+    private var fullSize = 0
+
     /** A new array holding every byte written so far. */
-    fun toByteArray(): ByteArray = bytes.copyOf(position)
+    fun toByteArray(): ByteArray {
+        val chunks = fullChunks ?: return bytes.copyOf(position)
+        val result = ByteArray(fullSize + position)
+        var offset = 0
+        for (i in chunks.indices) {
+            val length = fullChunkLengths[i]
+            chunks[i].copyInto(result, offset, 0, length)
+            offset += length
+        }
+        bytes.copyInto(result, offset, 0, position)
+        return result
+    }
 
     /** Writes [value] as is, outside of any Avro type: the single-object header. */
     fun writeByte(value: Byte) {
         if (position == bytes.size) {
-            grow(1)
+            nextChunk(1)
         }
         bytes[position++] = value
     }
@@ -106,9 +126,23 @@ internal class ByteArrayEncoder : AvroBinaryEncoder() {
     }
 
     override fun writeFixed(value: ByteArray) {
-        // reserved first: it may replace the array
-        val p = reserve(value.size)
-        value.copyInto(bytes, p)
+        val p = position
+        if (bytes.size - p >= value.size) {
+            value.copyInto(bytes, p)
+            position = p + value.size
+        } else {
+            writeAcrossChunks(value)
+        }
+    }
+
+    /** Fills the current chunk with the start of [value], and puts the rest at the start of the next one. */
+    private fun writeAcrossChunks(value: ByteArray) {
+        val head = bytes.size - position
+        value.copyInto(bytes, position, 0, head)
+        position += head
+        nextChunk(value.size - head)
+        value.copyInto(bytes, 0, head, value.size)
+        position = value.size - head
     }
 
     override fun writeEnum(index: Int) {
@@ -162,30 +196,47 @@ internal class ByteArrayEncoder : AvroBinaryEncoder() {
         position = p + encodeZigZagLong(value, bytes, p)
     }
 
-    /** Makes room for [byteCount] bytes and returns where they go, the position already moved past them. */
+    /**
+     * Makes room for [byteCount] contiguous bytes and returns where they go in [bytes], the position already moved past
+     * them.
+     */
     private fun reserve(byteCount: Int): Int {
         val p = reserveUpTo(byteCount)
         position = p + byteCount
         return p
     }
 
-    /** Makes room for at most [byteCount] bytes and returns where they go, leaving the position for the caller to move. */
+    /**
+     * Makes room for at most [byteCount] contiguous bytes, a varint or a number, and returns where they go in [bytes],
+     * leaving the position for the caller to move. The few bytes left at the end of a full chunk stay unused.
+     */
     private fun reserveUpTo(byteCount: Int): Int {
         if (bytes.size - position < byteCount) {
-            grow(byteCount)
+            nextChunk(byteCount)
         }
         return position
     }
 
-    private fun grow(byteCount: Int) {
-        val required = position + byteCount
-        if (required < 0 || required > MAX_BINARY_LENGTH) {
+    /** Keeps the current chunk with the bytes written in it, and starts a new one of at least [byteCount] bytes. */
+    private fun nextChunk(byteCount: Int) {
+        val size = fullSize.toLong() + position + byteCount
+        if (size > MAX_BINARY_LENGTH) {
             throw IllegalStateException("The encoded value does not fit in an array: more than $MAX_BINARY_LENGTH bytes")
         }
-        val doubled = (bytes.size.toLong() shl 1).coerceAtMost(MAX_BINARY_LENGTH.toLong()).toInt()
-        bytes = bytes.copyOf(maxOf(doubled, required))
+        val chunks = fullChunks ?: ArrayList<ByteArray>().also { fullChunks = it }
+        if (chunks.size == fullChunkLengths.size) {
+            fullChunkLengths = fullChunkLengths.copyOf(maxOf(8, chunks.size * 2))
+        }
+        fullChunkLengths[chunks.size] = position
+        chunks.add(bytes)
+        fullSize += position
+        bytes = ByteArray(maxOf((bytes.size shl 1).coerceAtMost(MAX_CHUNK_SIZE), byteCount))
+        position = 0
     }
 }
 
 /** Enough for a typical record, small enough not to matter when a value is a single field. */
-private const val INITIAL_CAPACITY = 256
+private const val FIRST_CHUNK_SIZE = 256
+
+/** Large enough for the copies into the final array to be few, small enough not to waste much of the last chunk. */
+private const val MAX_CHUNK_SIZE = 64 * 1024
