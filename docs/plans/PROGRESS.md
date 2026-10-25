@@ -11,7 +11,23 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-25): the kotlinx-io encoder replaced (IO-1, IO-2, IO-4 done) — IO-3 waits for the stream choice
+### Resume here (2026-10-25, later): JVM streams chosen, the stream units and their benchmarks planned
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
+- **§6 Q1 answered: (b), `InputStream`/`OutputStream` in core's JVM source set** (user: "it'll be an important need for
+  JVM users"; decision log). Plan: [`notes/m4-jvm-streams.md`](notes/m4-jvm-streams.md): units IO-5 (stream benchmark
+  rows) → IO-6 (merge `v3/one-cursor-decoder`, `BufferedDecoder`) → IO-7 (the eight stream functions, candidate A) →
+  IO-3 (kotlinx-io out, amended) → IO-7b (candidate B) → IO-8 (A/B, ~4½ h overnight) → IO-9 (v2 → v3: M0 against the
+  head, ~2¾ h).
+- **v2's stream functions were broken, reproduced on `main`:** `encodeToStream` writes nothing for a small value (never
+  flushed), and a second `decodeFromStream` on one stream fails. Pre-existing, so in
+  [`notes/backlog-pre-existing-bugs.md`](notes/backlog-pre-existing-bugs.md) #13 and #14 for a v2.x fix; v3's new
+  functions have both behaviours as acceptance tests. IO-9's v2 write row therefore uses `encodeToSink` + `flush()`.
+
+**Next, in order:** IO-5 → IO-6 → IO-7 (alone) → IO-3 (alone) → IO-7b → IO-8 → IO-9, then M5 batch 1 (M5-00 ∥ M5-01),
+whose A/B carries the encoder's open points.
+
+### Earlier (2026-10-25): the kotlinx-io encoder replaced (IO-1, IO-2, IO-4 done) — IO-3 waits for the stream choice
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
 - **`encodeToByteArray` writes into chunks owned by `ByteArrayEncoder`** (merge `afcaecd4`; IO-1 rows `d0391d70`).
@@ -473,7 +489,13 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M4 · `ByteArray` decoded with a plain position | done | `v3/m2-foundation` | `f9c3f34c` (merged), this commit | `decodeFromByteArray` reads through `ByteArrayDecoder` (`commonMain`): array + position, no kotlinx-io copy, Apache's varint shape (`readInt` whole int when 5 bytes are left, `readLong` bytes 1–4 inline, 5–10 out of line). +13 common tests; jvm 1045, jsNode 229, macosArm64 232. **A/B 2026-10-17 (head `fe8debc1`, v1 one-byte-inline `f9c3f34c`, v2 Apache shape; shortened, avro4k reads only): both candidates beat head on every read row (`simple` +28% to +32%, `complex` +7% to +14%, `lists` +4% to +8% for v2), tie each other end to end; v2 kept, faster on varint micros (field order +6–13% over v1). Open: `readLongs` @10 below head (−12.9%).** See [`notes/m4-bytearray-decoder.md`](notes/m4-bytearray-decoder.md) |
 | M4 · IO-1 `writeToByteArray` benchmark rows | done | `v3/m2-foundation` | `d0391d70` | avro4k's three workloads and Apache reflect's (reused buffered encoder over a reset `ByteArrayOutputStream`) |
 | M4 · IO-2/IO-4 `ByteArrayEncoder` | done | `v3/m2-foundation` | `ef5fc8fa`, `a704b005`, `0d614465`, merge `afcaecd4` | Chunks kept over one growable array: avro4k `writeToByteArray` +5% to +14% vs the `Buffer`; 7 tests added (jvm 1055, jsNode 239, macosArm64 242), API unchanged. See [`notes/m4-bytearray-encoder.md`](notes/m4-bytearray-encoder.md) |
-| M4 · IO-3 stream API and kotlinx-io removed from core | blocked | — | — | waits for the user's choice on streams ([`notes/m4-stream-options.md`](notes/m4-stream-options.md)) |
+| M4 · IO-5 stream benchmark rows (`readFromStream`, `writeToStream`) | todo | — | — | through today's kotlinx-io API; IO-7 switches them to the new functions ([`notes/m4-jvm-streams.md`](notes/m4-jvm-streams.md)) |
+| M4 · IO-6 merge `v3/one-cursor-decoder`, base class `BufferedDecoder` | todo | — | — | measured by IO-8 (`read` must not move) |
+| M4 · IO-7 `encodeToStream`/`decodeFromStream` in `jvmMain` (candidate A) | todo | — | — | 8 public functions (user, 2026-10-25), runs alone (`apiDump`) |
+| M4 · IO-3 stream API and kotlinx-io removed from core | todo | — | — | after IO-7; amended by [`notes/m4-jvm-streams.md`](notes/m4-jvm-streams.md) §3 |
+| M4 · IO-7b JVM streams candidate B | todo | — | — | decoder array sized from `available()`, encoder flushing chunks to the stream |
+| M4 · IO-8 JVM streams A/B | todo | — | — | base IO-5 vs A vs B, ~4½ h; numbers in the merge commit |
+| M4 · IO-9 v2 → v3 benchmark (M0 vs head) | todo | — | — | `read`, `readFromStream`, `writeToStream`, `writeToByteArray`, ~2¾ h; supersedes "M3 complete" |
 | M4 · stream decoded from its head segment's array | done | `v3/m2-foundation` | `79621284` (merged by `64b89c90`), bench rows `8920310f` | `KotlinxIoDecoder` reads the head segment's array with a position, consumed on segment end or `release()` (`decodeFromSource` calls it in a `finally`). Stream reads +12% to +48% end to end, `ByteArray` reads unchanged, +16 B/op on stream reads. Single-object `decodeFromByteArray` and big-decimal bytes through `ByteArrayDecoder`. [`notes/m4-stream-cursor.md`](notes/m4-stream-cursor.md) |
 | v3.0.0 · README final pass | todo | — | — | **user (2026-10-15): update the README just before the v3.0.0 release**, once benchmark numbers and the 3.1 container decision are final (B8 did a first pass) |
 | M5 decomposition (`Plan` agent) | done | `v3/m2-foundation` | this commit | 12 units, [`notes/m5-decomposition.md`](notes/m5-decomposition.md); §7 Q1–Q8 for the user before any unit |
@@ -501,6 +523,7 @@ Records *why* a unit was done the way it was, so a later session does not re-dec
 | 2026-09-20 | A3 | C1 (per-structure encoder/decoder allocation) and C2 (`resolveFields` per record instance) **cannot be told apart from outside the library** — they happen in the same call with no public seam, so the nested-record family measures their sum. Attributing a change to one of them needs async-profiler `-e alloc` or a temporary core-side counter. |
 | 2026-09-20 | A3 | Escape analysis puts a floor under two families: nested `write` at depth 1 reports ~0 B/op and polymorphic at `shapeCount=10` under-reports the `Pair` by ~3x. Read those at depth 3/8 and at 1000 respectively, or the numbers mislead. |
 | 2026-10-16 | M4 · varint | **User relaxes locked decision 6:** shaping code to help the JIT is fine (the varint read is central, optimizing it matters); if it makes the common code dirty, a JVM implementation next to a non-JVM one is allowed. Context: Apache splits `readLong`/`innerLongDecode` for the JIT, but on its own `byte[] buf; int pos; int limit` cursor; every avro4k shape tried read through kotlinx-io's `Buffer` bookkeeping instead. Candidates, in order: a `ByteArray` decoder for `decodeFromByteArray` (array + position, Apache-shaped varints), a decoder-owned cursor over the head segment for streams, Apache's shape on the segment array. |
+| 2026-10-25 | M4 · stream input and output | **User: JVM `InputStream`/`OutputStream` in core** (option b of `notes/m4-stream-options.md`): "it still needs a way to encode/decode with java streams, it'll be an important need for JVM users". kotlinx-io still leaves core; an `avro4k-kotlinx-io` module (c) is not in v3.0 and stays addable later (`backlog-after-v3.0.md` item 8). The stream functions come before the removal (IO-7 before IO-3) so every commit compiles and the benchmark rows switch without a gap; two pre-decided candidates (decoder array size, encoder output) in one overnight A/B (`notes/m4-jvm-streams.md`). |
 | 2026-10-25 | M4 · end of input off the JVM | **User: an internal avro4k `EOFException`** (`m4-no-stream-library.md` §4.3): `internal expect open class`, `actual typealias` to `java.io.EOFException` on the JVM (contract unchanged, `apache-interop` keeps working), a plain `Exception` subclass on JS and native. Only the cause's class changes there (a migration item). |
 | 2026-10-25 | M4 · `ByteArrayEncoder` storage | **Chunks (B) kept** by the A/B, as pre-decided: one growable array loses to the `Buffer` on mid-size payloads (its doubling copies), the chunks win everywhere but `simple` @1 (−11% vs A). The merged code is the measured code; the small-record tweak (shared empty `IntArray`) is left for a later measured batch. |
 | 2026-10-24 | M4 · stream library | **User: remove the stream library from core entirely** (kotlinx-io; okio would be no faster, being the same segment design). Reasons: the speed comes from reading an array with a position, not from the library; kotlinx-io is 0.x and in the public API, with `@InternalIoApi` in the fast path; removing it is breaking, so v3.0, while adding a stream entry point back later is not. The stream API (`encodeToSink`/`decodeFromSource`, `AvroSingleObject`'s too) is removed with the user's approval. **If the shared array decoder remains, its name is `BufferedDecoder`.** Plan: `notes/m4-no-stream-library.md`. |

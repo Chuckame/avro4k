@@ -212,3 +212,35 @@ message of the thread is wrapped as if it were a root string. The code is identi
 
 **Issue:** *Specific deserializer throws ClassCastException after a failed root string/bytes read* — a bad record then
 breaks every following message of that consumer thread.
+
+## 13. `encodeToStream` writes nothing for a small value
+
+**Repro (main `6ad6c1c6`, 2026-10-25, throwaway test):** `Avro.encodeToStream(SimpleRecord("alice", 42), ByteArrayOutputStream())`
+→ the stream holds **0 bytes** (`encodeToByteArray` gives 7). Same with `AvroSingleObject.encodeToStream`. v3 removed
+both functions (okio/stream removal) and brings `encodeToStream` back as new code (`m4-jvm-streams.md`), so v3 is not
+affected; v2.x users are.
+
+**Cause:** `encodeToStream` is `encodeToSink(…, outputStream.asSink().buffered())`, and nothing flushes that buffered
+sink: kotlinx-io only emits complete 8 KiB segments on its own, so a value loses everything after its last complete
+segment (all of it under 8 KiB). Neither `encodeToSink` nor the encoder flushes, by design for a caller-owned sink.
+
+**Fix sketch:** `outputStream.asSink().buffered().also { encodeToSink(…, it) }.flush()` in the three `Avro` overloads and
+in `AvroSingleObject.encodeToStream`; test the stream's bytes against `encodeToByteArray`.
+
+**Issue:** *encodeToStream writes nothing to the OutputStream* — the deprecated function's `ReplaceWith` points to
+`encodeToSink`, which needs the same explicit `flush()`.
+
+## 14. A second `decodeFromStream` on the same stream fails
+
+**Repro (main `6ad6c1c6`, 2026-10-25, throwaway test):** two encoded `SimpleRecord`s in one `ByteArrayInputStream`;
+the first `Avro.decodeFromStream<SimpleRecord>(input)` returns the value and leaves **0 bytes** in the stream, the
+second throws `IllegalStateException: Unreachable`. `AvroSingleObject.decodeFromStream` has the same code (not run).
+v3 is not affected (same reason as #13).
+
+**Cause:** each call wraps the stream in a new `asSource().buffered()`, which reads up to 8 KiB ahead and is dropped
+with what it did not use. The exception is not an end-of-input `SerializationException`, a second smell.
+
+**Fix sketch:** document that one stream holds one value, or wrap a markable stream and rewind as v3 does
+(`m4-jvm-streams.md`, IO-7); map end of input to `SerializationException`.
+
+**Issue:** *decodeFromStream consumes more than one value from the InputStream*.

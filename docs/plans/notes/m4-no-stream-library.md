@@ -1,7 +1,8 @@
 # M4 — No stream library in core: kotlinx-io removed (plan, not started)
 
-**Status (2026-10-25):** IO-1, IO-2 and IO-4 done (chunks kept, `m4-bytearray-encoder.md`); §6 Q2 answered (an
-internal avro4k `EOFException`); Q1 open, both stream options compared in `m4-stream-options.md`; IO-3 waits for it.
+**Status (2026-10-25):** IO-1, IO-2 and IO-4 done (chunks kept, `m4-bytearray-encoder.md`); §6 answered: Q1 = (b),
+JVM `InputStream`/`OutputStream` in core (user, 2026-10-25), Q2 = an internal avro4k `EOFException`. The stream units
+(IO-5 … IO-9), the new order and IO-3's amendments are in `m4-jvm-streams.md`.
 Planned 2026-10-24. Decision: user, 2026-10-24 (`PROGRESS.md` decision
 log). Open questions for the user are in §6; the plan below assumes the recommended answers and says what changes
 otherwise.
@@ -159,7 +160,8 @@ Only the cause's class changes, on JS and native (a migration item).
 - **M5-07** (strings written without an intermediate array) relied on kotlinx-io's `sink.writeString`. Re-scoped: the
   string is encoded straight into `ByteArrayEncoder`'s array (`utf8Length()` to reserve the prefix, then the UTF-8
   loop writing in place; on the JVM, the threshold question stays).
-- **The branch `v3/one-cursor-decoder`** (`d4aae3bf`, a shared base for the `ByteArray` and stream decoders): with no
+- **Superseded on 2026-10-25 (Q1 = b): IO-6 merges the branch** (`m4-jvm-streams.md`).
+  **The branch `v3/one-cursor-decoder`** (`d4aae3bf`, a shared base for the `ByteArray` and stream decoders): with no
   stream input left, `ByteArrayDecoder` is the only array decoder, so the branch is **not merged**; it stays as the
   starting point if a stream input comes back, with the base class then named **`BufferedDecoder`** (user, 2026-10-24).
   Its pending A/B is dropped.
@@ -167,6 +169,9 @@ Only the cause's class changes, on JS and native (a migration item).
   setup) become obsolete; new item: a stream entry point again (adapter module or JVM streams), from that branch.
 
 ## 6. Open questions for the user
+
+Both answered on 2026-10-25: Q1 = **(b)** ("it still needs a way to encode/decode with java streams, it'll be an
+important need for JVM users"; plan in `m4-jvm-streams.md`), Q2 = the recommended internal class.
 
 1. **What replaces reading from a stream?** An Avro datum carries no length, so reading several datums back to back
    needs a decoder that knows where each one ends. The README documents it ("Encode many objects in the same

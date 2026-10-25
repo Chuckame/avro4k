@@ -1,6 +1,7 @@
 # M4 — Stream input and output without kotlinx-io in core: the two implementations compared
 
-**Status:** written 2026-10-25 for the user's choice on `m4-no-stream-library.md` §6 Q1 (they asked to see both
+**Status:** decided 2026-10-25: **(b)**, JVM streams in core (user: "it'll be an important need for JVM users"); plan
+in `m4-jvm-streams.md`. Written 2026-10-25 for the user's choice on `m4-no-stream-library.md` §6 Q1 (they asked to see both
 implementations before choosing). Q2 is answered: an internal avro4k `EOFException` (typealias to
 `java.io.EOFException` on the JVM). The code below is a **sketch, not compiled** (written while the encoder A/B held
 the machine); names and shapes are what a unit would build.

@@ -1,0 +1,190 @@
+# M4 — JVM streams in core, and the benchmarks of the next steps
+
+**Status:** planned 2026-10-25, not started. **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
+with java streams, it'll be an important need for JVM users": option **(b)** of `m4-stream-options.md` (§6 Q1 of
+`m4-no-stream-library.md`). `InputStream`/`OutputStream` functions in core's JVM source set, no stream library; kotlinx-io
+still leaves core (IO-3). Option (c), an `avro4k-kotlinx-io` module, is not in v3.0 and stays possible later without
+breaking anything (`backlog-after-v3.0.md` item 8).
+
+The rules of `m4-no-stream-library.md` §3 apply. **The approved API change grows by the eight stream functions of
+IO-7** (v2's names and shapes, `AvroSchema` instead of Apache's `Schema`); any other API change stops the unit.
+
+## 1. What v2 did, and what this must not repeat
+
+v2's `encodeToStream`/`decodeFromStream` (deprecated) were `encodeToSink(…, stream.asSink().buffered())` and
+`decodeFromSource(…, stream.asSource().buffered())`. Reproduced on `main` on 2026-10-25 (`backlog-pre-existing-bugs.md`
+#13 and #14):
+- **`encodeToStream` writes nothing for a small value** (7-byte record: 0 bytes in the stream; same for
+  `AvroSingleObject.encodeToStream`): the buffered sink is never flushed, so everything after the last complete 8 KiB
+  segment stays in it.
+- **A second `decodeFromStream` on the same stream fails** (`IllegalStateException: Unreachable`): each call reads
+  ahead into its own buffered source and drops what it did not use.
+
+v3's functions are new code; the two behaviours are their acceptance tests (IO-7), not fixes of v2.
+
+## 2. Units, in this order
+
+Each commit compiles and passes `ACC`: the stream functions arrive (IO-7) before kotlinx-io leaves (IO-3), so the
+stream benchmark rows switch from the kotlinx-io adapters to the new functions without a gap.
+
+| Order | Unit | What | Runs alone | Benchmark |
+|---|---|---|---|---|
+| 1 | IO-5 | stream benchmark rows, through today's kotlinx-io API | — | smoke only |
+| 2 | IO-6 | merge `v3/one-cursor-decoder`, base class renamed `BufferedDecoder` | — | none (measured by IO-8) |
+| 3 | IO-7 | `encodeToStream`/`decodeFromStream` in `jvmMain`, candidate A | yes (`apiDump`) | none (IO-8) |
+| 4 | IO-3 | kotlinx-io and its API removed (`m4-no-stream-library.md`, amended in §3 below) | yes (`apiDump`) | none (IO-8) |
+| 5 | IO-7b | candidate B: one commit on a branch off IO-3 | — | none (IO-8) |
+| 6 | IO-8 | A/B: base IO-5, A = IO-3's commit, B = IO-7b | machine | **~4½ h, overnight** |
+| 7 | IO-9 | v2 → v3: M0 against the head after IO-8 | machine | **~2¾ h** |
+
+Then M5's batch 1 (`m5-decomposition.md`), whose A/B also carries the encoder's open points (§5).
+
+### IO-5 · Stream benchmark rows (benchmark only, committed alone)
+
+So that IO-8's base measures what a JVM user does today with a stream, and the candidates the same task through the new
+functions.
+- avro4k, the three workloads (`Avro4kSimpleBenchmark`, `Avro4kBenchmark`, `Avro4kListsBenchmark`):
+  - `readFromStream()`: decodes `ByteArrayInputStream(data)`, created per call. At IO-5 through
+    `Avro.decodeFromSource(schema, input.asSource().buffered())`; IO-7 switches the body to `Avro.decodeFromStream`.
+  - `writeToStream()`: encodes into `OutputStream.nullOutputStream()` (created once). At IO-5 through
+    `Avro.encodeToSink(schema, value, output.asSink().buffered())` then `flush()`, the sink created per call as a caller
+    with a stream does; IO-7 switches it to `Avro.encodeToStream`.
+- Apache reflect, the three workloads: `readFromStream()` with `DecoderFactory.get().binaryDecoder(ByteArrayInputStream(data), decoder)`,
+  the decoder reused as Apache users do. Apache's `write` row already writes to a stream (a direct encoder over a
+  discarding stream) and is the write reference.
+- `readFromSource` stays until IO-3 (its history ends there; `readFromStream` at IO-5 is the same code path, so the two
+  rows continue each other).
+- A JMH configuration `streamab` with the rows of IO-8 (below), so every side runs the same set.
+- Acceptance: `./gradlew :benchmark:compileKotlin`; the orchestrator runs one smoke iteration of the new rows.
+
+### IO-6 · One array-reading decoder (merge)
+
+Merge `v3/one-cursor-decoder` (`d4aae3bf`; `v3/m2-foundation` has 8 commits since their common base): `ArrayCursorDecoder` holds every read,
+`ByteArrayDecoder` and `KotlinxIoDecoder` only say what follows the array. Rename `ArrayCursorDecoder` to
+`BufferedDecoder` (user, 2026-10-24). Conflicts are expected in the decoders touched since (none of the encoder work
+touched them). Its own A/B, dropped on 2026-10-24, is folded into IO-8: `read` must not move. Acceptance: `ACC`, test
+counts unchanged.
+
+### IO-7 · `encodeToStream`/`decodeFromStream` in core's JVM source set
+
+**API** (`apiDump` alone; the diff shows exactly these):
+- `Avro.encodeToStream(writerSchema, serializer, value, output)`, reified `encodeToStream(value, output)` and
+  `encodeToStream(writerSchema, value, output)`;
+- `Avro.decodeFromStream(writerSchema, deserializer, input)`, reified `decodeFromStream(input)` and
+  `decodeFromStream(writerSchema, input)`;
+- `AvroSingleObject.encodeToStream(writerSchema, serializer, value, output)` and `decodeFromStream(deserializer, input)`,
+  as JVM extensions (the class is in `commonMain`).
+- Same opt-in annotations as today's `encodeToSink`/`decodeFromSource`.
+
+**Contract** (KDoc and README):
+- `encodeToStream` hands every byte to the stream before returning; it neither flushes nor closes the stream.
+- `decodeFromStream` reads one value. When the stream supports `mark` (`BufferedInputStream`, `ByteArrayInputStream`),
+  it leaves the stream right after the value, so values written back to back are read back one call at a time;
+  otherwise the bytes read ahead are lost (KDoc: wrap the stream once in a `BufferedInputStream`). End of input inside a
+  value: `AvroMalformedDataException` (through `decodeWithValidation`, cause `java.io.EOFException`); an `IOException` of
+  the stream propagates unchanged.
+
+**Code:** `internal/codec/InputStreamDecoder.kt` (a `BufferedDecoder` that refills from the stream, rewinds with
+`mark`/`reset` and skips exactly the bytes read, `skipExactly` without Java 12's `skipNBytes`), the entry points in
+`AvroJvmStreams.kt`, `ByteArrayEncoder.writeTo(output)`. The sketch is `m4-stream-options.md` (b).
+
+**Two candidates, pre-decided, the A/B picks** (read rows and write rows are separate, so each side pairs one decoder
+policy with one encoder policy without mixing their effects):
+
+| | decoder's array | encoder's output |
+|---|---|---|
+| **A** (IO-7, main line) | 8 KiB, allocated per call | `ByteArrayEncoder`, then its chunks written to the stream |
+| **B** (IO-7b, branch) | sized from `input.available()`, clamped to 512 B – 8 KiB, doubled on each refill up to 8 KiB | the same encoder writing each full chunk to the stream and reusing one array, so memory stays bounded by the chunk size whatever the value's size |
+
+Why these: a `simple` @1 record is about 60 bytes, and zeroing an 8 KiB array per call may cost as much as decoding it
+(B should win small values); a 9.7 MB `lists` @10000 value is held whole by A before being written (B should win large
+values, and allocates less). If B wins only one family, IO-8 keeps the winner of each.
+
+**Tests** (jvmTest; counts before/after):
+- the two v2 behaviours of §1, as acceptance: a 7-byte value written whole; three values back to back read from one
+  `ByteArrayInputStream` and from one `BufferedInputStream` over a non-markable stream;
+- a stream returning one byte per `read`; values crossing a refill (varint, string, fixed, skipped writer-only field);
+  a value larger than the array;
+- a non-markable stream reads one value correctly; end of input mid-value; empty stream;
+- single object both ways, and its header split across a refill;
+- byte identity of `encodeToStream` with `encodeToByteArray` on the Apache oracle cases.
+
+**Acceptance:** `ACC`, `apiDump` diff = the eight functions.
+
+### IO-7b · Candidate B
+
+One commit on branch `v3/jvm-streams-b`, off IO-3's commit: the two policies of the table, nothing else (same tests).
+`ACC`. Deleted if A wins both families.
+
+### IO-8 · A/B and merge (orchestrator, overnight)
+
+- **Sides:** base = IO-5's commit (streams through kotlinx-io, today's decoder); **A** = IO-3's commit (one-cursor
+  decoder, JVM streams A, no kotlinx-io); **B** = IO-7b.
+- **Rows** (`streamab`), every workload and parameter:
+  - avro4k `readFromStream`, `writeToStream`: **the decision** (base → A → B);
+  - avro4k `read`, `writeToByteArray`: **regression check** of IO-6 and IO-3 (expected flat; they are not controls,
+    the code under them changed);
+  - Apache reflect `read`, `readFromStream`, `write`: **noise reference**, the same code and versions on every side.
+- **Method** (as IO-4): 5 rounds × 3 sides, side order rotated each round, 1 fork × 5 × 1 s warmup × 5 × 3 s,
+  escape analysis on. Then `benchmarkAlloc` once per side on the four avro4k methods, `-XX:-DoEscapeAnalysis`. AC
+  power, Low Power Mode off, load below 3 at each start, one `caffeinate -dimsu` over the whole run, `pmset -g log`
+  checked on lines starting with a date. About 48 rows per invocation: ~4½ h in all.
+- **Verdict rules:**
+  - read and write families decided separately: the candidate above the other on the most separated rows; a tie keeps
+    A (simpler);
+  - `read` or `writeToByteArray` below base by more than 3% and separated on any row: **stop before merging**, and
+    run base vs IO-6 alone on `read` to tell the decoder merge from the removal;
+  - expected, to check: stream reads at least as fast as base everywhere; stream writes above base (no `Buffer`).
+- Numbers into `benchmark/README.md` ("Results — JVM streams without kotlinx-io") in the commit that merges the kept
+  candidate (or in IO-3's line if A is kept, with a docs commit).
+
+### IO-9 · v2 → v3: M0 against the head (orchestrator)
+
+Answers "how much faster is v3 than v2 on the JVM", for the release notes and the README. The last such run stopped at
+the end of M3 (`benchmark/README.md`, "M3 complete"); everything since (the decoders on a plain array, the
+`ByteArrayEncoder`, the JVM streams) was measured only against its own base.
+- **Sides:** **v2** = `4508a13` (M0) plus one benchmark-only commit on branch `bench/v2-rows`, adding the rows below
+  with v2's API; **v3** = the head after IO-8.
+- **Rows**, the three workloads, every parameter:
+  - avro4k `read` (`decodeFromByteArray` on both);
+  - avro4k `readFromStream`: v2's `decodeFromStream(schema, serializer, ByteArrayInputStream(data))` (one value per
+    stream, which v2 reads correctly) / v3's `decodeFromStream`;
+  - avro4k `writeToStream`: v2's `encodeToStream` writes nothing (§1), so its row is
+    `encodeToSink(schema, value, output.asSink().buffered())` then `flush()`, what a working v2 caller wrote / v3's
+    `encodeToStream`;
+  - avro4k `writeToByteArray`: `encodeToByteArray` on both;
+  - Apache `SpecificData` `read` and `write`: context for the "÷ Apache" columns only. Apache is 1.12.1 on v2 and 1.12.2
+    on v3 and moved by −32% to +18% between them, so it is **not** a noise reference: verdicts rest on separation.
+  - The old `write` row (to a kotlinx-io `Sink`) is not run: v3 has no `Sink`; `writeToStream` replaces it.
+- **Method:** the "M3 complete" protocol: 5 invocations per side alternated (1 fork × 5 × 1 s + 5 × 3 s, escape
+  analysis on), then `benchmarkAlloc` once per side on the avro4k rows, EA off. Same machine conditions as IO-8. ~2¾ h.
+- **Report:** `benchmark/README.md`, "Results — v2 against v3 on the JVM (4508a13 vs …)": per row v2, v3, Δ, separated,
+  verdict, ÷ Apache; B/op v2 → v3; the Kotlin, Apache and Jackson versions of each side. It supersedes "M3 complete" as
+  the current state. `PROGRESS.md` "Measured numbers" updated.
+
+## 3. What changes in IO-3 (`m4-no-stream-library.md` §4)
+
+- Runs after IO-7, not before: the stream rows already call the new functions.
+- **Benchmark:** `readFromSource` and the avro4k `write` rows (kotlinx-io `Sink`) are removed; `writeToStream` and
+  `readFromStream` continue them.
+- **Docs:** README "JVM stream encoding" stays, rewritten with `encodeToStream`/`decodeFromStream`; "Encode many objects
+  in the same stream" shows a `BufferedInputStream` wrapped once, and `ByteArray` concatenation off the JVM.
+- **Migration item** (`b8-migration-items.md`): users of `encodeToSink`/`decodeFromSource` → on the JVM,
+  `encodeToStream(…, sink.asOutputStream())` / `decodeFromStream(…, source.asInputStream())` (kotlinx-io's own
+  adapters; for several values from one source, the input stream wrapped once in a `BufferedInputStream`); off the JVM,
+  `ByteArray`. Users of v2's deprecated `encodeToStream`/`decodeFromStream`: same names, with `AvroSchema`.
+- `jvmMain` keeps `java.io.EOFException` directly; the `expect` class of §4.3 is for common code.
+
+## 4. Effect on the rest of the plan
+
+- `m4-no-stream-library.md` §5's "branch not merged" no longer holds: IO-6 merges it.
+- `backlog-after-v3.0.md` item 8: JVM streams done in v3.0 (IO-7); a kotlinx-io module stays possible later.
+- `backlog-after-v3.0.md` item 5 (benchmark setup decoding through the measured path) applies to `readFromStream` too,
+  if its large rows show the bimorphic calls `readFromSource` did.
+
+## 5. Benchmarks after these units (already planned elsewhere)
+
+- **M5's batch 1 A/B** carries `m4-bytearray-encoder.md`'s open points as extra candidates in the same run: one shared
+  empty `IntArray` (expected to close part of `simple` @1's gap to one array) and a first chunk of 64 B against 256 B.
+- **M5-00, multiplatform benchmarks:** `read`, `writeToByteArray` on JS and native, where the removed kotlinx-io
+  allocated an 8 KiB segment per `encodeToByteArray` call (the native gain still to measure). Streams are JVM only.
