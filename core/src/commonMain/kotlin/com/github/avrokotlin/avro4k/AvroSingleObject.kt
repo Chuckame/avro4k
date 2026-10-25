@@ -2,14 +2,14 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import com.github.avrokotlin.avro4k.internal.decodeWithValidation
+import com.github.avrokotlin.avro4k.internal.encodeWithValidation
 import com.github.avrokotlin.avro4k.internal.endOfInputError
 import com.github.avrokotlin.avro4k.internal.parsingFingerprintCrc64AvroBytes
-import kotlinx.io.Buffer
 import kotlinx.io.EOFException
 import kotlinx.io.Sink
 import kotlinx.io.Source
-import kotlinx.io.readByteArray
 import kotlinx.serialization.BinaryFormat
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
@@ -48,8 +48,8 @@ public class AvroSingleObject(
      * finds the fingerprint of an equal one, and is never remembered by identity (see [IdentityFirstCache]).
      *
      * The cached values are mutable [ByteArray]s, but they never escape: [crc64avro] is private, and its
-     * only caller hands the array to [Sink.write], which copies the bytes out and neither retains nor
-     * mutates the array. No public API exposes the fingerprint bytes.
+     * callers hand the array to [Sink.write] or to the encoder's `writeFixed`, which copy the bytes out and neither
+     * retain nor mutate the array. No public API exposes the fingerprint bytes.
      */
     private val fingerprintCache = IdentityFirstCache<AvroSchema, ByteArray>()
 
@@ -66,6 +66,20 @@ public class AvroSingleObject(
         sink.writeByte(FORMAT_VERSION)
         sink.write(writerSchema.crc64avro())
         avro.encodeToSink(writerSchema, serializer, value, sink)
+    }
+
+    /** The header then the value, in one array. */
+    internal fun <T> encodeWithHeader(
+        writerSchema: AvroSchema,
+        serializer: SerializationStrategy<T>,
+        value: T,
+    ): ByteArray {
+        val encoder = ByteArrayEncoder()
+        encoder.writeByte(MAGIC_BYTE)
+        encoder.writeByte(FORMAT_VERSION)
+        encoder.writeFixed(writerSchema.crc64avro())
+        avro.encodeWithValidation(writerSchema, serializer, value, encoder)
+        return encoder.toByteArray()
     }
 
     public fun <T> decodeFromSource(
@@ -130,9 +144,7 @@ public fun <T> AvroSingleObject.encodeToByteArray(
     serializer: SerializationStrategy<T>,
     value: T,
 ): ByteArray {
-    val sink = Buffer()
-    encodeToSink(writerSchema, serializer, value, sink)
-    return sink.readByteArray()
+    return encodeWithHeader(writerSchema, serializer, value)
 }
 
 public inline fun <reified T> AvroSingleObject.encodeToByteArray(

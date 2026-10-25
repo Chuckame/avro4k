@@ -5,11 +5,11 @@ import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.PolymorphicResolver
 import com.github.avrokotlin.avro4k.internal.RecordResolver
 import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import com.github.avrokotlin.avro4k.internal.decodeWithValidation
 import com.github.avrokotlin.avro4k.internal.defaultSerializersModule
+import com.github.avrokotlin.avro4k.internal.encodeWithValidation
 import com.github.avrokotlin.avro4k.internal.schema.ValueVisitor
-import kotlinx.io.Buffer
-import kotlinx.io.readByteArray
 import kotlinx.serialization.BinaryFormat
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.KSerializer
@@ -135,9 +135,9 @@ public sealed class Avro(
         serializer: SerializationStrategy<T>,
         value: T,
     ): ByteArray {
-        val buffer = Buffer()
-        encodeToSink(writerSchema, serializer, value, buffer)
-        return buffer.readByteArray()
+        val encoder = ByteArrayEncoder()
+        encodeWithValidation(writerSchema, serializer, value, encoder)
+        return encoder.toByteArray()
     }
 
     /**

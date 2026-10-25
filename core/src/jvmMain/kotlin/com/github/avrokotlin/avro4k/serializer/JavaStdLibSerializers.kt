@@ -11,7 +11,7 @@ import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.convertForEncoding
 import com.github.avrokotlin.avro4k.internal.schema.fixedSize
@@ -21,9 +21,7 @@ import com.github.avrokotlin.avro4k.trySelectFixedSchemaForSize
 import com.github.avrokotlin.avro4k.trySelectLogicalTypeFromUnion
 import com.github.avrokotlin.avro4k.trySelectTypeNameFromUnion
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
-import kotlinx.io.Buffer
 import kotlinx.io.EOFException
-import kotlinx.io.readByteArray
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -422,11 +420,10 @@ private fun BigDecimal.validateDecimal(schema: AvroSchema): BigDecimal {
 
 /** `BigDecimalConversion.toBytes`: the unscaled value as length-prefixed bytes, then the scale, both in Avro's binary encoding. */
 private fun BigDecimal.toBigDecimalBytes(): ByteArray {
-    val buffer = Buffer()
-    val encoder = KotlinxIoEncoder(buffer)
+    val encoder = ByteArrayEncoder()
     encoder.writeBytes(unscaledValue().toByteArray())
     encoder.writeInt(scale())
-    return buffer.readByteArray()
+    return encoder.toByteArray()
 }
 
 /**

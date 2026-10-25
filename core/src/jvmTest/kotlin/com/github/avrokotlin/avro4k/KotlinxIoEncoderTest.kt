@@ -1,6 +1,7 @@
 package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -104,6 +105,7 @@ class KotlinxIoEncoderTest : StringSpec() {
             cases.forEachIndexed { index, (abiCalls, apacheCalls) ->
                 val buffer = Buffer()
                 KotlinxIoEncoder(buffer).abiCalls()
+                val byteArrayEncoder = ByteArrayEncoder().apply(abiCalls)
 
                 val output = ByteArrayOutputStream()
                 val apacheEncoder = EncoderFactory.get().directBinaryEncoder(output, null)
@@ -111,6 +113,7 @@ class KotlinxIoEncoderTest : StringSpec() {
                 apacheEncoder.flush()
 
                 (index to buffer.readByteArray().toList()) shouldBe (index to output.toByteArray().toList())
+                (index to byteArrayEncoder.toByteArray().toList()) shouldBe (index to output.toByteArray().toList())
             }
         }
     }
