@@ -1,6 +1,6 @@
-# M4 — No stream library in core: kotlinx-io removed (plan, not started)
+# M4 — No stream library in core: kotlinx-io removed
 
-**Status (2026-10-25):** IO-1, IO-2 and IO-4 done (chunks kept, `m4-bytearray-encoder.md`); §6 answered: Q1 = (b),
+**Status (2026-10-25):** IO-1, IO-2, IO-4 and IO-3 done (IO-3's findings in §7) (chunks kept, `m4-bytearray-encoder.md`); §6 answered: Q1 = (b),
 JVM `InputStream`/`OutputStream` in core (user, 2026-10-25), Q2 = an internal avro4k `EOFException`. The stream units
 (IO-5 … IO-9), the new order and IO-3's amendments are in `m4-jvm-streams.md`.
 Planned 2026-10-24. Decision: user, 2026-10-24 (`PROGRESS.md` decision
@@ -188,3 +188,38 @@ important need for JVM users"; plan in `m4-jvm-streams.md`), Q2 = the recommende
    decoder lives in the JVM source set or the new module.
 2. **End-of-input cause on JS and native:** an internal avro4k class (recommended, §4.3), so callers there can no
    longer test the cause's class; or none at all. On the JVM it stays `java.io.EOFException`.
+
+## 7. IO-3 findings (2026-10-25)
+
+- **API:** `apiDump` removes exactly the eight functions (4 lines in `core.api`, the reified ones are not listed there;
+  8 in `core.klib.api`). `kotlinx-io-core` leaves `core/build.gradle.kts` and `libs.versions.toml` (nothing else used it).
+  `grep -rn "kotlinx.io" core/src` is empty, historical KDoc mentions included (the dot matches `kotlinx-io` too).
+- **End of input:** `internal expect open class EOFException(message: String?) : Exception` in `Platform.kt`; JVM
+  `actual typealias` to `java.io.EOFException`, JS and native a plain subclass in `nonJvmMain`.
+- **`AvroDuration`** reads its three ints with a local `getIntLe`, the mirror of `putIntLe`; the comment about Kotlin/Native
+  `Buffer` segments went with it.
+- **Tests, ported to `ByteArrayEncoder`/`ByteArrayDecoder`, same counts:** `ByteArrayDecoderTest` 13 (its "reads as the
+  stream decoder" test now checks the written values), `AvroSchemaSkipTest` 11, `AvroSerializationExceptionTest` 19 (the
+  `decodeFromSource` cases of the truncated-input test dropped, the `ByteArray` ones kept), `CollectionBlockGuardsTest` 9,
+  `ValidatingAvroBinaryCodecTest` 32; JVM: `JvmAvroSerializationExceptionTest` 5, `ValidatingCodecDifferentialTest` 3,
+  `AvroSchemaHelpersDifferentialTest` 10 (the twice-skipped value checked with `isExhausted`), `FreshWriterSchemaCacheTest`
+  4, `ReadBytesBufferBoundsTest` 8 (its segment test reads through `decodeFromStream`, a value longer than the refilled
+  array), `RecordEncodingTest` 17 (the piped-stream test decodes with `InputStreamDecoder` without the end check, which
+  waits for the producer by contract), `KotlinxIoEncoderTest` → `ByteArrayEncoderApacheTest` 3.
+- **Tests removed or moved:** `KotlinxIoCodecTest` (16) → `BinaryCodecTest` (11): removed "a string split across buffer
+  segments", "reading goes on after a release", "values decoded one after the other from a source" (kotlinx-io `Source`
+  behaviour), "a string longer than the remaining input" (same as `ByteArrayDecoderTest`'s); "every value split across
+  two segments" moved to the JVM `InputStreamDecoderTest`, on the refill. `VarintTest` (14) → 6: the two "read from the
+  segment array" tests duplicated `ByteArrayDecoderTest`'s; the split, one-byte, malformed and truncated cases on a
+  `Source` are covered on arrays by `ByteArrayDecoderTest` and on the refill by `InputStreamDecoderTest` (3 tests).
+  `InputStreamDecoderTest` is new (4, JVM).
+- **Benchmark:** avro4k `readFromSource` and `write` removed (`readFromStream`/`writeToStream` continue them), the six
+  micro classes write with `encodeToByteArray` (their `write*` methods return the array), `ManualProfilingWrite` calls
+  `writeToStream`. Apache and Jackson classes untouched.
+- **Docs:** README "Encode many objects in the same stream" (JVM: `encodeToStream` then `decodeFromByteBuffer` value by
+  value; off the JVM, one array per value or a length prefix) and "Custom encoding with a Buffer" → "Custom framing"
+  (`DataOutputStream` around `encodeToByteArray`; v2's example did not compile). `Migrating-from-v2.md`: checklist,
+  "Streams, kotlinx-io and okio", the changed-signature and removed-API tables, the dependency section, truncated input.
+  `b8-migration-items.md`: #318 and #319 marked superseded, a kotlinx-io item, the truncated-input item.
+- No hot method changed (the decoders only changed imports; the JVM's end-of-input class is the same), so no `javap`
+  sizes.

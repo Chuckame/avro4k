@@ -195,14 +195,22 @@ One line each, with where the details are. Not rewritten here.
 ## Removed or changed by the GitHub "V3" issues (user decisions, 2026-10-09)
 
 - **#318:** the deprecated okio overloads (`Avro.encodeToSink`/`decodeFromSource` on `okio.BufferedSink`/`BufferedSource`,
-  all three shapes of each) are removed; core no longer depends on okio, so it no longer comes transitively. Use the
-  kotlinx-io overloads: `kotlinx-io-okio` bridges an okio stream (`source.asKotlinxIoRawSource().buffered()`,
-  `sink.asKotlinxIoRawSink().buffered()`, then flush the sink). Behaviour change: the removed okio decoding overload
-  consumed exactly the decoded bytes from the okio source; a buffered kotlinx-io source reads ahead, so decode consecutive
-  values from the same kotlinx-io `Source` rather than re-wrapping the okio source each time.
-- **#319:** the deprecated `Avro.encodeToStream`/`decodeFromStream` (all three shapes of each) and
-  `AvroSingleObject.encodeToStream`/`decodeFromStream` are removed. Use the kotlinx-io overloads
-  (`outputStream.asSink().buffered()` / `inputStream.asSource().buffered()` wrap a Java stream; flush or close the sink).
+  all three shapes of each) are removed; core no longer depends on okio, so it no longer comes transitively. *Superseded
+  2026-10-25 by the kotlinx-io removal below:* on the JVM, `encodeToStream`/`decodeFromStream` with okio's
+  `sink.outputStream()`/`source.inputStream()`, one value per source; elsewhere `ByteArray`. The removed okio decoding
+  overload consumed exactly the decoded bytes, so it read values back to back: see the kotlinx-io item for that.
+- **#319:** *superseded 2026-10-25 (user: JVM streams are an important need, `m4-jvm-streams.md`):* the
+  `Avro.encodeToStream`/`decodeFromStream` (all three shapes of each) and `AvroSingleObject.encodeToStream`/
+  `decodeFromStream` **stay**, no longer deprecated, with `AvroSchema`; the `AvroSingleObject` ones become JVM
+  extension functions (an import if the caller is in another package). Behaviour changes: `encodeToStream` writes every
+  byte (v2 wrote nothing for a small value, #13 of the pre-existing bugs); `decodeFromStream` reads one value per stream
+  and throws on bytes after it (v2 returned the first value and lost the rest, #14).
+- **The kotlinx-io API is removed** (user, 2026-10-24; `m4-no-stream-library.md`): `Avro.encodeToSink`/
+  `decodeFromSource` (all three shapes of each) and `AvroSingleObject.encodeToSink`/`decodeFromSource`; core no longer
+  depends on kotlinx-io. Who: their users, v2 included (v2 had them). What to do: on the JVM,
+  `encodeToStream(…, sink.asOutputStream())` / `decodeFromStream(…, source.asInputStream())` (kotlinx-io's own
+  adapters), one value per source; several values from one source: its bytes read into a `ByteBuffer`, then
+  `decodeFromByteBuffer` value by value; off the JVM, `encodeToByteArray` / `decodeFromByteArray`.
   Not removed (never deprecated): `Avro.decodeFromByteBuffer` and `AvroObjectContainer`'s `OutputStream`/`InputStream`
   entry points (`openWriter`, `decodeFromStream`).
 - **#320:** `Record` and `ListRecord` are removed; `encodeToGenericData` returns an Apache `GenericData.Record`
@@ -349,9 +357,10 @@ One line each, with where the details are. Not rewritten here.
 - **Schema generation messages end with ` (at '<path>')`**, the element that failed from the root type
   (`com.example.Order.lines[].product<com.example.Digital>.price`). Code comparing generation messages exactly must
   append it, or compare with `startsWith`.
-- **Truncated input, on every input including `decodeFromSource`, throws `AvroMalformedDataException`** (the
-  `EOFException` as its cause) instead of kotlinx-io's/Java's `EOFException`. Who: code that reads datums back to back
-  from a `Source` until an `EOFException`. What to do: check `source.exhausted()` before each decode.
+- **Truncated input, on every input, throws `AvroMalformedDataException`** (the end of input as its cause:
+  `java.io.EOFException` on the JVM, an internal class on JS and native) instead of kotlinx-io's/Java's `EOFException`.
+  Who: code that reads datums back to back until an `EOFException`. What to do: check `buffer.hasRemaining()` before
+  each `decodeFromByteBuffer`.
 - **Exception classes that changed** (each now an `AvroSerializationException` subclass, the original as `cause` where
   one existed). Code catching the old class stops catching:
   - `IllegalStateException`: `AvroSingleObject`'s bad magic/version byte, two Kotlin properties matching one writer field
