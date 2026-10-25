@@ -235,12 +235,12 @@ in `AvroSingleObject.encodeToStream`; test the stream's bytes against `encodeToB
 **Repro (main `6ad6c1c6`, 2026-10-25, throwaway test):** two encoded `SimpleRecord`s in one `ByteArrayInputStream`;
 the first `Avro.decodeFromStream<SimpleRecord>(input)` returns the value and leaves **0 bytes** in the stream, the
 second throws `IllegalStateException: Unreachable`. `AvroSingleObject.decodeFromStream` has the same code (not run).
-v3 is not affected (same reason as #13).
+v3 is not affected: its new `decodeFromStream` reads one value per stream and throws on leftover bytes.
 
 **Cause:** each call wraps the stream in a new `asSource().buffered()`, which reads up to 8 KiB ahead and is dropped
 with what it did not use. The exception is not an end-of-input `SerializationException`, a second smell.
 
-**Fix sketch:** document that one stream holds one value, or wrap a markable stream and rewind as v3 does
-(`m4-jvm-streams.md`, IO-7); map end of input to `SerializationException`.
+**Fix sketch:** document that one stream holds one value and throw on leftover bytes, as v3 does
+(`m4-jvm-streams.md`, IO-7) and as `Json.decodeFromStream` does; map end of input to `SerializationException`.
 
 **Issue:** *decodeFromStream consumes more than one value from the InputStream*.

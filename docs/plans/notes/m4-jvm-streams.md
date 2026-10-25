@@ -6,6 +6,18 @@ with java streams, it'll be an important need for JVM users": option **(b)** of 
 still leaves core (IO-3). Option (c), an `avro4k-kotlinx-io` module, is not in v3.0 and stays possible later without
 breaking anything (`backlog-after-v3.0.md` item 8).
 
+**Decided with it (user, 2026-10-25):** the shared decoder base is merged (IO-6) and `decodeFromStream` reads the stream
+as it decodes, with **kotlinx-serialization-json's contract: one value per stream**, leftover bytes an error, no
+rewinding. The codec classes stay `@InternalAvro4kApi` in v3.0; making them public as experimental is decided after M5
+(`backlog-after-v3.0.md` item 10).
+
+How kotlinx-serialization-json does it (1.11.0 sources, `jvmMain/JvmStreams.kt`), the model followed here:
+`Json.encodeToStream`/`decodeFromStream`/`decodeToSequence(InputStream)` in the JSON artifact itself, JVM only,
+`@ExperimentalSerializationApi`; kotlinx-io and okio in separate artifacts (`kotlinx-serialization-json-io`, `-okio`).
+Writing goes through a pooled 512-byte array written to the stream whenever full and once at the end, the stream never
+flushed nor closed. Reading goes through a pooled 8 KiB buffer read ahead, never rewound, then `expectEof()`: "exactly
+one object would be present in the stream" and dangling bytes throw. Several values: `decodeToSequence`.
+
 The rules of `m4-no-stream-library.md` §3 apply. **The approved API change grows by the eight stream functions of
 IO-7** (v2's names and shapes, `AvroSchema` instead of Apache's `Schema`); any other API change stops the unit.
 
@@ -20,7 +32,8 @@ v2's `encodeToStream`/`decodeFromStream` (deprecated) were `encodeToSink(…, st
 - **A second `decodeFromStream` on the same stream fails** (`IllegalStateException: Unreachable`): each call reads
   ahead into its own buffered source and drops what it did not use.
 
-v3's functions are new code; the two behaviours are their acceptance tests (IO-7), not fixes of v2.
+v3's functions are new code. The first behaviour is an acceptance test of IO-7; the second is replaced by a contract:
+one value per stream, and a stream holding more fails on the first call instead of silently losing the rest.
 
 ## 2. Units, in this order
 
@@ -31,7 +44,7 @@ stream benchmark rows switch from the kotlinx-io adapters to the new functions w
 |---|---|---|---|---|
 | 1 | IO-5 | stream benchmark rows, through today's kotlinx-io API | — | smoke only |
 | 2 | IO-6 | merge `v3/one-cursor-decoder`, base class renamed `BufferedDecoder` | — | none (measured by IO-8) |
-| 3 | IO-7 | `encodeToStream`/`decodeFromStream` in `jvmMain`, candidate A | yes (`apiDump`) | none (IO-8) |
+| 3 | IO-7 | `encodeToStream`/`decodeFromStream` in `jvmMain`, one value per stream, candidate A | yes (`apiDump`) | none (IO-8) |
 | 4 | IO-3 | kotlinx-io and its API removed (`m4-no-stream-library.md`, amended in §3 below) | yes (`apiDump`) | none (IO-8) |
 | 5 | IO-7b | candidate B: one commit on a branch off IO-3 | — | none (IO-8) |
 | 6 | IO-8 | A/B: base IO-5, A = IO-3's commit, B = IO-7b | machine | **~4½ h, overnight** |
@@ -78,15 +91,21 @@ counts unchanged.
 
 **Contract** (KDoc and README):
 - `encodeToStream` hands every byte to the stream before returning; it neither flushes nor closes the stream.
-- `decodeFromStream` reads one value. When the stream supports `mark` (`BufferedInputStream`, `ByteArrayInputStream`),
-  it leaves the stream right after the value, so values written back to back are read back one call at a time;
-  otherwise the bytes read ahead are lost (KDoc: wrap the stream once in a `BufferedInputStream`). End of input inside a
-  value: `AvroMalformedDataException` (through `decodeWithValidation`, cause `java.io.EOFException`); an `IOException` of
-  the stream propagates unchanged.
+- `decodeFromStream` reads **exactly one value per stream**, as `Json.decodeFromStream`: it reads the stream as it
+  decodes (an array refilled, never the whole input at once), then requires the stream to end. Bytes left in the array,
+  or `read()` not returning -1, throw `AvroMalformedDataException("Not all bytes were consumed during deserialization")`,
+  as `decodeFromByteArray` does. The stream is neither rewound nor closed. End of input inside a value:
+  `AvroMalformedDataException` (through `decodeWithValidation`, cause `java.io.EOFException`); an `IOException` of the
+  stream propagates unchanged. KDoc: several values written back to back are read with `decodeFromByteBuffer` (a
+  `ByteBuffer` keeps its position after each value); a `decodeToSequence(InputStream)` may come later
+  (`backlog-after-v3.0.md` item 9).
+- Behaviour change from v2, a migration item: v2 returned the first value of a stream holding several and dropped the
+  rest (#14); v3 throws on that stream.
 
-**Code:** `internal/codec/InputStreamDecoder.kt` (a `BufferedDecoder` that refills from the stream, rewinds with
-`mark`/`reset` and skips exactly the bytes read, `skipExactly` without Java 12's `skipNBytes`), the entry points in
-`AvroJvmStreams.kt`, `ByteArrayEncoder.writeTo(output)`. The sketch is `m4-stream-options.md` (b).
+**Code:** `internal/codec/InputStreamDecoder.kt`, a `BufferedDecoder` that refills from the stream, with `skipAcross`
+reading or skipping past the array (`skipExactly`, without Java 12's `skipNBytes`) and an `ensureEnd()` for the
+contract above; the entry points in `AvroJvmStreams.kt`; `ByteArrayEncoder.writeTo(output)`. The sketch is
+`m4-stream-options.md` (b) without its `mark`/`reset` part (`rewindable`, `release`).
 
 **Two candidates, pre-decided, the A/B picks** (read rows and write rows are separate, so each side pairs one decoder
 policy with one encoder policy without mixing their effects):
@@ -101,11 +120,11 @@ Why these: a `simple` @1 record is about 60 bytes, and zeroing an 8 KiB array pe
 values, and allocates less). If B wins only one family, IO-8 keeps the winner of each.
 
 **Tests** (jvmTest; counts before/after):
-- the two v2 behaviours of §1, as acceptance: a 7-byte value written whole; three values back to back read from one
-  `ByteArrayInputStream` and from one `BufferedInputStream` over a non-markable stream;
+- the v2 behaviours of §1: a 7-byte value written whole; a stream holding two values throws on the first call (leftover
+  bytes in the array, and leftover bytes only reached by `read()` after a value ending exactly at a refill);
 - a stream returning one byte per `read`; values crossing a refill (varint, string, fixed, skipped writer-only field);
   a value larger than the array;
-- a non-markable stream reads one value correctly; end of input mid-value; empty stream;
+- end of input mid-value; empty stream; the stream is not closed;
 - single object both ways, and its header split across a refill;
 - byte identity of `encodeToStream` with `encodeToByteArray` on the Apache oracle cases.
 
@@ -167,18 +186,25 @@ the end of M3 (`benchmark/README.md`, "M3 complete"); everything since (the deco
 - Runs after IO-7, not before: the stream rows already call the new functions.
 - **Benchmark:** `readFromSource` and the avro4k `write` rows (kotlinx-io `Sink`) are removed; `writeToStream` and
   `readFromStream` continue them.
-- **Docs:** README "JVM stream encoding" stays, rewritten with `encodeToStream`/`decodeFromStream`; "Encode many objects
-  in the same stream" shows a `BufferedInputStream` wrapped once, and `ByteArray` concatenation off the JVM.
-- **Migration item** (`b8-migration-items.md`): users of `encodeToSink`/`decodeFromSource` → on the JVM,
-  `encodeToStream(…, sink.asOutputStream())` / `decodeFromStream(…, source.asInputStream())` (kotlinx-io's own
-  adapters; for several values from one source, the input stream wrapped once in a `BufferedInputStream`); off the JVM,
-  `ByteArray`. Users of v2's deprecated `encodeToStream`/`decodeFromStream`: same names, with `AvroSchema`.
+- **Docs:** README "JVM stream encoding" stays, rewritten with `encodeToStream`/`decodeFromStream` (one value per
+  stream); "Encode many objects in the same stream" writes the values one after another, then reads them back with
+  `decodeFromByteBuffer` on the JVM (the buffer's position moves past each value); off the JVM, `ByteArray` only.
+- **Migration items** (`b8-migration-items.md`):
+  - users of `encodeToSink`/`decodeFromSource` → on the JVM, `encodeToStream(…, sink.asOutputStream())` /
+    `decodeFromStream(…, source.asInputStream())` (kotlinx-io's own adapters), one value per source; several values
+    from one source: its bytes read into a `ByteBuffer`, then `decodeFromByteBuffer` value by value; off the JVM,
+    `ByteArray`;
+  - users of v2's deprecated `encodeToStream`/`decodeFromStream`: same names, with `AvroSchema`; a stream holding more
+    than one value now throws instead of returning the first one.
 - `jvmMain` keeps `java.io.EOFException` directly; the `expect` class of §4.3 is for common code.
 
 ## 4. Effect on the rest of the plan
 
 - `m4-no-stream-library.md` §5's "branch not merged" no longer holds: IO-6 merges it.
-- `backlog-after-v3.0.md` item 8: JVM streams done in v3.0 (IO-7); a kotlinx-io module stays possible later.
+- README "Encode many objects in the same stream" (IO-3's docs): on the JVM, `decodeFromByteBuffer` value by value;
+  `decodeFromStream` is one value per stream.
+- `backlog-after-v3.0.md`: item 8 (JVM streams done in v3.0, a kotlinx-io module possible later), item 9
+  (`decodeToSequence(InputStream)`), item 10 (public experimental codec classes, after M5).
 - `backlog-after-v3.0.md` item 5 (benchmark setup decoding through the measured path) applies to `readFromStream` too,
   if its large rows show the bimorphic calls `readFromSource` did.
 
