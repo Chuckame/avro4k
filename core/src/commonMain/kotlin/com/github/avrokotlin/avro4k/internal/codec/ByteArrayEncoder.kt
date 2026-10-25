@@ -9,8 +9,14 @@ import com.github.avrokotlin.avro4k.internal.encodeToUtf8
  * The bytes go into chunks: the first one small, enough for a typical record, each next one twice the previous up to
  * [MAX_CHUNK_SIZE], so that growing never copies what is already written. [toByteArray] copies the chunks into an array
  * of their exact size.
+ *
+ * With [writeFullChunk], each full chunk is handed to it instead of being kept, and its array reused once the chunks
+ * have reached [MAX_CHUNK_SIZE]: the memory held stays bounded by the chunk size whatever the value's size. Only
+ * [writeChunksTo] then hands the rest, [toByteArray] no longer holding every byte.
  */
-internal class ByteArrayEncoder : AvroBinaryEncoder() {
+internal class ByteArrayEncoder(
+    private val writeFullChunk: ((chunk: ByteArray, length: Int) -> Unit)? = null,
+) : AvroBinaryEncoder() {
     /** The chunk being written. */
     private var bytes = ByteArray(FIRST_CHUNK_SIZE)
     private var position = 0
@@ -229,6 +235,15 @@ internal class ByteArrayEncoder : AvroBinaryEncoder() {
 
     /** Keeps the current chunk with the bytes written in it, and starts a new one of at least [byteCount] bytes. */
     private fun nextChunk(byteCount: Int) {
+        val writeFullChunk = writeFullChunk
+        if (writeFullChunk != null) {
+            writeFullChunk(bytes, position)
+            if (bytes.size < MAX_CHUNK_SIZE || bytes.size < byteCount) {
+                bytes = ByteArray(maxOf((bytes.size shl 1).coerceAtMost(MAX_CHUNK_SIZE), byteCount))
+            }
+            position = 0
+            return
+        }
         val size = fullSize.toLong() + position + byteCount
         if (size > MAX_BINARY_LENGTH) {
             throw IllegalStateException("The encoded value does not fit in an array: more than $MAX_BINARY_LENGTH bytes")

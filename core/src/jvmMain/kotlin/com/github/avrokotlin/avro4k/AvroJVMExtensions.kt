@@ -38,9 +38,10 @@ public fun <T> Avro.encodeToStream(
     value: T,
     outputStream: OutputStream,
 ) {
-    val encoder = ByteArrayEncoder()
+    val write = outputStream.chunkWriter()
+    val encoder = ByteArrayEncoder(write)
     encodeWithValidation(writerSchema, serializer, value, encoder)
-    encoder.writeChunksTo { chunk, length -> outputStream.write(chunk, 0, length) }
+    encoder.writeChunksTo(write)
 }
 
 /**
@@ -151,10 +152,14 @@ public fun <T> AvroSingleObject.encodeToStream(
     value: T,
     outputStream: OutputStream,
 ) {
-    val encoder = ByteArrayEncoder()
+    val write = outputStream.chunkWriter()
+    val encoder = ByteArrayEncoder(write)
     encodeWithHeader(writerSchema, serializer, value, encoder)
-    encoder.writeChunksTo { chunk, length -> outputStream.write(chunk, 0, length) }
+    encoder.writeChunksTo(write)
 }
+
+/** Writes each chunk to the stream as the encoder fills it, so that a large value is never held whole. */
+private fun OutputStream.chunkWriter(): (ByteArray, Int) -> Unit = { chunk, length -> write(chunk, 0, length) }
 
 /**
  * Decodes the single Avro object held by the [inputStream], with the writer schema its header names.

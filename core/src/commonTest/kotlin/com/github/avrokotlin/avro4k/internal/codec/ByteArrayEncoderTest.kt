@@ -51,6 +51,27 @@ class ByteArrayEncoderTest {
     }
 
     @Test
+    fun `given a chunk writer the full chunks are handed as they fill and their array reused once at the largest size`() {
+        val chunk = ByteArray(1_000) { (it * 13).toByte() }
+        val written = mutableListOf<Byte>()
+        val arrays = mutableListOf<ByteArray>()
+        val writeChunk = { array: ByteArray, length: Int ->
+            if (arrays.none { it === array }) arrays += array
+            written += array.copyOf(length).asList()
+        }
+        ByteArrayEncoder(writeChunk)
+            .apply {
+                repeat(1_000) {
+                    writeFixed(chunk)
+                    writeLong(Long.MIN_VALUE + it)
+                }
+            }.writeChunksTo(writeChunk)
+        written.toByteArray() shouldBe (0 until 1_000).map { chunk + encodeLong(Long.MIN_VALUE + it) }.flatMap { it.asList() }.toByteArray()
+        // 256 B doubled up to 64 KiB, then that array alone for the rest of the megabyte
+        arrays.size shouldBe 9
+    }
+
+    @Test
     fun `a value larger than the doubled array is written whole`() {
         val large = ByteArray(5_000) { (it * 7).toByte() }
         val prefix = byteArrayOf(1, 2, 3)
