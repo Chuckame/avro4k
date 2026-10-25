@@ -29,7 +29,8 @@ jump to the sections that match your usage.
    `decodeFromGenericData`: add the `avro4k-apache-interop` dependency.
 3. Replace `org.apache.avro.Schema` by `com.github.avrokotlin.avro4k.AvroSchema` where you pass a schema to avro4k or get one from it; convert with
    `toAvro4k()` / `toApacheSchema()` where you still need Apache's one.
-4. Replace the removed stream and okio overloads by the kotlinx-io ones.
+4. Replace the removed okio overloads by the kotlinx-io ones. `encodeToStream` / `decodeFromStream` stay, but a stream holds a single value (see
+   [JVM streams](#jvm-streams-and-kotlinx-io)).
 5. If you have custom serializers: `getSchema` returns an `AvroSchema`, `decodeFixed()` returns a `ByteArray`, and the `decodeResolving*` functions and
    `decodeValue()` are gone.
 6. If you use `@AvroFixed`, regenerate and review your schemas: the full names of the generated fixed types changed.
@@ -130,13 +131,13 @@ Every schema in the public API of the core is avro4k's own multiplatform `AvroSc
 |---|---|---|
 | `Avro.schema(descriptor)`, `Avro.schema(serializer)`, `Avro.schema<T>()` | `Schema` | `AvroSchema` |
 | `Avro.encodeToByteArray(writerSchema, …)` / `decodeFromByteArray(writerSchema, …)` (and the reified ones) | `Schema` | `AvroSchema` |
-| `encodeToSink` / `decodeFromSource` (kotlinx-io), `decodeFromByteBuffer` | `writerSchema: Schema` | `AvroSchema` |
+| `encodeToSink` / `decodeFromSource` (kotlinx-io), `encodeToStream` / `decodeFromStream`, `decodeFromByteBuffer` | `writerSchema: Schema` | `AvroSchema` |
 | `AvroEncoder.currentWriterSchema` | `Schema` | `AvroSchema` |
 | `AvroDecoder.currentWriterSchema` | `Schema` | `ResolvedSchema` (a subtype of `AvroSchema`, never a union) |
 | `AvroSerializer.getSchema(context)` and every built-in serializer | `Schema` | `AvroSchema` |
 | `AvroStringable.createSchema()`, `AvroFixed.createSchema(elementLocation)` | `Schema` | `AvroSchema` |
 | `AvroSingleObject(schemaRegistry)`: the lambda | `(Long) -> Schema?` | `(Long) -> AvroSchema?` |
-| `AvroSingleObject.encodeToSink` / `encodeToByteArray(writerSchema, …)` | `Schema` | `AvroSchema` |
+| `AvroSingleObject.encodeToSink` / `encodeToStream` / `encodeToByteArray(writerSchema, …)` | `Schema` | `AvroSchema` |
 | `AvroObjectContainer.openWriter(schema, …)` | `Schema` | `AvroSchema` |
 | `MissingFieldsEncodingException(fields, writerSchema[, descriptor])` | `List<Schema.Field>, Schema` | `List<AvroSchema.RecordSchema.Field>, AvroSchema` |
 
@@ -208,22 +209,19 @@ Avro4k has no public fingerprint function for the other platforms.
 
 # Encoding and decoding API
 
-## Kotlin streams and kotlinx-io
+## JVM streams and kotlinx-io
 
-The deprecated stream and okio overloads are removed, see below. Use `encodeToSink` and `decodeFromSource` with kotlinx-io:
+`Avro.encodeToStream` / `decodeFromStream` and `AvroSingleObject.encodeToStream` / `decodeFromStream` are no longer
+deprecated, and take an `AvroSchema`. The `AvroSingleObject` ones are now extension functions: import
+`com.github.avrokotlin.avro4k.encodeToStream` / `decodeFromStream` if your code is in another package.
 
-```kotlin
-// Before
-Avro.encodeToStream(data, outputStream)
-val obj = Avro.decodeFromStream<Project>(inputStream)
-
-// Now
-val sink = outputStream.asSink().buffered()
-Avro.encodeToSink(data, sink)
-sink.flush() // or close()
-
-val obj = Avro.decodeFromSource<Project>(inputStream.asSource().buffered())
-```
+- `encodeToStream` now writes every byte before returning. In v2 it left the end of the value in a buffer that was never
+  flushed, so a small value wrote nothing at all.
+- **`decodeFromStream` reads exactly one value per stream**, as kotlinx-serialization-json's `decodeFromStream`: if the
+  stream holds more bytes after the value, it throws `AvroMalformedDataException`. In v2 it returned the first value and
+  silently lost part of the rest, so a second call on the same stream failed. To read several values written one after
+  another, read their bytes into a `ByteBuffer` and call `decodeFromByteBuffer` once per value (its position moves past
+  each one), or decode them from the same kotlinx-io `Source`.
 
 A buffered kotlinx-io `Source` reads ahead. Decode the consecutive values from the **same** `Source` rather than wrapping the stream again for each value.
 
@@ -272,14 +270,14 @@ element serializer reads the writer schema (a decimal, a nested list), instead o
 | Removed | Replacement |
 |---|---|
 | `Avro.encodeToSink` / `decodeFromSource` on `okio.BufferedSink` / `BufferedSource` (all three shapes of each) | The kotlinx-io overloads. Bridge an okio stream with the `kotlinx-io-okio` module: `source.asKotlinxIoRawSource().buffered()`, `sink.asKotlinxIoRawSink().buffered()` (then flush the sink). The removed decoding overload consumed exactly the decoded bytes of the okio source; a buffered kotlinx-io source reads ahead (see above). |
-| `Avro.encodeToStream` / `decodeFromStream` (all three shapes of each) and `AvroSingleObject.encodeToStream` / `decodeFromStream` | The kotlinx-io overloads: `outputStream.asSink().buffered()` and `inputStream.asSource().buffered()` (flush or close the sink). |
 | `Record` and `ListRecord` | `encodeToGenericData` returns an Apache `GenericData.Record`. It is mutable, and equals another `GenericData.Record` with the same schema and values (the `equals` of `ListRecord` only matched another `ListRecord`). Use the Apache API to read it. |
 | `AvroDecoder.decodeValue()` | In a custom serializer: read `currentWriterSchema` if needed, then call the typed method that matches (`decodeInt()`, `decodeString()`, `decodeBytes()`, `decodeFixed()`…). For a value of any type: `decoder.decodeSerializableValue(AnySerializer())`. |
 | `AvroDecoder.decodeResolvingAny` / `…Boolean` / `…Byte` / `…Short` / `…Int` / `…Long` / `…Float` / `…Double` / `…Char`, `findValueDecoder`, and the fun interfaces `AnyValueDecoder`, `BooleanValueDecoder`, `ByteValueDecoder`, `ShortValueDecoder`, `IntValueDecoder`, `LongValueDecoder`, `FloatValueDecoder`, `DoubleValueDecoder`, `CharValueDecoder` | Read `decoder.currentWriterSchema` (never a union) and switch on its type, see below. |
 | The `org.apache.avro.limits.*` system properties (for avro4k's own codecs) | See [Malformed and oversized input](#malformed-and-oversized-input). |
 | The IDE JSON highlighting of the `@AvroProp` / `@AvroDefault` values (the JVM-only `@Language` annotation) | Nothing: no effect on the runtime nor on the API. |
 
-Not removed: `Avro.decodeFromByteBuffer`, and the `OutputStream` / `InputStream` entry points of `AvroObjectContainer` (`openWriter`, `decodeFromStream`).
+Not removed: `Avro.decodeFromByteBuffer`, `Avro.encodeToStream` / `decodeFromStream` and `AvroSingleObject.encodeToStream` / `decodeFromStream` (see
+[JVM streams](#jvm-streams-and-kotlinx-io)), and the `OutputStream` / `InputStream` entry points of `AvroObjectContainer` (`openWriter`, `decodeFromStream`).
 
 ## From `decodeResolving*` to `currentWriterSchema`
 

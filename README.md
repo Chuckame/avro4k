@@ -65,16 +65,14 @@ fun main() {
 
 ### JVM stream encoding
 
-Avro4k is also able to encode and decode objects to and from any kotlinx-io `Sink` and `Source`, which means any supported bridge to kotlinx-io is supported by avro4k.
+On the JVM, avro4k encodes to an `OutputStream` and decodes from an `InputStream`, as kotlinx-serialization-json does:
 
-As an example, for JVM streams, you can use `InputStream.asSource().buffered()` and `OutputStream.asSink().buffered()`.
-For okio, the [`kotlinx-io-okio`](https://github.com/Kotlin/kotlinx-io) bridge wraps an okio `Source` with `asKotlinxIoRawSource().buffered()` and an okio `Sink` with `asKotlinxIoRawSink().buffered()`.
-
-> [!NOTE]
-> Note the required `buffered()` call to allow avro4k accessing the `read` and `write` methods.
-
-> [!WARNING]
-> Do not use `ByteArrayInputStream` and `ByteArrayOutputStream`, prefer using `kotlinx.io.Buffer` instead as it is more efficient and allows better performance.
+- `encodeToStream` hands every byte of the value to the stream before returning. It neither flushes nor closes the
+  stream, and needs no `BufferedOutputStream` around it. Several values can be written one after another.
+- `decodeFromStream` reads the stream as it decodes, never the whole input at once, and **a stream holds exactly one
+  value**: once the value is read, the stream must end, or `AvroMalformedDataException` is thrown. The stream is neither
+  rewound nor closed. To read several values written one after another, read their bytes into a `ByteBuffer` and call
+  `decodeFromByteBuffer` once per value: the buffer's position moves past each one.
 
 <details>
 <summary>Example:</summary>
@@ -85,7 +83,6 @@ package myapp
 import com.github.avrokotlin.avro4k.*
 import kotlinx.serialization.*
 import java.io.*
-import kotlinx.io.*
 
 @Serializable
 data class Project(val name: String, val language: String)
@@ -93,16 +90,14 @@ data class Project(val name: String, val language: String)
 fun main() {
     // Serializing objects
     val data = Project("kotlinx.serialization", "Kotlin")
-    val outputStream: OutputStream = TODO("Your output stream here, e.g. FileOutputStream, etc.")
-    val sink = outputStream.asSink().buffered()
-    Avro.encodeToSink(data, sink)
-    sink.close() // Will flush the data to the output stream at the same time
+    FileOutputStream("project.avro").use { outputStream ->
+        Avro.encodeToStream(data, outputStream)
+    }
 
     // Deserializing objects
-    val inputStream: InputStream = TODO("Your input stream here, e.g. FileInputStream, etc.")
-    val source = inputStream.asSource().buffered()
-    // Be sure to read all the content from the soure, or you may lose data from the upper stream, as buffering means that the source may read more bytes to fill the buffer.
-    val obj = Avro.decodeFromSource<Project>(source)
+    val obj = FileInputStream("project.avro").use { inputStream ->
+        Avro.decodeFromStream<Project>(inputStream)
+    }
     println(obj) // Project(name=kotlinx.serialization, language=Kotlin)
 }
 ```

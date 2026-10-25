@@ -36,6 +36,16 @@ internal class ByteArrayEncoder : AvroBinaryEncoder() {
         return result
     }
 
+    /** Hands every byte written so far to [write], without copying them: each chunk in order, with its used length. */
+    fun writeChunksTo(write: (chunk: ByteArray, length: Int) -> Unit) {
+        fullChunks?.let { chunks ->
+            for (i in chunks.indices) {
+                write(chunks[i], fullChunkLengths[i])
+            }
+        }
+        write(bytes, position)
+    }
+
     /** Writes [value] as is, outside of any Avro type: the single-object header. */
     fun writeByte(value: Byte) {
         if (position == bytes.size) {

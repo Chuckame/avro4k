@@ -1,6 +1,7 @@
 package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
 import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import com.github.avrokotlin.avro4k.internal.decodeWithValidation
@@ -68,18 +69,17 @@ public class AvroSingleObject(
         avro.encodeToSink(writerSchema, serializer, value, sink)
     }
 
-    /** The header then the value, in one array. */
+    /** Writes the header then the value into [encoder]. */
     internal fun <T> encodeWithHeader(
         writerSchema: AvroSchema,
         serializer: SerializationStrategy<T>,
         value: T,
-    ): ByteArray {
-        val encoder = ByteArrayEncoder()
+        encoder: ByteArrayEncoder,
+    ) {
         encoder.writeByte(MAGIC_BYTE)
         encoder.writeByte(FORMAT_VERSION)
         encoder.writeFixed(writerSchema.crc64avro())
         avro.encodeWithValidation(writerSchema, serializer, value, encoder)
-        return encoder.toByteArray()
     }
 
     public fun <T> decodeFromSource(
@@ -88,6 +88,22 @@ public class AvroSingleObject(
     ): T {
         val fingerprint = readHeader { source.readByte() }
         return avro.decodeFromSource(writerSchema(fingerprint), deserializer, source)
+    }
+
+    /** Reads the header from [decoder], then the value with the writer schema it names. */
+    internal fun <T> decodeWithHeader(
+        deserializer: DeserializationStrategy<T>,
+        decoder: AvroBinaryDecoder,
+    ): T {
+        val header =
+            try {
+                decoder.readFixed(HEADER_SIZE)
+            } catch (e: EOFException) {
+                throw endOfInputError(e)
+            }
+        var index = 0
+        val fingerprint = readHeader { header[index++] }
+        return avro.decodeWithValidation(writerSchema(fingerprint), deserializer, decoder)
     }
 
     public override fun <T> decodeFromByteArray(
@@ -139,12 +155,17 @@ public class AvroSingleObject(
 private const val MAGIC_BYTE: Byte = 0xC3.toByte()
 private const val FORMAT_VERSION: Byte = 1
 
+/** The marker, the version and the fingerprint. */
+private const val HEADER_SIZE = 2 + 8
+
 public fun <T> AvroSingleObject.encodeToByteArray(
     writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
 ): ByteArray {
-    return encodeWithHeader(writerSchema, serializer, value)
+    val encoder = ByteArrayEncoder()
+    encodeWithHeader(writerSchema, serializer, value, encoder)
+    return encoder.toByteArray()
 }
 
 public inline fun <reified T> AvroSingleObject.encodeToByteArray(
