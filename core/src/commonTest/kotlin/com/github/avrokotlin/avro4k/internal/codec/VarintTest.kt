@@ -18,6 +18,7 @@ class VarintTest {
         for ((value, expected) in INT_VECTORS) {
             encodeInt(value) shouldBe expected
             writeIntWithKotlinxIo(value) shouldBe expected
+            writeIntToByteArray(value) shouldBe expected
             KotlinxIoDecoder(Buffer().apply { write(expected) }).readInt() shouldBe value
         }
     }
@@ -27,6 +28,7 @@ class VarintTest {
         for ((value, expected) in LONG_VECTORS) {
             encodeLong(value) shouldBe expected
             writeLongWithKotlinxIo(value) shouldBe expected
+            writeLongToByteArray(value) shouldBe expected
             KotlinxIoDecoder(Buffer().apply { write(expected) }).readLong() shouldBe value
         }
     }
@@ -211,6 +213,7 @@ class VarintTest {
         val encoded = encodeInt(value)
         encoded.size shouldBe expectedLength
         writeIntWithKotlinxIo(value) shouldBe encoded
+        writeIntToByteArray(value) shouldBe encoded
         KotlinxIoDecoder(Buffer().apply { write(encoded) }).readInt() shouldBe value
     }
 
@@ -221,6 +224,7 @@ class VarintTest {
         val encoded = encodeLong(value)
         encoded.size shouldBe expectedLength
         writeLongWithKotlinxIo(value) shouldBe encoded
+        writeLongToByteArray(value) shouldBe encoded
         KotlinxIoDecoder(Buffer().apply { write(encoded) }).readLong() shouldBe value
     }
 
@@ -291,6 +295,10 @@ class VarintTest {
         fun writeIntWithKotlinxIo(value: Int): ByteArray = Buffer().also { KotlinxIoEncoder(it).writeInt(value) }.readByteArray()
 
         fun writeLongWithKotlinxIo(value: Long): ByteArray = Buffer().also { KotlinxIoEncoder(it).writeLong(value) }.readByteArray()
+
+        fun writeIntToByteArray(value: Int): ByteArray = ByteArrayEncoder().apply { writeInt(value) }.toByteArray()
+
+        fun writeLongToByteArray(value: Long): ByteArray = ByteArrayEncoder().apply { writeLong(value) }.toByteArray()
     }
 }
 

@@ -1131,6 +1131,88 @@ invocation of one side is above (or below) every invocation of the other.
 - B/op (EA on): `readFromSource` +16 B on every row (`simple` @1 648 → 664, `complex` @1 4,344 → 4,360); `read` the
   same to the byte.
 
+## Results — a ByteArray written without kotlinx-io (d0391d70 vs two candidates)
+
+**Is `Avro.encodeToByteArray` faster when it writes into an array it owns instead of a kotlinx-io `Buffer` read back
+into an array?** Yes with chunks (kept): +5% to +14% on every avro4k write row. One growable array is faster on the
+smallest record (`simple` @1, +26%) but slower than the `Buffer` on mid-size payloads (`complex` @15/@200, −3%), its
+doubling copies costing more than the segments.
+
+| | |
+|---|---|
+| Date | 2026-10-25 09:18 → 11:42 |
+| Machine, power, sleep | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37; AC power and Low Power Mode checked before every invocation and polled every 10 s; one `caffeinate -dimsu` over the whole script, no sleep or dark wake (checked in `pmset -g log`); nothing discarded |
+| Load | Every invocation started once the 1-min load average was below 3 (2.23–2.93 at the starts) |
+| Sides | **base** `d0391d70` (`encodeToByteArray` writes into a kotlinx-io `Buffer`, then `readByteArray()`); **A** `a704b005` (`ByteArrayEncoder`: one array, 256 B to start, doubled when full, `copyOf` at the end); **B** `0d614465` (`ByteArrayEncoder`: chunks from 256 B, each twice the previous up to 64 KiB, never copied when growing, concatenated once at the end) — **B is merged by the commit that adds this section**. `benchmark/src` identical on all three sides; the selection below added identically and uncommitted to each side's `benchmark/build.gradle.kts` |
+
+**Method:** a configuration of the avro4k `read` and `writeToByteArray` rows and Apache reflect's `writeToByteArray`
+(the per-workload tasks' JMH settings: 1 fork, 5 × 1 s warmup, 5 × 3 s measurement), 5 invocations per side, the side
+order rotated each round (base/A/B, A/B/base, B/base/A, base/B/A, A/base/B). Controls: Apache's rows (same code on every
+side) and avro4k's `read` (untouched code). Allocation: one invocation per side, escape analysis off, 1 fork, 2 × 1 s
+warmup, 3 × 1 s measurement. "Y" = every invocation of one side is above (or below) every invocation of the other.
+
+### avro4k `writeToByteArray`
+
+| workload | param | base | A | B | base → A | base → B | A → B |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `simple` | 1 | 5.580M | 7.023M | 6.244M | **+25.9%** Y | **+11.9%** Y | −11.1% Y |
+| `simple` | 25 | 396,564 | 450,051 | 447,776 | **+13.5%** Y | **+12.9%** Y | −0.5% n |
+| `simple` | 500 | 19,924 | 20,608 | 21,331 | +3.4% Y | **+7.1%** Y | +3.5% Y |
+| `complex` | 1 | 774,176 | 839,612 | 840,913 | +8.5% Y | **+8.6%** Y | +0.2% n |
+| `complex` | 15 | 42,437 | 41,048 | 44,582 | −3.3% Y | **+5.1%** Y | +8.6% Y |
+| `complex` | 200 | 3,051 | 2,951 | 3,247 | −3.3% Y | +6.4% n | +10.0% Y |
+| `lists` | 100 | 8,174 | 8,257 | 9,329 | +1.0% n | +14.1% n | +13.0% n |
+| `lists` | 10000 | 64.9 | 70.8 | 73.3 | +9.0% Y | **+12.9%** Y | +3.5% Y |
+
+- `lists` @100 is noisy on every side (base 6,885–9,973, A 7,341–10,590, B 7,627–11,294).
+- `complex` @200 on B: 4 invocations of 5 at 3,240–3,318, one at 3,003.
+
+### Controls
+
+No control row is separated between any two sides. Apache `writeToByteArray`: −3.9% to +8.3%, the largest on
+`lists` @10000 (34.5–37.4 ops/s), every other row within ±4%; avro4k `read`: −3.5% to +5.0%.
+
+| workload | param | Apache `writeToByteArray` (base) | avro4k B ÷ Apache |
+|---|---:|---:|---:|
+| `simple` | 1 | 2.842M | 2.20× |
+| `simple` | 25 | 129,393 | 3.46× |
+| `simple` | 500 | 4,816 | 4.43× |
+| `complex` | 1 | 350,369 | 2.40× |
+| `complex` | 15 | 16,027 | 2.78× |
+| `complex` | 200 | 1,231 | 2.64× |
+| `lists` | 100 | 3,542 | 2.63× |
+| `lists` | 10000 | 34.7 | 2.11× |
+
+Apache 1.12.2's reflect writer, its buffered `BinaryEncoder` reused over a reset `ByteArrayOutputStream`.
+
+### Allocation per operation, escape analysis off (B/op, lower is better)
+
+| workload | param | base | A | B |
+|---|---:|---:|---:|---:|
+| `simple` | 1 | 392 | 640 | 664 |
+| `simple` | 25 | 4,968 | 12,960 | 9,000 |
+| `simple` | 500 | 95,528 | 226,464 | 161,064 |
+| `complex` | 1 | 2,368 | 3,144 | 3,296 |
+| `complex` | 15 | 75,376 | 219,232 | 133,544 |
+| `complex` | 200 | 1,007,290 | 3,349,634 | 1,716,602 |
+| `lists` | 100 | 106,705 | 368,729 | 237,793 |
+| `lists` | 10000 | 16,108,824 | 44,194,816 | 20,346,126 |
+
+**More bytes allocated than base on the JVM, and expected:** kotlinx-io takes its segments from a pool on the JVM, so
+base only allocates the final array; the candidates allocate their working array(s) on every call, then the final copy.
+`simple` @1: +256 B for the first array, plus B's three more fields and its empty `IntArray` (+24 B). A's doublings
+copy everything written so far each time (×2.2 to ×3.5 base); B's chunks are written once (×1.3 to ×1.8). Off the JVM
+kotlinx-io has no segment pool, so base allocated an 8 KiB segment per call there: the opposite is expected, to measure
+once the multiplatform benchmarks exist.
+
+### Verdict, in plain words
+
+- **Kept: B, the chunks.** Faster than the `Buffer` on every row (5% to 14%), and faster than A on every row but the
+  one-record `simple` @1, where A's simpler `toByteArray` and one less field win (+11% over B).
+- A's doubling loses to the `Buffer` once payloads pass a few kilobytes (`complex` @15/@200), which is what the chunks
+  avoid.
+- Reads do not move (control), and neither does Apache.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than
