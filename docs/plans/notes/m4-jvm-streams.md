@@ -1,6 +1,6 @@
 # M4 — JVM streams in core, and the benchmarks of the next steps
 
-**Status:** planned 2026-10-25; IO-5 done (`8ff89859`). **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
+**Status:** planned 2026-10-25; IO-5 done (`8ff89859`), IO-6 done (merge `19f3e5d8`, rename `dc9cf462`). **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
 with java streams, it'll be an important need for JVM users": option **(b)** of `m4-stream-options.md` (§6 Q1 of
 `m4-no-stream-library.md`). `InputStream`/`OutputStream` functions in core's JVM source set, no stream library; kotlinx-io
 still leaves core (IO-3). Option (c), an `avro4k-kotlinx-io` module, is not in v3.0 and stays possible later without
