@@ -9,7 +9,6 @@ import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AvroValueDirectDecoder
 import com.github.avrokotlin.avro4k.internal.encoder.direct.AvroValueDirectEncoder
-import kotlinx.io.EOFException
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 

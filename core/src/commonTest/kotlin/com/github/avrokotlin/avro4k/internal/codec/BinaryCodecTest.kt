@@ -1,23 +1,14 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
-import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
-import com.github.avrokotlin.avro4k.decodeFromSource
-import com.github.avrokotlin.avro4k.encodeToSink
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
-import kotlinx.io.Buffer
-import kotlinx.io.EOFException
-import kotlinx.io.readByteArray
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.builtins.serializer
 import kotlin.test.Test
 
-class KotlinxIoCodecTest {
+class BinaryCodecTest {
     @Test
     fun `every encoder method round trips through the decoder`() {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).apply {
+        val encoder = ByteArrayEncoder().apply {
             writeNull()
             writeBoolean(true)
             writeBoolean(false)
@@ -50,7 +41,7 @@ class KotlinxIoCodecTest {
             writeMapStart(0)
             writeMapEnd()
         }
-        KotlinxIoDecoder(buffer).apply {
+        ByteArrayDecoder(encoder.toByteArray()).apply {
             readNull()
             readBoolean() shouldBe true
             readBoolean() shouldBe false
@@ -77,15 +68,13 @@ class KotlinxIoCodecTest {
             readLong() shouldBe 7
             mapNext() shouldBe 0
             readMapStart() shouldBe 0
-            release()
+            isExhausted shouldBe true
         }
-        buffer.exhausted() shouldBe true
     }
 
     @Test
     fun `the encoder writes the bytes the Avro spec says`() {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).apply {
+        val encoder = ByteArrayEncoder().apply {
             writeNull()
             writeBoolean(true)
             writeFloat(1.0f)
@@ -108,7 +97,7 @@ class KotlinxIoCodecTest {
             writeMapStart(0)
             writeMapEnd()
         }
-        buffer.readByteArray() shouldBe
+        encoder.toByteArray() shouldBe
             bytes(
                 0x01,
                 0x00,
@@ -144,18 +133,17 @@ class KotlinxIoCodecTest {
     }
 
     @Test
-    fun `values spanning several segments are read whole`() {
+    fun `values spanning several of the encoder's chunks are read whole`() {
         val big = ByteArray(3 * 8192 + 17) { (it % 251).toByte() }
         val bigString = "é".repeat(3 * 8192)
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).apply {
+        val encoder = ByteArrayEncoder().apply {
             writeBytes(big)
             writeString(bigString)
             writeString(big)
             writeFixed(big)
             writeInt(123)
         }
-        KotlinxIoDecoder(buffer).apply {
+        ByteArrayDecoder(encoder.toByteArray()).apply {
             readBytes() shouldBe big
             readString() shouldBe bigString
             readStringBytes() shouldBe big
@@ -165,13 +153,12 @@ class KotlinxIoCodecTest {
     }
 
     @Test
-    fun `returned arrays are not shared with the source`() {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).apply {
+    fun `returned arrays are not shared with the input`() {
+        val encoder = ByteArrayEncoder().apply {
             writeBytes(byteArrayOf(1, 2))
             writeBytes(byteArrayOf(1, 2))
         }
-        val decoder = KotlinxIoDecoder(buffer)
+        val decoder = ByteArrayDecoder(encoder.toByteArray())
         val first = decoder.readBytes()
         first[0] = 99
         decoder.readBytes() shouldBe byteArrayOf(1, 2)
@@ -179,8 +166,7 @@ class KotlinxIoCodecTest {
 
     @Test
     fun `skipping reads past every value`() {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).apply {
+        val encoder = ByteArrayEncoder().apply {
             writeString("skipped")
             writeBytes(byteArrayOf(1, 2, 3))
             writeFixed(byteArrayOf(4, 5))
@@ -197,7 +183,7 @@ class KotlinxIoCodecTest {
             writeMapEnd()
             writeInt(42)
         }
-        KotlinxIoDecoder(buffer).apply {
+        ByteArrayDecoder(encoder.toByteArray()).apply {
             skipString()
             skipBytes()
             skipFixed(2)
@@ -219,7 +205,7 @@ class KotlinxIoCodecTest {
         // array of ints [1, 2] as a block of -2 items spanning 2 bytes, then [3] as a positive block, then the end
         val encoded = bytes(0x03, 0x04, 0x02, 0x04, 0x02, 0x06, 0x00, 0x54)
 
-        KotlinxIoDecoder(Buffer().apply { write(encoded) }).apply {
+        ByteArrayDecoder(encoded).apply {
             readArrayStart() shouldBe 2
             readInt() shouldBe 1
             readInt() shouldBe 2
@@ -228,14 +214,14 @@ class KotlinxIoCodecTest {
             arrayNext() shouldBe 0
             readInt() shouldBe 42
         }
-        KotlinxIoDecoder(Buffer().apply { write(encoded) }).apply {
+        ByteArrayDecoder(encoded).apply {
             // the sized block is skipped whole, the positive one is left to the caller
             skipArray() shouldBe 1
             readInt() shouldBe 3
             skipArray() shouldBe 0
             readInt() shouldBe 42
         }
-        KotlinxIoDecoder(Buffer().apply { write(encoded) }).apply {
+        ByteArrayDecoder(encoded).apply {
             readMapStart() shouldBe 2
         }
     }
@@ -252,11 +238,10 @@ class KotlinxIoCodecTest {
                 { skipBytes() }
             )
         for (read in reads) {
-            val source = Buffer().apply { write(lengthOfMinusOne) }
-            val decoder = KotlinxIoDecoder(source)
+            val decoder = ByteArrayDecoder(lengthOfMinusOne)
             shouldThrow<SerializationException> { decoder.read() }
-            decoder.release()
-            source.size shouldBe 2L
+            // only the length was read
+            decoder.readFixed(2) shouldBe bytes(0x00, 0x00)
         }
     }
 
@@ -271,8 +256,8 @@ class KotlinxIoCodecTest {
                 { skipBytes() }
             )
         for (read in reads) {
-            val source = Buffer().also { KotlinxIoEncoder(it).writeLong(MAX_BINARY_LENGTH.toLong() + 1) }
-            shouldThrow<SerializationException> { KotlinxIoDecoder(source).read() }
+            val input = ByteArrayEncoder().apply { writeLong(MAX_BINARY_LENGTH.toLong() + 1) }.toByteArray()
+            shouldThrow<SerializationException> { ByteArrayDecoder(input).read() }
         }
     }
 
@@ -289,9 +274,9 @@ class KotlinxIoCodecTest {
     @Test
     fun `a string is written as the JVM writes its UTF-8 bytes and an unpaired surrogate as a question mark`() {
         fun written(value: String): List<Int> {
-            val buffer = Buffer()
-            KotlinxIoEncoder(buffer).writeString(value)
-            return buffer.readByteArray().map { it.toInt() and 0xff }
+            val encoder = ByteArrayEncoder()
+            encoder.writeString(value)
+            return encoder.toByteArray().map { it.toInt() and 0xff }
         }
         written("a\uD800b") shouldBe listOf(0x06, 0x61, 0x3f, 0x62)
         written("\uDC00") shouldBe listOf(0x02, 0x3f)
@@ -310,9 +295,9 @@ class KotlinxIoCodecTest {
     @Test
     fun `a malformed string is decoded as the JVM decodes it`() {
         fun read(vararg utf8: Int): String {
-            val buffer = Buffer()
-            KotlinxIoEncoder(buffer).writeString(bytes(*utf8))
-            return KotlinxIoDecoder(buffer).readString()
+            val encoder = ByteArrayEncoder()
+            encoder.writeString(bytes(*utf8))
+            return ByteArrayDecoder(encoder.toByteArray()).readString()
         }
         read(0xc0, 0x80) shouldBe "��"
         read(0xc1, 0xbf) shouldBe "��"
@@ -324,112 +309,5 @@ class KotlinxIoCodecTest {
         read(0x80) shouldBe "�"
     }
 
-    @Test
-    fun `a string split across buffer segments is decoded whole`() {
-        // 10,000 bytes: longer than a segment, so the head segment never holds the whole string
-        val value = "é".repeat(5000)
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).writeString(value)
-        KotlinxIoDecoder(buffer).apply {
-            readString() shouldBe value
-            release()
-        }
-        buffer.exhausted() shouldBe true
-    }
-
-    @Test
-    fun `a string longer than the remaining input is the end of the input`() {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).writeString("hello")
-        val truncated = Buffer().apply { write(buffer.readByteArray().copyOf(4)) }
-        shouldThrow<EOFException> { KotlinxIoDecoder(truncated).readString() }
-    }
-
-    @Test
-    fun `every value split across two segments is read whole at every split position`() {
-        val encoded =
-            Buffer().also {
-                KotlinxIoEncoder(it).apply {
-                    writeBoolean(true)
-                    writeInt(-300_000)
-                    writeLong(Long.MIN_VALUE)
-                    writeFloat(1.5f)
-                    writeDouble(-0.1)
-                    writeString("héllo")
-                    writeBytes(byteArrayOf(1, 2, 3))
-                    writeFixed(byteArrayOf(4, 5, 6, 7))
-                    writeString("skipped")
-                    writeBytes(byteArrayOf(8, 9))
-                    writeFixed(byteArrayOf(10, 11))
-                    writeLong(7)
-                }
-            }.readByteArray()
-        for (bytesInFirstSegment in 0..encoded.size) {
-            val source = sourceSplitAt(encoded, bytesInFirstSegment)
-            KotlinxIoDecoder(source).apply {
-                readBoolean() shouldBe true
-                readInt() shouldBe -300_000
-                readLong() shouldBe Long.MIN_VALUE
-                readFloat() shouldBe 1.5f
-                readDouble() shouldBe -0.1
-                readString() shouldBe "héllo"
-                readBytes() shouldBe byteArrayOf(1, 2, 3)
-                readFixed(4) shouldBe byteArrayOf(4, 5, 6, 7)
-                skipString()
-                skipBytes()
-                skipFixed(2)
-                readLong() shouldBe 7L
-                release()
-            }
-            source.readByteArray() shouldBe TRAILER
-        }
-    }
-
-    @Test
-    fun `reading goes on after a release from where the source was left`() {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).apply {
-            writeInt(1)
-            writeString("two")
-            writeLong(3)
-        }
-        val decoder = KotlinxIoDecoder(buffer)
-        decoder.readInt() shouldBe 1
-        decoder.release()
-        decoder.readString() shouldBe "two"
-        decoder.release()
-        buffer.size shouldBe 1L
-        decoder.readLong() shouldBe 3L
-        decoder.release()
-        buffer.exhausted() shouldBe true
-    }
-
-    @Test
-    fun `values decoded one after the other from a source each stop right after their own bytes`() {
-        val values = listOf("first", "second", "third")
-        val buffer = Buffer()
-        values.forEach { Avro.encodeToSink(StringSchema(), String.serializer(), it, buffer) }
-        buffer.writeByte(42)
-        values.forEach { Avro.decodeFromSource(StringSchema(), String.serializer(), buffer) shouldBe it }
-        buffer.readByteArray() shouldBe byteArrayOf(42)
-    }
-
-    /** A source whose head segment holds [bytesInFirstSegment] bytes of [encoded], the rest being in the next segment. */
-    private fun sourceSplitAt(
-        encoded: ByteArray,
-        bytesInFirstSegment: Int,
-    ): Buffer {
-        val filler = ByteArray(SEGMENT_SIZE - bytesInFirstSegment) { 0x2A }
-        val source = Buffer().apply { write(filler + encoded + TRAILER) }
-        source.skip(filler.size.toLong())
-        return source
-    }
-
     private fun bytes(vararg values: Int) = ByteArray(values.size) { values[it].toByte() }
-
-    private companion object {
-        /** The size of a kotlinx-io segment. */
-        const val SEGMENT_SIZE = 8192
-        val TRAILER = byteArrayOf(1, 2, 3)
-    }
 }

@@ -2,29 +2,26 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
 import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
-import kotlinx.io.Buffer
-import kotlinx.io.readByteArray
 import org.apache.avro.io.EncoderFactory
 import org.apache.avro.util.Utf8
 import java.io.ByteArrayOutputStream
 
-class KotlinxIoEncoderTest : StringSpec() {
+class ByteArrayEncoderApacheTest : StringSpec() {
     init {
         "basic string is serialized correctly" {
-            val buffer = Buffer()
+            val encoder = ByteArrayEncoder()
             val string = "test"
-            KotlinxIoEncoder(buffer).writeString(string)
-            buffer.readByteArray() shouldBe byteArrayOf(4.zigZagByte()) + string.encodeToByteArray()
+            encoder.writeString(string)
+            encoder.toByteArray() shouldBe byteArrayOf(4.zigZagByte()) + string.encodeToByteArray()
         }
 
         "special chars in string are serialized correctly" {
-            val buffer = Buffer()
+            val encoder = ByteArrayEncoder()
             val string = "àûTöç"
-            KotlinxIoEncoder(buffer).writeString(string)
-            buffer.readByteArray() shouldBe byteArrayOf(9.zigZagByte()) + string.encodeToByteArray()
+            encoder.writeString(string)
+            encoder.toByteArray() shouldBe byteArrayOf(9.zigZagByte()) + string.encodeToByteArray()
         }
 
         "every method writes the same bytes as Apache's BinaryEncoder" {
@@ -103,8 +100,6 @@ class KotlinxIoEncoderTest : StringSpec() {
                     })
                 )
             cases.forEachIndexed { index, (abiCalls, apacheCalls) ->
-                val buffer = Buffer()
-                KotlinxIoEncoder(buffer).abiCalls()
                 val byteArrayEncoder = ByteArrayEncoder().apply(abiCalls)
 
                 val output = ByteArrayOutputStream()
@@ -112,7 +107,6 @@ class KotlinxIoEncoderTest : StringSpec() {
                 apacheEncoder.apacheCalls()
                 apacheEncoder.flush()
 
-                (index to buffer.readByteArray().toList()) shouldBe (index to output.toByteArray().toList())
                 (index to byteArrayEncoder.toByteArray().toList()) shouldBe (index to output.toByteArray().toList())
             }
         }

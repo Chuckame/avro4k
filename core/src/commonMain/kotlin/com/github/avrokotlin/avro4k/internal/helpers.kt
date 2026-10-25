@@ -6,9 +6,6 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.schema.isFullNameOrAliasMatch
-import kotlinx.io.Buffer
-import kotlinx.io.UnsafeIoApi
-import kotlinx.io.unsafe.UnsafeBufferOperations
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.descriptors.PolymorphicKind
@@ -111,7 +108,3 @@ internal val AvroProp.jsonElement: JsonElement
         }
         return JsonPrimitive(value)
     }
-
-@OptIn(UnsafeIoApi::class)
-internal fun Buffer(bytes: ByteArray): Buffer =
-    Buffer().apply { UnsafeBufferOperations.moveToTail(this, bytes) }

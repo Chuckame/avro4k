@@ -2,7 +2,7 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToSink
+import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.benchmark.internal.CoreSchema
 import com.github.avrokotlin.benchmark.internal.coreSchema
 import com.github.avrokotlin.benchmark.internal.encodeWith
@@ -15,11 +15,6 @@ import kotlinx.benchmark.Scope
 import kotlinx.benchmark.Setup
 import kotlinx.benchmark.State
 import kotlinx.benchmark.Warmup
-import kotlinx.io.Sink
-import kotlinx.io.asSink
-import kotlinx.io.buffered
-import kotlinx.serialization.ExperimentalSerializationApi
-import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -49,8 +44,6 @@ internal class PolymorphicMicroBenchmark {
     lateinit var circlesSchema: CoreSchema
     lateinit var circlesData: ByteArray
 
-    /** Allocated once so that the write methods only measure the encoding, not the sink construction. */
-    lateinit var sink: Sink
 
     @Setup
     fun setup() {
@@ -60,26 +53,17 @@ internal class PolymorphicMicroBenchmark {
         circles = circleList(shapeCount)
         shapesData = Avro.encodeWith(shapesSchema, shapes)
         circlesData = Avro.encodeWith(circlesSchema, circles)
-        sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 
     @Benchmark
     fun readPolymorphic(): ShapeList = Avro.decodeFromByteArray<ShapeList>(shapesSchema, shapesData)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writePolymorphic() {
-        Avro.encodeToSink(shapesSchema, shapes, sink)
-        sink.flush()
-    }
+    fun writePolymorphic(): ByteArray = Avro.encodeToByteArray(shapesSchema, shapes)
 
     @Benchmark
     fun readConcrete(): CircleList = Avro.decodeFromByteArray<CircleList>(circlesSchema, circlesData)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writeConcrete() {
-        Avro.encodeToSink(circlesSchema, circles, sink)
-        sink.flush()
-    }
+    fun writeConcrete(): ByteArray = Avro.encodeToByteArray(circlesSchema, circles)
 }

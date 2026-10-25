@@ -1,12 +1,12 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.internal.EOFException
 import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import com.github.avrokotlin.avro4k.internal.codec.ByteBufferDecoder
 import com.github.avrokotlin.avro4k.internal.codec.InputStreamDecoder
 import com.github.avrokotlin.avro4k.internal.decodeWithValidation
 import com.github.avrokotlin.avro4k.internal.encodeWithValidation
 import com.github.avrokotlin.avro4k.internal.endOfInputError
-import kotlinx.io.EOFException
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer

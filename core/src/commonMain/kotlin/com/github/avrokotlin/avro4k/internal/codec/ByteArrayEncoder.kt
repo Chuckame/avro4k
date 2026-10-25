@@ -88,7 +88,7 @@ internal class ByteArrayEncoder : AvroBinaryEncoder() {
         }
     }
 
-    // `toBits`, not `toRawBits`: every NaN is written as the canonical one, as kotlinx-io's `writeFloatLe` did
+    // `toBits`, not `toRawBits`: every NaN is written as the canonical one, as Apache Avro's `floatToIntBits` does
     override fun writeFloat(value: Float) {
         val bits = value.toBits()
         val p = reserve(4)

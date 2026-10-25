@@ -19,12 +19,10 @@ import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.LockableList
 import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoDecoder
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
-import kotlinx.io.Buffer
-import kotlinx.io.readByteArray
 import kotlin.test.Test
 
 /**
@@ -52,23 +50,18 @@ class AvroSchemaSkipTest {
         schema: AvroSchema,
         write: AvroBinaryEncoder.() -> Unit,
     ) {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).apply {
-            write()
-            writeLong(SENTINEL)
-        }
-        val decoder = KotlinxIoDecoder(buffer)
+        val encoder =
+            ByteArrayEncoder().apply {
+                write()
+                writeLong(SENTINEL)
+            }
+        val decoder = ByteArrayDecoder(encoder.toByteArray())
         decoder.skip(schema)
         decoder.readLong() shouldBe SENTINEL
-        decoder.release()
-        buffer.exhausted() shouldBe true
+        decoder.isExhausted shouldBe true
     }
 
-    private fun bytesOf(write: AvroBinaryEncoder.() -> Unit): ByteArray {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).write()
-        return buffer.readByteArray()
-    }
+    private fun bytesOf(write: AvroBinaryEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
 
     @Test
     fun `skips every primitive type`() {
@@ -319,9 +312,8 @@ class AvroSchemaSkipTest {
 
     @Test
     fun `a union branch index out of range fails`() {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).writeIndex(2)
-        shouldThrow<AvroMalformedDataException> { KotlinxIoDecoder(buffer).skip(UnionSchema(NullSchema(), IntSchema())) }
+        val input = ByteArrayEncoder().apply { writeIndex(2) }.toByteArray()
+        shouldThrow<AvroMalformedDataException> { ByteArrayDecoder(input).skip(UnionSchema(NullSchema(), IntSchema())) }
             .message shouldBe "Malformed data: union index 2 out of range [0, 2) for union[null, int]"
     }
 

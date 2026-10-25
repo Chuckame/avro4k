@@ -4,16 +4,15 @@ import com.github.avrokotlin.avro4k.AvroMalformedDataException
 
 /**
  * Reads Avro binary from an array with a plain position, whatever the input: [ByteArrayDecoder] reads a whole
- * [ByteArray], [KotlinxIoDecoder] the array of a stream's head segment, then the next one.
+ * [ByteArray], the JVM's stream decoder an array it refills from the stream.
  *
- * Reading through a kotlinx-io [kotlinx.io.Source] updates the buffer's segment bookkeeping on every read, even when the
- * whole input is one array. Here a read is an array access and a position update, as in Apache Avro's `BinaryDecoder`,
- * whose varint shape is kept too: away from the end of the array, an int is decoded in one go without checking each
- * byte against the end, and so are the first four bytes of a long, its rare 5th to 10th bytes being decoded out of line.
+ * A read is an array access and a position update, as in Apache Avro's `BinaryDecoder`, whose varint shape is kept too:
+ * away from the end of the array, an int is decoded in one go without checking each byte against the end, and so are the
+ * first four bytes of a long, its rare 5th to 10th bytes being decoded out of line.
  *
  * Every value is read here; a subclass only says what follows the array, for a value that does not fit in what is left
  * of it: the next array ([nextArray]), or the bytes read or skipped across arrays ([readAcross], [skipAcross]). The end
- * of the input is a [kotlinx.io.EOFException], as from a [kotlinx.io.Source]. Every length prefix is checked by
+ * of the input is an [com.github.avrokotlin.avro4k.internal.EOFException]. Every length prefix is checked by
  * [checkBinaryLength] before anything is allocated or skipped for it, and every returned array is a copy.
  */
 internal abstract class BufferedDecoder(

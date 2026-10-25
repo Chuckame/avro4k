@@ -47,3 +47,4 @@ internal actual fun platformLogicalTypes(): Map<String, KSerializer<out Any>> =
 
 /** `String.getBytes(UTF_8)`, the reference the other platforms match. */
 internal actual fun String.encodeToUtf8(): ByteArray = encodeToByteArray()
+internal actual typealias EOFException = java.io.EOFException

@@ -1,7 +1,7 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
 import com.github.avrokotlin.avro4k.AvroMalformedDataException
-import kotlinx.io.EOFException
+import com.github.avrokotlin.avro4k.internal.EOFException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -11,10 +11,8 @@ import java.nio.ByteOrder
  * Every read advances the [buffer]'s position, so once a value is decoded, the position sits right after its last
  * byte: nothing past it is read nor copied, whatever the number of bytes remaining after the value.
  *
- * It exists because kotlinx-io has no [kotlinx.io.Source] backed by a [ByteBuffer] yet
- * (https://github.com/Kotlin/kotlinx-io/issues/239): reading one through a [KotlinxIoDecoder] requires copying all its
- * remaining bytes into a [kotlinx.io.Buffer] first (a direct or read-only buffer has no array to wrap), even when the
- * value only takes a few of them. Once kotlinx-io provides such a source, this class can give way to it.
+ * It reads the buffer in place: going through a [ByteArrayDecoder] would copy all its remaining bytes first (a direct or
+ * read-only buffer has no array to wrap), even when the value only takes a few of them.
  *
  * A single-byte read past the limit throws the [ByteBuffer]'s [java.nio.BufferUnderflowException], left to the caller
  * to convert once per decoded value rather than checked on every byte; a length-prefixed read checks the remaining
@@ -129,7 +127,7 @@ internal class ByteBufferDecoder(
         return doSkipItems()
     }
 
-    /** Out of line, as the multi-byte decoding of [KotlinxIoDecoder], so that [readInt] stays small enough to inline. */
+    /** Out of line, so that [readInt] stays small enough to inline. */
     private fun readVarIntTail(first: Int): Int {
         return decodeVarIntTail(first) { buffer.get() }
     }

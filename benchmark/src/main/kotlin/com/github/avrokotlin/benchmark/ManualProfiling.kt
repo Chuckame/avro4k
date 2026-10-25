@@ -9,7 +9,7 @@ object ManualProfilingWrite {
             initTestData()
             for (i in 0 until 1_000_000) {
                 if (i % 1_000 == 0) println("Iteration $i")
-                write()
+                writeToStream()
             }
         }
     }

@@ -31,3 +31,11 @@ internal expect fun platformLogicalTypes(): Map<String, KSerializer<out Any>>
  * `encodeToByteArray()` writes U+FFFD (3 bytes) on JS and native: the same string must give the same bytes everywhere.
  */
 internal expect fun String.encodeToUtf8(): ByteArray
+
+/**
+ * The end of the input in the middle of a value, thrown by the decoders and turned into an
+ * [com.github.avrokotlin.avro4k.AvroMalformedDataException] by [decodeWithValidation], whose cause it becomes.
+ *
+ * `java.io.EOFException` on the JVM, which Apache's decoders throw too, so that one entry point catches both.
+ */
+internal expect open class EOFException(message: String?) : Exception

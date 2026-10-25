@@ -10,7 +10,6 @@ import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.ensureFixedSize
 import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
-import com.github.avrokotlin.avro4k.internal.Buffer
 import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.schema.fixedSize
 import com.github.avrokotlin.avro4k.internal.schema.isFullNameOrAliasMatch
@@ -20,7 +19,6 @@ import com.github.avrokotlin.avro4k.trySelectLogicalTypeFromUnion
 import com.github.avrokotlin.avro4k.trySelectNamedSchema
 import com.github.avrokotlin.avro4k.trySelectTypeNameFromUnion
 import com.github.avrokotlin.avro4k.unsupportedWriterTypeError
-import kotlinx.io.readIntLe
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encoding.Decoder
@@ -194,10 +192,6 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>("com.github.
 
     /**
      * Three unsigned 32-bit integers, each little-endian: months, days, then milliseconds (the spec's layout).
-     *
-     * Written by hand into the 12-byte array rather than through a kotlinx-io `Buffer`: on Kotlin/Native, kotlinx-io does
-     * not pool its segments, so a `Buffer` would allocate an 8 KiB segment per encoded duration, then copy the 12 bytes
-     * out of it.
      */
     private fun encodeDuration(value: AvroDuration): ByteArray {
         val bytes = ByteArray(DURATION_BYTES)
@@ -209,12 +203,10 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>("com.github.
 
     /** The reverse of [encodeDuration]. [bytes] is exactly [DURATION_BYTES] long (checked on the writer schema). */
     private fun decodeDuration(bytes: ByteArray): AvroDuration {
-        // Wraps the array without copying it
-        val source = Buffer(bytes)
         return AvroDuration(
-            months = source.readIntLe().toUInt(),
-            days = source.readIntLe().toUInt(),
-            millis = source.readIntLe().toUInt()
+            months = bytes.getIntLe(0).toUInt(),
+            days = bytes.getIntLe(4).toUInt(),
+            millis = bytes.getIntLe(8).toUInt()
         )
     }
 
@@ -227,6 +219,12 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>("com.github.
         this[offset + 2] = (value ushr 16).toByte()
         this[offset + 3] = (value ushr 24).toByte()
     }
+
+    private fun ByteArray.getIntLe(offset: Int): Int =
+        (this[offset].toInt() and 0xFF) or
+            ((this[offset + 1].toInt() and 0xFF) shl 8) or
+            ((this[offset + 2].toInt() and 0xFF) shl 16) or
+            (this[offset + 3].toInt() shl 24)
 
     override fun serializeGeneric(
         encoder: Encoder,

@@ -4,15 +4,13 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
 import com.github.avrokotlin.avro4k.internal.decoder.direct.MAX_PRESIZED_BLOCK_ITEMS
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
-import kotlinx.io.Buffer
-import kotlinx.io.readByteArray
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ArraySerializer
@@ -213,9 +211,9 @@ class CollectionBlockGuardsTest {
     }
 
     /** Writes one collection as one block per size, then the terminating empty block; item `i` counts across the blocks. */
-    private fun KotlinxIoEncoder.writeBlocks(
+    private fun ByteArrayEncoder.writeBlocks(
         sizes: List<Int>,
-        writeItem: KotlinxIoEncoder.(Int) -> Unit,
+        writeItem: ByteArrayEncoder.(Int) -> Unit,
     ) {
         var item = 0
         for (size in sizes) {
@@ -225,11 +223,7 @@ class CollectionBlockGuardsTest {
         writeLong(0)
     }
 
-    private fun blocks(write: KotlinxIoEncoder.() -> Unit): ByteArray {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).write()
-        return buffer.readByteArray()
-    }
+    private fun blocks(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
 
     private companion object {
         val VALIDATING = Avro { validateSerialization = true }

@@ -2,7 +2,7 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.encodeToSink
+import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.avro4k.fromJsonString
 import com.github.avrokotlin.avro4k.toAvro4k
 import com.github.avrokotlin.benchmark.internal.CoreSchema
@@ -17,12 +17,7 @@ import kotlinx.benchmark.Scope
 import kotlinx.benchmark.Setup
 import kotlinx.benchmark.State
 import kotlinx.benchmark.Warmup
-import kotlinx.io.Sink
-import kotlinx.io.asSink
-import kotlinx.io.buffered
-import kotlinx.serialization.ExperimentalSerializationApi
 import org.apache.avro.Schema
-import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -56,8 +51,6 @@ internal class FreshWriterSchemaMicroBenchmark {
     lateinit var reusedSchema: CoreSchema
     lateinit var data: ByteArray
 
-    /** Allocated once so that the write methods only measure the encoding, not the sink construction. */
-    lateinit var sink: Sink
 
     @Setup
     fun setup() {
@@ -65,7 +58,6 @@ internal class FreshWriterSchemaMicroBenchmark {
         reusedSchema = Schema.Parser().parse(writerSchemaJson).toCoreSchema()
         value = SmallRecord(42L, true)
         data = Avro.encodeWith(reusedSchema, SmallRecord.serializer(), value)
-        sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 
     @Benchmark
@@ -79,26 +71,14 @@ internal class FreshWriterSchemaMicroBenchmark {
     fun readFreshAvroSchema(): SmallRecord =
         Avro.decodeFromByteArray(AvroSchema.fromJsonString(writerSchemaJson), SmallRecord.serializer(), data)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writeReused() {
-        Avro.encodeToSink(reusedSchema, SmallRecord.serializer(), value, sink)
-        sink.flush()
-    }
+    fun writeReused(): ByteArray = Avro.encodeToByteArray(reusedSchema, SmallRecord.serializer(), value)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writeFreshApache() {
-        Avro.encodeToSink(Schema.Parser().parse(writerSchemaJson).toAvro4k(), SmallRecord.serializer(), value, sink)
-        sink.flush()
-    }
+    fun writeFreshApache(): ByteArray = Avro.encodeToByteArray(Schema.Parser().parse(writerSchemaJson).toAvro4k(), SmallRecord.serializer(), value)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writeFreshAvroSchema() {
-        Avro.encodeToSink(AvroSchema.fromJsonString(writerSchemaJson), SmallRecord.serializer(), value, sink)
-        sink.flush()
-    }
+    fun writeFreshAvroSchema(): ByteArray = Avro.encodeToByteArray(AvroSchema.fromJsonString(writerSchemaJson), SmallRecord.serializer(), value)
 
     /** The control for the `*FreshApache` methods: the parse and conversion alone. */
     @Benchmark

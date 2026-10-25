@@ -3,14 +3,14 @@ package com.github.avrokotlin.avro4k.encoding
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroAssertions
 import com.github.avrokotlin.avro4k.apacheSchema
-import com.github.avrokotlin.avro4k.decodeFromSource
 import com.github.avrokotlin.avro4k.encodeWith
+import com.github.avrokotlin.avro4k.internal.codec.InputStreamDecoder
+import com.github.avrokotlin.avro4k.internal.decodeWithValidation
 import com.github.avrokotlin.avro4k.nullable
 import com.github.avrokotlin.avro4k.record
+import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
-import kotlinx.io.asSource
-import kotlinx.io.buffered
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -50,11 +50,9 @@ internal class RecordEncodingTest : StringSpec({
         val produceTask = ProduceTask(outStream)
         produceTask.start()
         latch.await(1, TimeUnit.SECONDS)
-        val source = inStream.asSource().buffered()
-
-        // It should throw an exception if the data is not available yet
-        // Thanks to kotlinx.io, we can read less than the buffer size, so the data is immediately available for small chunks
-        Avro.decodeFromSource<DataS>(source)
+        // The value is decoded from the bytes available, without waiting for the stream to fill the decoder's array. Only
+        // `decodeFromStream`'s check that the stream ends after the value waits for the producer, so it is left out here.
+        Avro.decodeWithValidation(Avro.schema<DataS>(), DataS.serializer(), InputStreamDecoder(inStream))
         latch2.countDown()
     }
     "encoding basic data class" {

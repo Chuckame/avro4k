@@ -6,13 +6,12 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.Type
 import com.github.avrokotlin.avro4k.apacheSchema
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
 import com.github.avrokotlin.avro4k.toAvro4k
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
-import kotlinx.io.Buffer
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import org.apache.avro.AvroRuntimeException
@@ -257,14 +256,11 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
 
         listOf(direct.toByteArray(), blocking.toByteArray()).forEach { bytes ->
             // twice in a row, to also check that the first skip stops exactly at the end of the first value
-            val buffer = Buffer().apply { write(bytes + bytes) }
-            val decoder = KotlinxIoDecoder(buffer)
+            val decoder = ByteArrayDecoder(bytes + bytes)
             decoder.skip(model)
-            decoder.release()
-            buffer.size shouldBe bytes.size.toLong()
+            decoder.isExhausted shouldBe false
             decoder.skip(model)
-            decoder.release()
-            buffer.exhausted() shouldBe true
+            decoder.isExhausted shouldBe true
         }
     }
 }) {

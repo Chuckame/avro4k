@@ -13,7 +13,6 @@ import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
 import com.github.avrokotlin.avro4k.internal.schema.getName
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import com.github.avrokotlin.avro4k.internal.schema.types
-import kotlinx.io.EOFException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.SerialKind
 import kotlinx.serialization.encoding.Decoder

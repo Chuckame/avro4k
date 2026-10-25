@@ -25,8 +25,6 @@ import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import kotlinx.io.Buffer
-import kotlinx.io.readByteArray
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -99,18 +97,14 @@ class ValidatingAvroBinaryCodecTest {
         writeInt(99)
     }
 
-    private fun bytesOf(write: AvroBinaryEncoder.() -> Unit): ByteArray {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).write()
-        return buffer.readByteArray()
-    }
+    private fun bytesOf(write: AvroBinaryEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
 
-    private fun validatingEncoder(schema: AvroSchema) = ValidatingAvroBinaryEncoder(KotlinxIoEncoder(Buffer()), schema)
+    private fun validatingEncoder(schema: AvroSchema) = ValidatingAvroBinaryEncoder(ByteArrayEncoder(), schema)
 
     private fun validatingDecoder(
         schema: AvroSchema,
         bytes: ByteArray,
-    ) = ValidatingAvroBinaryDecoder(KotlinxIoDecoder(Buffer().apply { write(bytes) }), schema)
+    ) = ValidatingAvroBinaryDecoder(ByteArrayDecoder(bytes), schema)
 
     /** Writes with the validating encoder, which must reject the sequence with a message containing every [parts]. */
     private fun encoderRejects(
@@ -148,12 +142,12 @@ class ValidatingAvroBinaryCodecTest {
 
     @Test
     fun `a valid datum is accepted and forwarded unchanged`() {
-        val buffer = Buffer()
-        ValidatingAvroBinaryEncoder(KotlinxIoEncoder(buffer), everyType).apply {
+        val encoder = ByteArrayEncoder()
+        ValidatingAvroBinaryEncoder(encoder, everyType).apply {
             writeEveryType()
             checkDatumComplete()
         }
-        buffer.readByteArray().toHexString() shouldBe bytesOf { writeEveryType() }.toHexString()
+        encoder.toByteArray().toHexString() shouldBe bytesOf { writeEveryType() }.toHexString()
     }
 
     @Test

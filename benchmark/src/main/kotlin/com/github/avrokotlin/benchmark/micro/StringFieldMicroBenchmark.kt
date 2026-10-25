@@ -2,7 +2,7 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToSink
+import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.benchmark.internal.CoreSchema
 import com.github.avrokotlin.benchmark.internal.coreSchema
 import com.github.avrokotlin.benchmark.internal.encodeWith
@@ -14,11 +14,6 @@ import kotlinx.benchmark.Scope
 import kotlinx.benchmark.Setup
 import kotlinx.benchmark.State
 import kotlinx.benchmark.Warmup
-import kotlinx.io.Sink
-import kotlinx.io.asSink
-import kotlinx.io.buffered
-import kotlinx.serialization.ExperimentalSerializationApi
-import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -49,8 +44,6 @@ internal class StringFieldMicroBenchmark {
     lateinit var nullableSchema: CoreSchema
     lateinit var nullableData: ByteArray
 
-    /** Allocated once so that the write methods only measure the encoding, not the sink construction. */
-    lateinit var sink: Sink
 
     @Setup
     fun setup() {
@@ -60,26 +53,17 @@ internal class StringFieldMicroBenchmark {
         nullable = nullableStringStorm()
         nonNullData = Avro.encodeWith(nonNullSchema, nonNull)
         nullableData = Avro.encodeWith(nullableSchema, nullable)
-        sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 
     @Benchmark
     fun readNonNull(): StringStorm = Avro.decodeFromByteArray<StringStorm>(nonNullSchema, nonNullData)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writeNonNull() {
-        Avro.encodeToSink(nonNullSchema, nonNull, sink)
-        sink.flush()
-    }
+    fun writeNonNull(): ByteArray = Avro.encodeToByteArray(nonNullSchema, nonNull)
 
     @Benchmark
     fun readNullable(): NullableStringStorm = Avro.decodeFromByteArray<NullableStringStorm>(nullableSchema, nullableData)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writeNullable() {
-        Avro.encodeToSink(nullableSchema, nullable, sink)
-        sink.flush()
-    }
+    fun writeNullable(): ByteArray = Avro.encodeToByteArray(nullableSchema, nullable)
 }

@@ -82,3 +82,5 @@ internal actual fun String.encodeToUtf8(): ByteArray {
     }
     return bytes
 }
+
+internal actual open class EOFException actual constructor(message: String?) : Exception(message)

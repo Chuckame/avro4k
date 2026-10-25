@@ -18,9 +18,9 @@ import com.github.avrokotlin.avro4k.AvroValidationException
 import com.github.avrokotlin.avro4k.FieldNamingStrategy
 import com.github.avrokotlin.avro4k.MissingFieldsEncodingException
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.decodeFromSource
 import com.github.avrokotlin.avro4k.fromJsonString
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoEncoder
+import com.github.avrokotlin.avro4k.internal.EOFException
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
 import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
@@ -29,9 +29,6 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlinx.io.Buffer
-import kotlinx.io.EOFException
-import kotlinx.io.readByteArray
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -173,12 +170,7 @@ class AvroSerializationExceptionTest {
 
         shouldThrow<AvroMalformedDataException> { Avro.decodeFromByteArray(Avro.schema<Point>(), Point.serializer(), truncated) }
             .cause.shouldBeInstanceOf<EOFException>()
-        val source = Buffer().apply { write(truncated) }
-        shouldThrow<AvroMalformedDataException> { Avro.decodeFromSource(Avro.schema<Point>(), Point.serializer(), source) }
-            .cause.shouldBeInstanceOf<EOFException>()
-        // a long read at the very end of the input, from a source with no data left at all
-        shouldThrow<AvroMalformedDataException> { Avro.decodeFromSource(LongSchema(), Long.serializer(), Buffer()) }
-            .cause.shouldBeInstanceOf<EOFException>()
+        // a long read at the very end of the input, with no data left at all
         shouldThrow<AvroMalformedDataException> { Avro.decodeFromByteArray(LongSchema(), Long.serializer(), byteArrayOf()) }
             .cause.shouldBeInstanceOf<EOFException>()
     }
@@ -236,11 +228,7 @@ class AvroSerializationExceptionTest {
 
     private fun encodedLong(value: Long): ByteArray = encoded { writeLong(value) }
 
-    private fun encoded(write: KotlinxIoEncoder.() -> Unit): ByteArray {
-        val buffer = Buffer()
-        KotlinxIoEncoder(buffer).write()
-        return buffer.readByteArray()
-    }
+    private fun encoded(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
 
     private companion object {
         val VALIDATING = Avro { validateSerialization = true }

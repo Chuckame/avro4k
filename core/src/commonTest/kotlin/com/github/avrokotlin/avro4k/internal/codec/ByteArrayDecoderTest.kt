@@ -1,13 +1,11 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
 import com.github.avrokotlin.avro4k.AvroMalformedDataException
+import com.github.avrokotlin.avro4k.internal.EOFException
 import com.github.avrokotlin.avro4k.internal.codec.VarintTest.Companion.INT_VECTORS
 import com.github.avrokotlin.avro4k.internal.codec.VarintTest.Companion.LONG_VECTORS
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
-import kotlinx.io.Buffer
-import kotlinx.io.EOFException
-import kotlinx.io.readByteArray
 import kotlin.test.Test
 
 class ByteArrayDecoderTest {
@@ -65,41 +63,45 @@ class ByteArrayDecoderTest {
     }
 
     @Test
-    fun `every value reads as the stream decoder reads it`() {
+    fun `every value reads back what the encoder wrote`() {
         val encoded =
-            Buffer().also {
-                KotlinxIoEncoder(it).apply {
-                    writeBoolean(true)
-                    writeBoolean(false)
-                    writeInt(-300)
-                    writeLong(Long.MIN_VALUE)
-                    writeFloat(1.5f)
-                    writeFloat(-0.0f)
-                    writeFloat(Float.MAX_VALUE)
-                    writeDouble(-2.25)
-                    writeDouble(Double.MIN_VALUE)
-                    writeDouble(Double.NEGATIVE_INFINITY)
-                    writeString("")
-                    writeString("ascii")
-                    writeString("é€😀")
-                    writeBytes(bytes(1, 2, 3))
-                    writeFixed(bytes(4, 5))
-                    writeEnum(3)
-                    writeIndex(70)
-                }
-            }.readByteArray()
-        val stream = KotlinxIoDecoder(Buffer().apply { write(encoded) })
+            ByteArrayEncoder().apply {
+                writeBoolean(true)
+                writeBoolean(false)
+                writeInt(-300)
+                writeLong(Long.MIN_VALUE)
+                writeFloat(1.5f)
+                writeFloat(-0.0f)
+                writeFloat(Float.MAX_VALUE)
+                writeDouble(-2.25)
+                writeDouble(Double.MIN_VALUE)
+                writeDouble(Double.NEGATIVE_INFINITY)
+                writeString("")
+                writeString("ascii")
+                writeString("é€😀")
+                writeBytes(bytes(1, 2, 3))
+                writeFixed(bytes(4, 5))
+                writeEnum(3)
+                writeIndex(70)
+            }.toByteArray()
         val array = ByteArrayDecoder(encoded)
-        repeat(2) { array.readBoolean() shouldBe stream.readBoolean() }
-        array.readInt() shouldBe stream.readInt()
-        array.readLong() shouldBe stream.readLong()
-        repeat(3) { array.readFloat().toBits() shouldBe stream.readFloat().toBits() }
-        repeat(3) { array.readDouble().toBits() shouldBe stream.readDouble().toBits() }
-        repeat(3) { array.readString() shouldBe stream.readString() }
-        array.readBytes() shouldBe stream.readBytes()
-        array.readFixed(2) shouldBe stream.readFixed(2)
-        array.readEnum() shouldBe stream.readEnum()
-        array.readIndex() shouldBe stream.readIndex()
+        array.readBoolean() shouldBe true
+        array.readBoolean() shouldBe false
+        array.readInt() shouldBe -300
+        array.readLong() shouldBe Long.MIN_VALUE
+        array.readFloat().toBits() shouldBe 1.5f.toBits()
+        array.readFloat().toBits() shouldBe (-0.0f).toBits()
+        array.readFloat().toBits() shouldBe Float.MAX_VALUE.toBits()
+        array.readDouble().toBits() shouldBe (-2.25).toBits()
+        array.readDouble().toBits() shouldBe Double.MIN_VALUE.toBits()
+        array.readDouble().toBits() shouldBe Double.NEGATIVE_INFINITY.toBits()
+        array.readString() shouldBe ""
+        array.readString() shouldBe "ascii"
+        array.readString() shouldBe "é€😀"
+        array.readBytes() shouldBe bytes(1, 2, 3)
+        array.readFixed(2) shouldBe bytes(4, 5)
+        array.readEnum() shouldBe 3
+        array.readIndex() shouldBe 70
         array.isExhausted shouldBe true
     }
 
@@ -112,14 +114,12 @@ class ByteArrayDecoderTest {
     @Test
     fun `strings and bytes are skipped without being read`() {
         val encoded =
-            Buffer().also {
-                KotlinxIoEncoder(it).apply {
-                    writeString("skipped")
-                    writeBytes(bytes(9, 9, 9))
-                    writeFixed(bytes(8, 8))
-                    writeInt(42)
-                }
-            }.readByteArray()
+            ByteArrayEncoder().apply {
+                writeString("skipped")
+                writeBytes(bytes(9, 9, 9))
+                writeFixed(bytes(8, 8))
+                writeInt(42)
+            }.toByteArray()
         val decoder = ByteArrayDecoder(encoded)
         decoder.skipString()
         decoder.skipBytes()

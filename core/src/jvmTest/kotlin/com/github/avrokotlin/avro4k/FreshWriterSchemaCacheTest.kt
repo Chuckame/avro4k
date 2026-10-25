@@ -2,7 +2,7 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.apacheConversionCacheSize
 import com.github.avrokotlin.avro4k.internal.apacheConversionEqualityCacheSize
-import com.github.avrokotlin.avro4k.internal.codec.KotlinxIoDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.direct.AvroValueDirectDecoder
 import com.github.avrokotlin.avro4k.serializer.AnySerializer
 import io.kotest.assertions.fail
@@ -11,7 +11,6 @@ import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.types.shouldNotBeSameInstanceAs
-import kotlinx.io.Buffer
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -158,8 +157,7 @@ internal class FreshWriterSchemaCacheTest : StringSpec({
             deserializer: DeserializationStrategy<T>,
             bytes: ByteArray,
         ): T {
-            val source = Buffer().apply { write(bytes) }
-            return AvroValueDirectDecoder(writerSchema, this, KotlinxIoDecoder(source)).decodeSerializableValue(deserializer)
+            return AvroValueDirectDecoder(writerSchema, this, ByteArrayDecoder(bytes)).decodeSerializableValue(deserializer)
         }
     }
 }

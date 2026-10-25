@@ -1,6 +1,6 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
-import kotlinx.io.EOFException
+import com.github.avrokotlin.avro4k.internal.EOFException
 
 /**
  * Reads Avro binary straight from a [ByteArray], from its [startIndex] on, with nothing between the decoder and the bytes

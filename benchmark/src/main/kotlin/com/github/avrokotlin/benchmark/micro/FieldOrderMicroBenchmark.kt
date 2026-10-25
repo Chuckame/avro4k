@@ -1,7 +1,7 @@
 package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.encodeToSink
+import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.benchmark.internal.CoreSchema
 import com.github.avrokotlin.benchmark.internal.apacheSchema
 import com.github.avrokotlin.benchmark.internal.coreSchema
@@ -16,12 +16,7 @@ import kotlinx.benchmark.Scope
 import kotlinx.benchmark.Setup
 import kotlinx.benchmark.State
 import kotlinx.benchmark.Warmup
-import kotlinx.io.Sink
-import kotlinx.io.asSink
-import kotlinx.io.buffered
-import kotlinx.serialization.ExperimentalSerializationApi
 import org.apache.avro.Schema
-import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -55,8 +50,6 @@ internal class FieldOrderMicroBenchmark {
     lateinit var writerSchema: CoreSchema
     lateinit var data: ByteArray
 
-    /** Allocated once so that [write] only measures the encoding, not the sink construction. */
-    lateinit var sink: Sink
 
     @Setup
     fun setup() {
@@ -71,18 +64,13 @@ internal class FieldOrderMicroBenchmark {
         }
         value = fieldOrderRecord()
         data = Avro.encodeWith(writerSchema, FieldOrderRecord.serializer(), value)
-        sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 
     @Benchmark
     fun read(): FieldOrderRecord = Avro.decodeFromByteArray(writerSchema, FieldOrderRecord.serializer(), data)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun write() {
-        Avro.encodeToSink(writerSchema, FieldOrderRecord.serializer(), value, sink)
-        sink.flush()
-    }
+    fun write(): ByteArray = Avro.encodeToByteArray(writerSchema, FieldOrderRecord.serializer(), value)
 }
 
 /**

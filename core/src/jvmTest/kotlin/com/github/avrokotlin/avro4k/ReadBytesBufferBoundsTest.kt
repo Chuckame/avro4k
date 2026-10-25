@@ -5,8 +5,6 @@ import com.github.avrokotlin.avro4k.serializer.AvroSerializer
 import com.github.avrokotlin.avro4k.serializer.SchemaSupplierContext
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
-import kotlinx.io.asSource
-import kotlinx.io.buffered
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToByteArray
@@ -20,7 +18,7 @@ import java.nio.ByteBuffer
 /**
  * Regression tests for reading BYTES values into an exclusively owned, exactly sized [ByteArray].
  *
- * - [decodeFromByteBuffer] reads a heap buffer in place (its array is wrapped, not copied, into the kotlinx-io source),
+ * - [decodeFromByteBuffer] reads a heap buffer in place, without copying it,
  *   so every decoded value must be copied out of it, bounded by the buffer's position and limit.
  * - `org.apache.avro.io.Decoder.readBytes(null)`, which the Apache adapter calls, is only contracted to return a
  *   [ByteBuffer] positioned on the requested bytes: it is free to return a view onto memory owned by someone else,
@@ -80,13 +78,13 @@ internal class ReadBytesBufferBoundsTest : StringSpec({
         decoded.payload shouldBe payload
     }
 
-    "decodes a BYTES field spanning multiple source segments" {
-        // kotlinx-io's readAtMostTo only drains the head segment, so a value bigger than a segment must be read
-        // in a loop, otherwise the tail of the decoded array is silently left zeroed.
+    "decodes a BYTES field longer than the array a stream is read into" {
+        // A single read fills the array at most, so a value longer than it must be read in a loop, otherwise the tail
+        // of the decoded array is silently left zeroed.
         val bigPayload = ByteArray(20_000) { (it % 251).toByte() }
         val encoded = Avro.encodeToByteArray(BytesRecord("header", bigPayload))
 
-        val decoded = Avro.decodeFromSource<BytesRecord>(ByteArrayInputStream(encoded).asSource().buffered())
+        val decoded = Avro.decodeFromStream<BytesRecord>(ByteArrayInputStream(encoded))
 
         decoded.payload shouldBe bigPayload
     }

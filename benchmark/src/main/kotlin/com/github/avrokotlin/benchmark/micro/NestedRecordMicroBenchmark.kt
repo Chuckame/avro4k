@@ -1,7 +1,7 @@
 package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
-import com.github.avrokotlin.avro4k.encodeToSink
+import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.benchmark.internal.CoreSchema
 import com.github.avrokotlin.benchmark.internal.coreSchema
 import com.github.avrokotlin.benchmark.internal.encodeWith
@@ -14,12 +14,7 @@ import kotlinx.benchmark.Scope
 import kotlinx.benchmark.Setup
 import kotlinx.benchmark.State
 import kotlinx.benchmark.Warmup
-import kotlinx.io.Sink
-import kotlinx.io.asSink
-import kotlinx.io.buffered
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
-import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -49,8 +44,6 @@ internal class NestedRecordMicroBenchmark {
     lateinit var value: Any
     lateinit var data: ByteArray
 
-    /** Allocated once so that [write] only measures the encoding, not the sink construction. */
-    lateinit var sink: Sink
 
     @Suppress("UNCHECKED_CAST")
     @Setup
@@ -65,16 +58,11 @@ internal class NestedRecordMicroBenchmark {
         this.value = value
         schema = Avro.coreSchema(this.serializer.descriptor)
         data = Avro.encodeWith(schema, this.serializer, this.value)
-        sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 
     @Benchmark
     fun read(): Any = Avro.decodeFromByteArray(schema, serializer, data)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun write() {
-        Avro.encodeToSink(schema, serializer, value, sink)
-        sink.flush()
-    }
+    fun write(): ByteArray = Avro.encodeToByteArray(schema, serializer, value)
 }

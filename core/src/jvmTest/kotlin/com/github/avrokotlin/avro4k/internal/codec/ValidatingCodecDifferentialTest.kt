@@ -20,8 +20,6 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
-import kotlinx.io.Buffer
-import kotlinx.io.readByteArray
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -500,7 +498,7 @@ private fun <T> modelEntry(
         val encoder = RecordingAbiEncoder()
         Avro.encodeWithBinaryEncoder(schema, serializer, value, encoder)
         entry.encoderSequences += encoder.calls
-        val decoder = RecordingAbiDecoder(KotlinxIoDecoder(Buffer().apply { write(encoder.bytes()) }))
+        val decoder = RecordingAbiDecoder(ByteArrayDecoder(encoder.bytes()))
         Avro.decodeWithBinaryDecoder(schema, serializer, decoder)
         entry.decoderSequences += decoder.calls
     }
@@ -627,10 +625,9 @@ private fun generateCollection(
 /** Records the calls of avro4k's direct encoder, and writes them for the decoder side. */
 private class RecordingAbiEncoder : AvroBinaryEncoder() {
     val calls = mutableListOf<Call>()
-    private val buffer = Buffer()
-    private val delegate = KotlinxIoEncoder(buffer)
+    private val delegate = ByteArrayEncoder()
 
-    fun bytes(): ByteArray = buffer.peek().readByteArray()
+    fun bytes(): ByteArray = delegate.toByteArray()
 
     override fun writeNull() = record(Call(Kind.NULL)) { delegate.writeNull() }
 

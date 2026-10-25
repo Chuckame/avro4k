@@ -106,11 +106,12 @@ fun main() {
 
 ### Encode many objects in the same stream
 
-You can use kotlinx-io's `Buffer` to encode many objects in the same stream, and then extract the whole bytes from the buffer.
+An Avro value does not carry its length, so values written one after another can only be read back by a decoder that
+stops right after each one. On the JVM, write them to the same `OutputStream` with `encodeToStream` (or concatenate
+their `encodeToByteArray` results), then read their bytes into a `ByteBuffer` and call `decodeFromByteBuffer` once per
+value: the buffer's position moves past each one. `decodeFromStream` reads a single value per stream.
 
-> [!WARNING]
-> As kotlinx-io is using an internal buffer pool, each `Buffer` instance you create must be fully consumed to allow the internal buffer segments to be returned to the pool and reused.
-> More detailsin the [kotlinx-io documentation](https://github.com/Kotlin/kotlinx-io).
+Off the JVM, keep each value in its own `ByteArray`, or prefix each one with its length (see below).
 
 <details>
 <summary>Example:</summary>
@@ -120,35 +121,35 @@ package myapp
 
 import com.github.avrokotlin.avro4k.*
 import kotlinx.serialization.*
-import kotlinx.io.*
+import java.io.*
+import java.nio.ByteBuffer
 
 @Serializable
 data class Project(val name: String, val language: String)
 
+@OptIn(ExperimentalAvro4kApi::class)
 fun main() {
     // Serializing objects
-    val buffer = Buffer()
-    Avro.encodeToSink(data1, buffer)
-    Avro.encodeToSink(data2, buffer)
-    Avro.encodeToSink(data3, buffer)
-    // You need to consume the whole buffer by passing the buffer to the wanted framework or read the byte-array, or you may have kotlinx-io internal buffer leaks.
-    val bytes = buffer.readByteArray()
+    val output = ByteArrayOutputStream() // or any OutputStream: a file, a socket...
+    Avro.encodeToStream(data1, output)
+    Avro.encodeToStream(data2, output)
+    Avro.encodeToStream(data3, output)
 
     // Deserializing objects
-    val source: Source = TODO("a Buffer, or any other source from kotlinx-io")
-    val data1 = Avro.decodeFromSource<Project>(source)
-    val data2 = Avro.decodeFromSource<Project>(source)
-    val data3 = Avro.decodeFromSource<Project>(source)
+    val buffer = ByteBuffer.wrap(output.toByteArray()) // the bytes of every value
+    val data1 = Avro.decodeFromByteBuffer<Project>(buffer)
+    val data2 = Avro.decodeFromByteBuffer<Project>(buffer)
+    val data3 = Avro.decodeFromByteBuffer<Project>(buffer)
 }
 ```
 
 </details>
 
-### Custom encoding with a Buffer
+### Custom framing
 
-The following example shows how to encode in a custom format using a `Buffer` to write the data. The example is going to encode like this: `<timestamp><schema><binary-length><binary-data>`.
-
-You will still encode the data in pure avro binary format, while you will be able to add some metadata before the data (or after), compress the data, and much more.
+Avro4k encodes the value in pure Avro binary format into a `ByteArray`; the bytes around it are yours to write. This
+lets you add metadata before or after the data, compress it, and much more. The following example writes
+`<timestamp><schema><binary-length><binary-data>` with a JVM `DataOutputStream`.
 
 <details>
 <summary>Example:</summary>
@@ -158,28 +159,29 @@ package myapp
 
 import com.github.avrokotlin.avro4k.*
 import kotlinx.serialization.*
-import kotlinx.io.*
+import java.io.*
 
 @Serializable
 data class Project(val name: String, val language: String)
 
 fun main() {
     // Serializing objects
-    val buffer = Buffer()
-    buffer.writeInt(theTimestamp)
-    buffer.writeString(theSchema)
-    
-    val dataBuffer = Buffer()
-    Avro.encodeToSink(data, dataBuffer)
-    // You need to consume the whole buffer by passing the buffer to the wanted framework or read the byte-array, or you may have kotlinx-io internal buffer leaks.
-    val bytes = buffer.readByteArray()
-    buffer.writeInt()
+    val outputStream: OutputStream = TODO("Your output stream here, e.g. FileOutputStream, etc.")
+    val output = DataOutputStream(outputStream)
+    val schema = Avro.schema<Project>()
+    output.writeLong(System.currentTimeMillis())
+    output.writeUTF(schema.toJsonElement().toString())
+    val bytes = Avro.encodeToByteArray(schema, data)
+    output.writeInt(bytes.size)
+    output.write(bytes)
 
     // Deserializing objects
-    val source: Source = TODO("a Buffer, or any other source from kotlinx-io")
-    val data1 = Avro.decodeFromSource<Project>(source)
-    val data2 = Avro.decodeFromSource<Project>(source)
-    val data3 = Avro.decodeFromSource<Project>(source)
+    val inputStream: InputStream = TODO("Your input stream here, e.g. FileInputStream, etc.")
+    val input = DataInputStream(inputStream)
+    val timestamp = input.readLong()
+    val writerSchema = AvroSchema.fromJsonString(input.readUTF())
+    val data = ByteArray(input.readInt()).also { input.readFully(it) }
+    val obj = Avro.decodeFromByteArray<Project>(writerSchema, data)
 }
 ```
 

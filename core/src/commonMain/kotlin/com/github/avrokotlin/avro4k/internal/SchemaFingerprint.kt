@@ -51,7 +51,7 @@ internal fun AvroSchema.parsingFingerprint64(): Long = crc64Avro(toParsingCanoni
 /**
  * The 8-byte little-endian encoding of [parsingFingerprint64], as single-object encoding writes it after its `C3 01`
  * marker: a drop-in for Apache's `SchemaNormalization.parsingFingerprint("CRC-64-AVRO", schema)`. Allocates the array
- * on each call; a caller writing to a `kotlinx.io.Sink` can also memoize the `Long` and use `writeLongLe`.
+ * on each call.
  */
 internal fun AvroSchema.parsingFingerprintCrc64AvroBytes(): ByteArray = parsingFingerprint64().toLittleEndianBytes()
 

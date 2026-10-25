@@ -2,7 +2,7 @@ package com.github.avrokotlin.benchmark.micro
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.decodeFromByteArray
-import com.github.avrokotlin.avro4k.encodeToSink
+import com.github.avrokotlin.avro4k.encodeToByteArray
 import com.github.avrokotlin.benchmark.internal.CoreSchema
 import com.github.avrokotlin.benchmark.internal.coreSchema
 import com.github.avrokotlin.benchmark.internal.encodeWith
@@ -15,11 +15,6 @@ import kotlinx.benchmark.Scope
 import kotlinx.benchmark.Setup
 import kotlinx.benchmark.State
 import kotlinx.benchmark.Warmup
-import kotlinx.io.Sink
-import kotlinx.io.asSink
-import kotlinx.io.buffered
-import kotlinx.serialization.ExperimentalSerializationApi
-import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -56,8 +51,6 @@ internal class CollectionMicroBenchmark {
     lateinit var twoCollectionsSchema: CoreSchema
     lateinit var twoCollectionsData: ByteArray
 
-    /** Allocated once so that the write methods only measure the encoding, not the sink construction. */
-    lateinit var sink: Sink
 
     @Setup
     fun setup() {
@@ -70,28 +63,19 @@ internal class CollectionMicroBenchmark {
         twoCollectionsSchema = Avro.coreSchema<TwoCollectionsRecordList>()
         twoCollections = twoCollectionsRecordList(size)
         twoCollectionsData = Avro.encodeWith(twoCollectionsSchema, twoCollections)
-        sink = OutputStream.nullOutputStream().asSink().buffered()
     }
 
     @Benchmark
     fun readLongs(): LongList = Avro.decodeFromByteArray<LongList>(longsSchema, longsData)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writeLongs() {
-        Avro.encodeToSink(longsSchema, longs, sink)
-        sink.flush()
-    }
+    fun writeLongs(): ByteArray = Avro.encodeToByteArray(longsSchema, longs)
 
     @Benchmark
     fun readRecords(): SmallRecordList = Avro.decodeFromByteArray<SmallRecordList>(recordsSchema, recordsData)
 
-    @OptIn(ExperimentalSerializationApi::class)
     @Benchmark
-    fun writeRecords() {
-        Avro.encodeToSink(recordsSchema, records, sink)
-        sink.flush()
-    }
+    fun writeRecords(): ByteArray = Avro.encodeToByteArray(recordsSchema, records)
 
     @Benchmark
     fun readTwoCollections(): TwoCollectionsRecordList =

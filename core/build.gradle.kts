@@ -65,7 +65,6 @@ kotlin {
         commonMain {
             dependencies {
                 api(libs.kotlinx.serialization.core)
-                api(libs.kotlinx.io)
                 // api: AvroSchema exposes JsonElement (props, field default values, JSON conversions)
                 api(libs.kotlinx.serialization.json)
             }
