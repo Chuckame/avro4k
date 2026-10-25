@@ -1,6 +1,6 @@
 # M4 — JVM streams in core, and the benchmarks of the next steps
 
-**Status:** planned 2026-10-25; IO-5 done (`8ff89859`), IO-6 done (merge `19f3e5d8`, rename `dc9cf462`); IO-7 done (`9122e71e`, bench rows `64052105`), findings in §6. **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
+**Status:** planned 2026-10-25; IO-5 done (`8ff89859`), IO-6 done (merge `19f3e5d8`, rename `dc9cf462`); IO-7 done (`9122e71e`, bench rows `64052105`), findings in §6; IO-3 done (`0a19d72e`); IO-7b done (`0ad413d3`, branch `v3/jvm-streams-b`), findings in §7. **Decision (user, 2026-10-25):** "it still needs a way to encode/decode
 with java streams, it'll be an important need for JVM users": option **(b)** of `m4-stream-options.md` (§6 Q1 of
 `m4-no-stream-library.md`). `InputStream`/`OutputStream` functions in core's JVM source set, no stream library; kotlinx-io
 still leaves core (IO-3). Option (c), an `avro4k-kotlinx-io` module, is not in v3.0 and stays possible later without
@@ -238,3 +238,27 @@ the end of M3 (`benchmark/README.md`, "M3 complete"); everything since (the deco
 - **The smoke runs of IO-5 and IO-7 were made on battery with `-PallowReducedPower`, against the rule that every
   benchmark runs on AC power with Low Power Mode off (the user caught it).** Their numbers are discarded and not cited
   anywhere; they only showed that the rows run. IO-8, on AC power, gives the first numbers of these rows.
+
+## 7. IO-7b findings (2026-10-25)
+
+- **Decoder: the array doubles on a refill only when the previous read filled it.** The decoder starts empty, so the
+  first read is itself a refill: doubling on every refill would have thrown away the array sized from `available()`
+  unread. And a stream returning less than asked (a socket, a pipe) gains nothing from a larger array. A stream that
+  reports nothing (`available()` = 0, the default of `InputStream`) and fills every read starts at 512 B and reaches
+  8 KiB after 4 refills; a `ByteArrayInputStream` larger than 8 KiB starts at 8 KiB, as A.
+- **Encoder: `ByteArrayEncoder` takes an optional `writeFullChunk`** (common code, one class, so the encoder's calls stay
+  monomorphic when a program writes both arrays and streams). Chunks still grow from 256 B to 64 KiB, each full one
+  handed to the stream; from 64 KiB the array is reused. A single `bytes`/`fixed` larger than the chunk gets a chunk of
+  its size, as in A. `toByteArray` is not used in that mode.
+- **Two behaviour differences from A, to weigh with the numbers at IO-8's verdict:**
+  1. **A failed encode leaves bytes in the stream.** A writes nothing until the whole value is encoded, so a value
+     failing mid-way (an unsupported value, a schema mismatch) leaves the stream untouched; B has already written the
+     chunks filled before the failure (any value past 256 B). kotlinx-serialization-json's `encodeToStream` (512-byte
+     buffer written when full) and v2's `encodeToSink` behave as B. The KDoc says nothing of a failure either way; if B
+     is kept, it should say the stream may hold part of the value.
+  2. **No size limit on a value written to a stream.** A holds the value in chunks and throws past `MAX_BINARY_LENGTH`
+     (it must fit `toByteArray`'s array); B never holds it, so the check is skipped and a value over 2 GiB streams out.
+     v2 wrote to a `Sink` without limit either.
+- `writeToByteArray` runs the same code on both sides apart from one null check on the chunk-growth path (out of line):
+  IO-8's regression rows should show it flat.
+
