@@ -76,6 +76,8 @@ internal class AvroStreamsTest : StringSpec({
 
         Avro.decodeFromStream<Record>(ByteArrayInputStream(bytes)) shouldBe large
         Avro.decodeFromStream<Record>(ChunkedInputStream(bytes, 1000)) shouldBe large
+        // Says nothing of its size and fills every read: the array starts small and doubles on each refill
+        Avro.decodeFromStream<Record>(ChunkedInputStream(bytes, Int.MAX_VALUE)) shouldBe large
     }
 
     "skips writer-only fields across refills, short and longer than the array" {

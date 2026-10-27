@@ -8,13 +8,16 @@ import java.io.InputStream
  * Reads Avro binary from an [InputStream] through an array it refills as it decodes (see [BufferedDecoder]), never the
  * whole input at once.
  *
+ * The array starts at the size the stream says it holds, so that a small value is not decoded through a large array
+ * allocated for it, and doubles on each refill that filled it, up to [MAX_BUFFER_SIZE].
+ *
  * The array is filled ahead of the value being read, and the stream cannot give those bytes back: the stream holds a
  * single value, and [requireEnd] checks that nothing follows it, as kotlinx-serialization-json's `decodeFromStream`
  * does. The stream is neither rewound nor closed.
  */
 internal class InputStreamDecoder(
     private val input: InputStream,
-) : BufferedDecoder(ByteArray(BUFFER_SIZE), 0, 0) {
+) : BufferedDecoder(ByteArray(input.available().coerceIn(MIN_BUFFER_SIZE, MAX_BUFFER_SIZE)), 0, 0) {
     /** Throws unless every byte of the stream has been read. */
     fun requireEnd() {
         if (position < limit || input.read() != -1) {
@@ -23,6 +26,9 @@ internal class InputStreamDecoder(
     }
 
     override fun nextArray() {
+        if (limit == bytes.size && bytes.size < MAX_BUFFER_SIZE) {
+            bytes = ByteArray(minOf(bytes.size shl 1, MAX_BUFFER_SIZE))
+        }
         var read: Int
         // `read` only returns 0 when asked for no byte; looping keeps a stream that does it anyway from being read as empty
         do {
@@ -87,8 +93,11 @@ internal class InputStreamDecoder(
     private fun endOfInput(length: Long): EOFException = EOFException("$length bytes expected, the input ended before")
 }
 
-/** The array refilled from the stream: large enough for most values to be decoded without crossing a refill. */
-private const val BUFFER_SIZE = 8 * 1024
+/** The smallest array refilled from the stream, whatever it says it holds: a typical record or more. */
+private const val MIN_BUFFER_SIZE = 512
+
+/** The largest array refilled from the stream: large enough for most values to be decoded without crossing a refill. */
+private const val MAX_BUFFER_SIZE = 8 * 1024
 
 /** Beyond this, the bytes of a value are read before its array is allocated. */
 private const val MAX_LENGTH_ALLOCATED_AHEAD = 1024 * 1024

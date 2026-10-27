@@ -24,6 +24,9 @@ import java.nio.ByteBuffer
  * nor closed: wrapping it in a [java.io.BufferedOutputStream] is not needed, and closing it is up to the caller. Several
  * values can be written one after another to the same stream.
  *
+ * The bytes are handed to the stream as the value is encoded, without holding the whole value in memory. If the
+ * encoding fails part-way, the stream may already hold the beginning of the value.
+ *
  * @param writerSchema the schema to use for encoding the value which must be compatible with the given [serializer].
  * @param serializer the serialization strategy to use for encoding the value. You may prefer the other extension methods without the serializer parameter for convenience.
  * @param value the value to encode.
@@ -38,9 +41,10 @@ public fun <T> Avro.encodeToStream(
     value: T,
     outputStream: OutputStream,
 ) {
-    val encoder = ByteArrayEncoder()
+    val write = outputStream.chunkWriter()
+    val encoder = ByteArrayEncoder(write)
     encodeWithValidation(writerSchema, serializer, value, encoder)
-    encoder.writeChunksTo { chunk, length -> outputStream.write(chunk, 0, length) }
+    encoder.writeChunksTo(write)
 }
 
 /**
@@ -141,6 +145,7 @@ public inline fun <reified T> Avro.decodeFromStream(
  * then the value.
  *
  * Every byte is handed to the [outputStream] before this function returns; the stream is neither flushed nor closed.
+ * If the encoding fails part-way, the stream may already hold the header and the beginning of the value.
  *
  * @see Avro.encodeToStream
  */
@@ -151,10 +156,14 @@ public fun <T> AvroSingleObject.encodeToStream(
     value: T,
     outputStream: OutputStream,
 ) {
-    val encoder = ByteArrayEncoder()
+    val write = outputStream.chunkWriter()
+    val encoder = ByteArrayEncoder(write)
     encodeWithHeader(writerSchema, serializer, value, encoder)
-    encoder.writeChunksTo { chunk, length -> outputStream.write(chunk, 0, length) }
+    encoder.writeChunksTo(write)
 }
+
+/** Writes each chunk to the stream as the encoder fills it, so that a large value is never held whole. */
+private fun OutputStream.chunkWriter(): (ByteArray, Int) -> Unit = { chunk, length -> write(chunk, 0, length) }
 
 /**
  * Decodes the single Avro object held by the [inputStream], with the writer schema its header names.

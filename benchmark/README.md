@@ -1213,6 +1213,153 @@ once the multiplatform benchmarks exist.
   avoid.
 - Reads do not move (control), and neither does Apache.
 
+## Results — JVM streams without kotlinx-io (8ff89859 vs two candidates)
+
+**Are `Avro.encodeToStream`/`decodeFromStream` on plain `java.io` streams faster than the same work through
+kotlinx-io?** Writes: yes, +15% to +83% on every row with either candidate. Reads: only with candidate B (kept), whose
+array is sized from the stream: A's fixed 8 KiB array costs 40% on the smallest record. B is +10% to +18% over base on
+the one-record rows and level elsewhere.
+
+| | |
+|---|---|
+| Date | 2026-10-26 20:13 → 2026-10-27 01:23 |
+| Machine, power, sleep | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37; AC power and Low Power Mode checked before every invocation and polled every 10 s (no violation); one `caffeinate -dimsu` over the whole script, no sleep or dark wake (`pmset -g log`, lines starting with a date); nothing discarded |
+| Load | Every invocation started once the 1-min load average was below 3 (2.05–2.92 at the starts) |
+| Sides | **base** `8ff89859` (v2's way: `decodeFromSource`/`encodeToSink` over `asSource()`/`asSink()` of the stream, `buffered()`, then `flush()`); **A** `0a19d72e` (kotlinx-io removed, `decodeFromStream` refills a fresh 8 KiB array, `encodeToStream` encodes the whole value into `ByteArrayEncoder`'s chunks then writes them); **B** `0ad413d3` (the decoder's array sized from `available()`, 512 B to 8 KiB, doubled when a read fills it; the encoder hands each full chunk to the stream and reuses one 64 KiB array past that size) — **B is merged by the commit that adds this section** |
+
+**Method:** the `streamab` configuration: avro4k `readFromStream`, `writeToStream`, `read`, `writeToByteArray` and Apache
+reflect's `read`, `readFromStream`, `write` (1 fork, 5 × 1 s warmup, 5 × 3 s measurement), 5 invocations per side, the
+side order rotated each round (base/A/B, A/B/base, B/base/A, base/B/A, A/base/B). avro4k's `read` and
+`writeToByteArray` are a regression check (the decoders were merged into one base class and kotlinx-io removed under
+them), not a control. Allocation: one invocation per side on the four avro4k methods, escape analysis off, 1 fork,
+2 × 1 s warmup, 3 × 1 s measurement. "Y" = every invocation of one side is above (or below) every invocation of the
+other.
+
+### avro4k `readFromStream` (one value per `ByteArrayInputStream`)
+
+| workload | param | base | A | B | base → A | base → B | A → B |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `simple` | 1 | 3.982M | 2.369M | 4.375M | −40.5% Y | +9.9% Y | +84.7% Y |
+| `simple` | 25 | 276,355 | 251,029 | 269,534 | −9.2% n | −2.5% n | +7.4% n |
+| `simple` | 500 | 13,191 | 13,232 | 12,559 | +0.3% n | −4.8% n | −5.1% n |
+| `complex` | 1 | 402,690 | 411,332 | 476,281 | +2.1% n | +18.3% Y | +15.8% Y |
+| `complex` | 15 | 29,976 | 29,697 | 30,271 | −0.9% n | +1.0% n | +1.9% n |
+| `complex` | 200 | 2,190 | 2,238 | 2,203 | +2.2% n | +0.6% n | −1.6% n |
+| `lists` | 100 | 8,086 | 8,302 | 7,775 | +2.7% n | −3.9% n | −6.4% n |
+| `lists` | 10000 | 78.9 | 83.0 | 80.5 | +5.2% n | +2.0% n | −3.0% n |
+
+- A's 8 KiB array, allocated and zeroed on every call, dominates a 60-byte record (`simple` @1, A 2.30M–2.48M every
+  invocation); B starts at the stream's `available()` and wins it back.
+- `simple` @25/@500, `lists` @100: not separated; base and B overlap (`simple` @500 base 12,517–13,644, B 11,127–13,678).
+
+### avro4k `writeToStream` (one value per call, into a reused `ByteArrayOutputStream`)
+
+| workload | param | base | A | B | base → A | base → B | A → B |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `simple` | 1 | 5.595M | 7.427M | 7.700M | +32.7% Y | +37.6% Y | +3.7% n |
+| `simple` | 25 | 314,053 | 467,603 | 471,434 | +48.9% Y | +50.1% Y | +0.8% n |
+| `simple` | 500 | 15,458 | 22,452 | 22,517 | +45.2% Y | +45.7% Y | +0.3% n |
+| `complex` | 1 | 699,033 | 845,197 | 842,628 | +20.9% Y | +20.5% Y | −0.3% n |
+| `complex` | 15 | 43,421 | 50,039 | 49,863 | +15.2% Y | +14.8% Y | −0.4% n |
+| `complex` | 200 | 2,958 | 3,615 | 3,745 | +22.2% Y | +26.6% Y | +3.6% Y |
+| `lists` | 100 | 4,711 | 8,599 | 8,476 | +82.5% Y | +79.9% Y | −1.4% n |
+| `lists` | 10000 | 52.8 | 77.9 | 79.5 | +47.5% Y | +50.5% Y | +2.0% n |
+
+- Wide spreads, every row still separated from base: base `simple` @25 (237,309–367,179), B `simple` @1
+  (6.27M–9.94M), A and B `lists` @100 (8,165–9,954 and 7,960–9,848).
+- A and B separated only on `complex` @200 (B +3.6%); the larger gap is in memory (below).
+
+### Regression check: avro4k `read` and `writeToByteArray`
+
+No row is below base by more than 3% **and** separated. One row is separated, upward: `lists` @100 `read` (A +6.7%,
+B +2.5%).
+
+| workload | param | base | A | B | base → A | base → B | A → B |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `simple` | 1 | 5.448M | 4.764M | 4.570M | −12.6% n | −16.1% n | −4.1% n |
+| `simple` | 25 | 282,144 | 264,515 | 254,557 | −6.2% n | −9.8% n | −3.8% n |
+| `simple` | 500 | 13,052 | 13,726 | 14,295 | +5.2% n | +9.5% n | +4.1% n |
+| `complex` | 1 | 421,830 | 407,948 | 410,432 | −3.3% n | −2.7% n | +0.6% n |
+| `complex` | 15 | 31,437 | 31,620 | 31,998 | +0.6% n | +1.8% n | +1.2% n |
+| `complex` | 200 | 2,344 | 2,334 | 2,332 | −0.4% n | −0.5% n | −0.1% n |
+| `lists` | 100 | 7,638 | 8,147 | 7,825 | +6.7% Y | +2.5% Y | −4.0% n |
+| `lists` | 10000 | 85.2 | 85.6 | 85.7 | +0.5% n | +0.6% n | +0.1% n |
+
+| workload | param | base | A | B | base → A | base → B | A → B |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `simple` | 1 | 6.433M | 6.661M | 6.729M | +3.5% n | +4.6% n | +1.0% n |
+| `simple` | 25 | 464,587 | 449,926 | 458,417 | −3.2% n | −1.3% n | +1.9% n |
+| `simple` | 500 | 21,377 | 21,426 | 21,277 | +0.2% n | −0.5% n | −0.7% n |
+| `complex` | 1 | 845,706 | 846,426 | 846,001 | +0.1% n | +0.0% n | −0.1% n |
+| `complex` | 15 | 44,552 | 44,399 | 44,622 | −0.3% n | +0.2% n | +0.5% n |
+| `complex` | 200 | 3,259 | 3,320 | 3,343 | +1.9% n | +2.6% n | +0.7% n |
+| `lists` | 100 | 9,014 | 9,639 | 9,062 | +6.9% n | +0.5% n | −6.0% n |
+| `lists` | 10000 | 74.7 | 73.7 | 74.0 | −1.3% n | −0.9% n | +0.5% n |
+
+| method | workload | param | base | A | B |
+|---|---|---:|---:|---:|---:|
+| `readFromStream` | `simple` | 1 | 664 | 8,800 | 1,120 |
+| `readFromStream` | `simple` | 25 | 6,872 | 15,008 | 9,592 |
+| `readFromStream` | `simple` | 500 | 130,368 | 138,505 | 138,505 |
+| `readFromStream` | `complex` | 1 | 4,520 | 12,656 | 4,976 |
+| `readFromStream` | `complex` | 15 | 106,104 | 114,208 | 114,208 |
+| `readFromStream` | `complex` | 200 | 1,415,875 | 1,423,643 | 1,423,643 |
+| `readFromStream` | `lists` | 100 | 301,817 | 309,953 | 309,953 |
+| `readFromStream` | `lists` | 10000 | 30,249,639 | 30,257,769 | 30,257,767 |
+| `writeToStream` | `simple` | 1 | 296 | 544 | 552 |
+| `writeToStream` | `simple` | 25 | 2,216 | 6,288 | 6,168 |
+| `writeToStream` | `simple` | 500 | 40,216 | 105,856 | 105,736 |
+| `writeToStream` | `complex` | 1 | 1,888 | 2,824 | 2,704 |
+| `writeToStream` | `complex` | 15 | 26,624 | 84,864 | 84,744 |
+| `writeToStream` | `complex` | 200 | 356,642 | 1,066,186 | 541,490 |
+| `writeToStream` | `lists` | 100 | 9,914 | 141,121 | 141,001 |
+| `writeToStream` | `lists` | 10000 | 960,407 | 10,668,588 | 1,093,817 |
+
+- `read` `simple` @1 (−13% / −16%, not separated) is the multimodal row seen before: base 4.74M–6.25M, A 4.31M–5.32M,
+  B 4.34M–4.74M. A and B run the same `read` code (B changes only the stream decoder and the stream path of the
+  encoder), and differ by 4% here: the spread is the JIT's, not the code's. To watch in the v2 → v3 run.
+
+### Controls
+
+No Apache row is separated between any two sides: `read` −1.8% to +5.4%, `readFromStream` −4.8% to +3.4%, `write`
+−3.9% to +6.3%.
+
+### Allocation per operation, escape analysis off (B/op, lower is better)
+
+| method | workload | param | base | A | B |
+|---|---|---:|---:|---:|---:|
+| `readFromStream` | `simple` | 1 | 664 | 8,800 | 1,120 |
+| `readFromStream` | `simple` | 25 | 6,872 | 15,008 | 9,592 |
+| `readFromStream` | `simple` | 500 | 130,368 | 138,505 | 138,505 |
+| `readFromStream` | `complex` | 1 | 4,520 | 12,656 | 4,976 |
+| `readFromStream` | `complex` | 15 | 106,104 | 114,208 | 114,208 |
+| `readFromStream` | `complex` | 200 | 1,415,875 | 1,423,643 | 1,423,643 |
+| `readFromStream` | `lists` | 100 | 301,817 | 309,953 | 309,953 |
+| `readFromStream` | `lists` | 10000 | 30,249,639 | 30,257,769 | 30,257,767 |
+| `writeToStream` | `simple` | 1 | 296 | 544 | 552 |
+| `writeToStream` | `simple` | 25 | 2,216 | 6,288 | 6,168 |
+| `writeToStream` | `simple` | 500 | 40,216 | 105,856 | 105,736 |
+| `writeToStream` | `complex` | 1 | 1,888 | 2,824 | 2,704 |
+| `writeToStream` | `complex` | 15 | 26,624 | 84,864 | 84,744 |
+| `writeToStream` | `complex` | 200 | 356,642 | 1,066,186 | 541,490 |
+| `writeToStream` | `lists` | 100 | 9,914 | 141,121 | 141,001 |
+| `writeToStream` | `lists` | 10000 | 960,407 | 10,668,588 | 1,093,817 |
+
+`read` is identical on all three sides, and `writeToByteArray` is identical between base and A, B +8 B (the
+stream-chunk callback field). base allocates least on the stream rows because kotlinx-io takes its segments from a
+pool on the JVM. A holds the whole value before writing it (`lists` @10000: 10.7 MB per call); B never holds more than
+its chunks, growing up to 64 KiB then reused (1.09 MB per call, near base's 0.96 MB).
+
+### Verdict, in plain words
+
+- **Kept: B, for reads and for writes.** Reads: B above A on the two separated rows, A above B on none, and B is the
+  only candidate at least as fast as base on the smallest values. Writes: both candidates are 15% to 83% faster than
+  base; B is ahead on the one separated row and holds a large value in a bounded amount of memory.
+- B's two behaviour differences come with it, both as v2's `encodeToSink` and kotlinx-serialization-json's
+  `encodeToStream`: a value failing part-way may leave its first bytes in the stream (now said in the KDoc), and a
+  value written to a stream has no 2 GiB limit.
+- Nothing moved on the `ByteArray` paths, and Apache did not move.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than

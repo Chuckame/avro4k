@@ -262,3 +262,18 @@ the end of M3 (`benchmark/README.md`, "M3 complete"); everything since (the deco
 - `writeToByteArray` runs the same code on both sides apart from one null check on the chunk-growth path (out of line):
   IO-8's regression rows should show it flat.
 
+
+## 8. IO-8 findings (2026-10-27)
+
+- **B kept for both families and merged.** Numbers and method: `benchmark/README.md`, "Results — JVM streams without
+  kotlinx-io". Reads: A's 8 KiB array per call is the whole cost of a small value (`simple` @1 −40% vs base, 8,800 B/op
+  against base's 664); B's array from `available()` brings it to +10% over base. Writes: removing the `Buffer` gives
+  +15% to +82% to either candidate; between them only memory separates them clearly (`lists` @10000: A 10.7 MB/op,
+  B 1.09 MB/op).
+- **B still allocates more than base on stream reads** (`simple` @1 1,120 B vs 664 B; +8 KiB on every value past 512 B):
+  base's kotlinx-io segments come from a pool on the JVM. A shared or pooled array is not planned; if wanted, it is an
+  M5 candidate, measured against this B.
+- **The driver's sleep check was too loose:** it printed `pmset -g log`'s "Sleep/Wakes since boot" summary lines, which
+  carry no date, as events. Only lines starting with a date count; there were none in the run window. Filter on
+  `^20` in the IO-9 driver.
+- `read` `simple` @1 is multimodal on every side (base 4.74M–6.25M, B 4.34M–4.74M); IO-9 re-measures it against v2.
