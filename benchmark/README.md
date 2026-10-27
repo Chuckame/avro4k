@@ -1252,7 +1252,7 @@ other.
   invocation); B starts at the stream's `available()` and wins it back.
 - `simple` @25/@500, `lists` @100: not separated; base and B overlap (`simple` @500 base 12,517–13,644, B 11,127–13,678).
 
-### avro4k `writeToStream` (one value per call, into a reused `ByteArrayOutputStream`)
+### avro4k `writeToStream` (one value per call, into one discarding `OutputStream.nullOutputStream()`)
 
 | workload | param | base | A | B | base → A | base → B | A → B |
 |---|---:|---:|---:|---:|---:|---:|---:|
