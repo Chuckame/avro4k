@@ -244,3 +244,28 @@ with what it did not use. The exception is not an end-of-input `SerializationExc
 (`m4-jvm-streams.md`, IO-7) and as `Json.decodeFromStream` does; map end of input to `SerializationException`.
 
 **Issue:** *decodeFromStream consumes more than one value from the InputStream*.
+
+## 15. A `bytes` value crossing a kotlinx-io segment is read short (`decodeFromSource`, `decodeFromStream`)
+
+**Found by** the v2 → v3 benchmark run (2026-10-27): v2's `readFromStream` row throws on `simple` @500 and
+`complex` @15/@200 (`IndexOutOfBoundsException: Index -7926 out of bounds for length 2` in
+`decodeAndResolveUnion`), where the same bytes decode from a `ByteArray`.
+
+**Repro (main `020adbad`, 2026-10-27, throwaway test):** `@Serializable class Holder(val prefix: String, val bytes:
+ByteArray, val after: Int?)` with an 8,000-char `prefix` and 1,000 `bytes`; `decodeFromByteArray` returns it,
+`decodeFromSource(schema, serializer, ByteArrayInputStream(data).asSource().buffered())` throws
+`SerializationException: Invalid varint encoding: more bytes than expected`. With a 100-char `prefix` (the bytes
+inside the first 8 KiB segment) it passes. Any reader of a `Source` or `InputStream` holding more than 8 KiB before a
+`bytes` field is affected: wrong values, or an exception further on.
+
+**Cause:** `KotlinxIoDecoder.readBytes`: when the value spans segments (`length >= segment.size`), and on the
+`old`-buffer path, it calls `source.readAtMostTo(ByteBuffer)` once, which reads only what the head segment holds. The
+rest of the value is then read as the next fields. Second smell in the same function: for `length < segment.size` it
+returns a `ByteBuffer` wrapping the segment's array, which the pool recycles once the segment is consumed, so the
+returned bytes can change later.
+
+**Fix sketch:** read exactly `length` bytes (`source.readByteArray(length)`, or loop `readAtMostTo` until the buffer
+is full) and never wrap a segment's array. v3 is not affected: kotlinx-io is gone, `InputStreamDecoder` reads a
+value across refills, and v3's `readFromStream` rows decode these three workloads.
+
+**Issue:** *decodeFromSource/decodeFromStream corrupts a bytes field that crosses an 8 KiB boundary*.

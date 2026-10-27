@@ -1360,7 +1360,163 @@ its chunks, growing up to 64 KiB then reused (1.09 MB per call, near base's 0.96
   value written to a stream has no 2 GiB limit.
 - Nothing moved on the `ByteArray` paths, and Apache did not move.
 
+## Results — v2 against v3 on the JVM (4508a13 vs 9c1325ce)
+
+**How much faster is v3 than v2 on the JVM?** On every avro4k row both versions run, v3 is faster, separated on all
+but one: reads +25% to +56%, reads from a stream +32% to +75%, writes to a stream +21% to +63%, writes to a new array
++19% to +48% (`lists` @10000 +4.4%, not separated). v2's stream read throws on three of the eight rows, a pre-existing
+bug found by this run. **This section supersedes "M3 complete" as the current state.**
+
+| | |
+|---|---|
+| Date | 2026-10-27 01:29 → 04:29 |
+| Machine, power, sleep | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37; AC power and Low Power Mode checked before every invocation (the run waited otherwise) and polled every 10 s (no violation); one `caffeinate -dimsu` over the whole script, no sleep or dark wake (`pmset -g log`, lines starting with a date); nothing discarded |
+| Load | Every invocation started once the 1-min load average was below 3 (1.99–2.99 at the starts) |
+| v2 | `9f6566d6` on branch `bench/v2-rows`: M0 `4508a13` plus one benchmark-only commit adding the stream and `ByteArray` rows with v2's API. Apache Avro 1.12.1, Kotlin 2.3.21, Jackson 2.21.3, kotlinx-io 0.8.2 |
+| v3 | `9c1325ce` (code = the merge `3f5f2833`): Apache Avro 1.12.2, Kotlin 2.4.20, Jackson 2.22.3, no kotlinx-io in core. kotlinx-serialization 1.11.0 and JMH 1.37 on both sides |
+
+**Rows** (`v2v3` configuration, on both sides):
+- `read`: `decodeFromByteArray` on both.
+- `readFromStream`: one value per `ByteArrayInputStream` created per call. v2: `decodeFromStream(schema, …)`, i.e.
+  `decodeFromSource` over `asSource().buffered()`; v3: `decodeFromStream`.
+- `writeToStream`: into one `OutputStream.nullOutputStream()`. v2's `encodeToStream` never flushes and writes nothing
+  for a small value (backlog #13), so v2's row is what a working v2 caller wrote: `encodeToSink` into
+  `output.asSink().buffered()`, then `flush()`; v3: `encodeToStream`.
+- `writeToByteArray`: `encodeToByteArray` on both.
+- Apache `SpecificData` `read`, `write`: for the "÷ Apache" column only. Apache's version differs between the sides
+  (1.12.1 → 1.12.2, which moved it by −32% to +21% on reads), so it is not a noise reference: the verdicts rest on
+  separation.
+
+**Method:** 5 invocations per side alternated (v2/v3, v3/v2, v2/v3, v3/v2, v2/v3), 1 fork, 5 × 1 s warmup, 5 × 3 s
+measurement, escape analysis on. Allocation: one invocation per side on the avro4k rows, escape analysis off, 1 fork,
+5 × 1 s warmup, 5 × 1 s measurement. "separated" = every invocation of one side is above (or below) every invocation of
+the other. "v3 ÷ Apache" = v3 against Apache 1.12.2 `SpecificData` on the same workload and parameter (reads against
+its `read`, writes against its `write`, which writes into a reused buffered encoder).
+
+### avro4k reads
+
+| method | workload | param | v2 | v3 | v2 → v3 | separated | v3 ÷ Apache |
+|---|---|---:|---:|---:|---:|---|---:|
+| `read` | `simple` | 1 | 3.749M | 5.013M | +33.7% | yes | 0.93× |
+| `read` | `simple` | 25 | 202,982 | 254,332 | +25.3% | yes | 0.72× |
+| `read` | `simple` | 500 | 10,378 | 14,926 | +43.8% | yes | 0.92× |
+| `read` | `complex` | 1 | 329,890 | 413,809 | +25.4% | yes | 0.54× |
+| `read` | `complex` | 15 | 24,743 | 31,473 | +27.2% | yes | 0.68× |
+| `read` | `complex` | 200 | 1,807 | 2,313 | +28.0% | yes | 0.70× |
+| `read` | `lists` | 100 | 6,355 | 8,137 | +28.0% | yes | 0.66× |
+| `read` | `lists` | 10000 | 54.9 | 85.6 | +56.0% | yes | 0.63× |
+| `readFromStream` | `simple` | 1 | 3.161M | 4.444M | +40.6% | yes | 0.82× |
+| `readFromStream` | `simple` | 25 | 191,551 | 253,586 | +32.4% | yes | 0.71× |
+| `readFromStream` | `simple` | 500 | throws | 13,975 | v2 throws ([#15](../docs/plans/notes/backlog-pre-existing-bugs.md)) |  |  |
+| `readFromStream` | `complex` | 1 | 329,603 | 470,353 | +42.7% | yes | 0.61× |
+| `readFromStream` | `complex` | 15 | throws | 29,646 | v2 throws ([#15](../docs/plans/notes/backlog-pre-existing-bugs.md)) |  |  |
+| `readFromStream` | `complex` | 200 | throws | 2,218 | v2 throws ([#15](../docs/plans/notes/backlog-pre-existing-bugs.md)) |  |  |
+| `readFromStream` | `lists` | 100 | 5,294 | 7,973 | +50.6% | yes | 0.65× |
+| `readFromStream` | `lists` | 10000 | 45.9 | 80.3 | +75.1% | yes | 0.59× |
+
+### avro4k writes
+
+| method | workload | param | v2 | v3 | v2 → v3 | separated | v3 ÷ Apache |
+|---|---|---:|---:|---:|---:|---|---:|
+| `writeToStream` | `simple` | 1 | 4.767M | 7.351M | +54.2% | yes | 1.07× |
+| `writeToStream` | `simple` | 25 | 290,102 | 471,666 | +62.6% | yes | 1.99× |
+| `writeToStream` | `simple` | 500 | 13,947 | 22,573 | +61.9% | yes | 2.14× |
+| `writeToStream` | `complex` | 1 | 630,158 | 846,180 | +34.3% | yes | 1.12× |
+| `writeToStream` | `complex` | 15 | 37,700 | 50,080 | +32.8% | yes | 1.15× |
+| `writeToStream` | `complex` | 200 | 2,544 | 3,760 | +47.8% | yes | 1.29× |
+| `writeToStream` | `lists` | 100 | 5,864 | 8,443 | +44.0% | yes | 0.91× |
+| `writeToStream` | `lists` | 10000 | 65.7 | 79.8 | +21.5% | yes | 0.96× |
+| `writeToByteArray` | `simple` | 1 | 5.724M | 7.323M | +27.9% | yes | 1.06× |
+| `writeToByteArray` | `simple` | 25 | 311,987 | 460,403 | +47.6% | yes | 1.94× |
+| `writeToByteArray` | `simple` | 500 | 15,567 | 21,409 | +37.5% | yes | 2.03× |
+| `writeToByteArray` | `complex` | 1 | 669,647 | 842,877 | +25.9% | yes | 1.11× |
+| `writeToByteArray` | `complex` | 15 | 37,535 | 44,760 | +19.2% | yes | 1.03× |
+| `writeToByteArray` | `complex` | 200 | 2,631 | 3,319 | +26.1% | yes | 1.13× |
+| `writeToByteArray` | `lists` | 100 | 7,354 | 9,731 | +32.3% | yes | 1.05× |
+| `writeToByteArray` | `lists` | 10000 | 70.6 | 73.7 | +4.4% | no | 0.88× |
+
+- Wide spreads on v3, every row still separated except the last: `writeToByteArray` `simple` @1 6.19M–9.17M,
+  `lists` @100 7,682–11,103; `read` `simple` @25 227,435–291,605.
+- `read` `simple` @1, multimodal in the JVM streams run, is +34% here and separated (v2 3.57M–3.88M, v3 4.31M–5.27M).
+
+### Apache `SpecificData`, the two versions (context)
+
+| method | workload | param | 1.12.1 (v2 side) | 1.12.2 (v3 side) | Δ |
+|---|---|---:|---:|---:|---:|
+| `read` | `simple` | 1 | 7.922M | 5.389M | −32.0% |
+| `read` | `simple` | 25 | 354,366 | 355,094 | +0.2% |
+| `read` | `simple` | 500 | 17,190 | 16,186 | −5.8% |
+| `read` | `complex` | 1 | 634,211 | 770,122 | +21.4% |
+| `read` | `complex` | 15 | 48,734 | 46,204 | −5.2% |
+| `read` | `complex` | 200 | 3,494 | 3,294 | −5.7% |
+| `read` | `lists` | 100 | 13,924 | 12,258 | −12.0% |
+| `read` | `lists` | 10000 | 132.3 | 135.8 | +2.7% |
+| `write` | `simple` | 1 | 6.809M | 6.893M | +1.2% |
+| `write` | `simple` | 25 | 238,830 | 236,859 | −0.8% |
+| `write` | `simple` | 500 | 10,395 | 10,527 | +1.3% |
+| `write` | `complex` | 1 | 751,688 | 758,645 | +0.9% |
+| `write` | `complex` | 15 | 42,188 | 43,528 | +3.2% |
+| `write` | `complex` | 200 | 2,859 | 2,925 | +2.3% |
+| `write` | `lists` | 100 | 9,207 | 9,243 | +0.4% |
+| `write` | `lists` | 10000 | 85.8 | 83.4 | −2.9% |
+
+### Allocation per operation, escape analysis off (B/op, lower is better)
+
+| method | workload | param | v2 | v3 | Δ |
+|---|---|---:|---:|---:|---:|
+| `read` | `simple` | 1 | 976 | 552 | −43% |
+| `read` | `simple` | 25 | 13,328 | 6,760 | −49% |
+| `read` | `simple` | 500 | 258,441 | 130,256 | −50% |
+| `read` | `complex` | 1 | 6,280 | 4,408 | −30% |
+| `read` | `complex` | 15 | 135,216 | 105,960 | −22% |
+| `read` | `complex` | 200 | 1,808,620 | 1,415,395 | −22% |
+| `read` | `lists` | 100 | 312,377 | 301,705 | −3% |
+| `read` | `lists` | 10000 | 31,160,916 | 30,249,512 | −3% |
+| `readFromStream` | `simple` | 1 | 1,008 | 1,120 | +11% |
+| `readFromStream` | `simple` | 25 | 13,360 | 9,592 | −28% |
+| `readFromStream` | `simple` | 500 | throws | 138,505 |  |
+| `readFromStream` | `complex` | 1 | 6,312 | 4,976 | −21% |
+| `readFromStream` | `complex` | 15 | throws | 114,208 |  |
+| `readFromStream` | `complex` | 200 | throws | 1,423,643 |  |
+| `readFromStream` | `lists` | 100 | 312,409 | 309,953 | −1% |
+| `readFromStream` | `lists` | 10000 | 31,160,980 | 30,257,766 | −3% |
+| `writeToStream` | `simple` | 1 | 608 | 552 | −9% |
+| `writeToStream` | `simple` | 25 | 5,216 | 6,168 | +18% |
+| `writeToStream` | `simple` | 500 | 96,417 | 105,736 | +10% |
+| `writeToStream` | `complex` | 1 | 2,240 | 2,704 | +21% |
+| `writeToStream` | `complex` | 15 | 30,848 | 84,744 | +175% |
+| `writeToStream` | `complex` | 200 | 409,883 | 541,490 | +32% |
+| `writeToStream` | `lists` | 100 | 21,425 | 141,001 | +558% |
+| `writeToStream` | `lists` | 10000 | 2,080,727 | 1,093,816 | −47% |
+| `writeToByteArray` | `simple` | 1 | 704 | 672 | −5% |
+| `writeToByteArray` | `simple` | 25 | 7,968 | 9,008 | +13% |
+| `writeToByteArray` | `simple` | 500 | 151,728 | 161,072 | +6% |
+| `writeToByteArray` | `complex` | 1 | 2,720 | 3,304 | +21% |
+| `writeToByteArray` | `complex` | 15 | 79,600 | 133,552 | +68% |
+| `writeToByteArray` | `complex` | 200 | 1,060,531 | 1,716,610 | +62% |
+| `writeToByteArray` | `lists` | 100 | 118,217 | 237,801 | +101% |
+| `writeToByteArray` | `lists` | 10000 | 17,229,144 | 20,346,134 | +18% |
+
+- **Reads allocate less on every row** (−3% to −50%): `simple` halves.
+- **Writes allocate more on most rows, as in the `ByteArray` encoder run:** v2's kotlinx-io took its segments from a
+  pool on the JVM, so only the final array counted; v3's chunks are allocated per call (256 B growing to 64 KiB). On
+  `writeToStream` `lists` @100 (+558%) the value is over 64 KiB, so v3 allocates every chunk size up to 64 KiB; on `lists`
+  @10000 it reuses the 64 KiB chunk and allocates half of v2 (−47%). Off the JVM there is no pool, so the comparison
+  reverses there (to measure with the multiplatform benchmarks).
+
+### Verdict, in plain words
+
+- **v3 is faster than v2 on every row**, separated on all but `writeToByteArray` `lists` @10000, by a fifth to three
+  quarters, and the stream functions now work: v2's read
+  from a stream throws or returns wrong values once a `bytes` field crosses an 8 KiB segment boundary (backlog #15), and v2's write to a
+  stream needs a flush the function does not do (#13).
+- **Against Apache 1.12.2 `SpecificData`:** reads at 0.54× to 0.93×, writes at 0.88× to 2.14×.
+- **Open point for M5:** the per-call chunk allocation of writes (above); a reused or pooled first chunk is the
+  candidate, measured against this run.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
+
+*Superseded as the current state by "v2 against v3 on the JVM" above (2026-10-27).*
 
 The cumulative question again, on the tree M3 ends with (every M3 unit, the review's six fixes): **is avro4k faster than
 at the M0 baseline, and how far is it from Apache?** Same protocol as the "M3 so far" run below, which this section
