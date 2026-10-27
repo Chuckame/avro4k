@@ -26,8 +26,8 @@ batches, and its §1 rules in every brief. The current state is in the newest "R
 - Branch `bench/v2-rows` is benchmark-only, never merged; keep it for the next v2 → v3 run. `v3/jvm-streams-b` can be
   deleted.
 
-**Next:** M5 batch 1 (M5-00 ∥ M5-01), per [`notes/m3-decomposition.md`](notes/m3-decomposition.md) and the M5
-decomposition. Its A/B carries the encoder's open points (`m4-jvm-streams.md` §5) plus a new one from IO-9: the
+**Next:** M5 batch 1 (M5-00 ∥ M5-01), per the M5
+decomposition ([`notes/m5-decomposition.md`](notes/m5-decomposition.md)). Its A/B carries the encoder's open points (`m4-jvm-streams.md` §5) plus a new one from IO-9: the
 per-call chunk allocation of writes (a reused or pooled first chunk), measured against IO-9.
 
 ### Earlier (2026-10-27): IO-8 done, candidate B merged — IO-9 next
@@ -534,8 +534,6 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M4 · IO-7b JVM streams candidate B | done | `v3/jvm-streams-b` (off IO-3, merged by IO-8) | `0ad413d3` | Decoder array from `available()` clamped to 512 B – 8 KiB, doubled on each refill that **filled** it (else the first refill would double an unread array, and a trickling socket would grow it for nothing); `ByteArrayEncoder(writeFullChunk)` hands each full chunk to the stream, reusing the 64 KiB array. ACC+KMP green, 10 no-runner binaries link, API unchanged; +1 common test (jvm 1066, jsNode 227, macosArm64 230), one more stream in a jvm test. Two behaviour differences from A for IO-8's verdict: [`notes/m4-jvm-streams.md`](notes/m4-jvm-streams.md) §7 |
 | M4 · IO-8 JVM streams A/B and merge | done | `v3/m2-foundation` | merge (this commit) | base `8ff89859` vs A `0a19d72e` vs B `0ad413d3`, 5 rounds × 3 sides of `streamab` + EA-off alloc, ~5h10. **B kept for both families**: `readFromStream` B > A on `simple` @1 (+85%) and `complex` @1 (+16%), separated; `writeToStream` both +15% to +82% over base, B > A on `complex` @200 (+3.6%), B/op 10× lower on `lists` @10000. Regression rows flat; Apache flat. KDoc: a failed `encodeToStream` may leave bytes in the stream. `benchmark/README.md` → "Results — JVM streams without kotlinx-io". core jvmTest 1066, `apiCheck` clean. |
 | M4 · IO-9 v2 → v3 on the JVM | done | `v3/m2-foundation` (+ `bench/v2-rows` `9f6566d6`) | config `9c1325ce`, numbers this commit | 5 alternated invocations per side of `v2v3` + EA-off alloc, ~3 h. v3 faster on every avro4k row (31 of 32 comparable rows separated), +19% to +75%; v2's `readFromStream` throws on 3 rows (backlog #15, new). README "Results — v2 against v3 on the JVM" is the current state. |
-| M4 · IO-8 JVM streams A/B | todo | — | — | base IO-5 (`8ff89859`) vs A vs B, ~5¼ h (56 rows × 15 invocations, then alloc); numbers in the merge commit |
-| M4 · IO-9 v2 → v3 benchmark (M0 vs head) | todo | — | — | `read`, `readFromStream`, `writeToStream`, `writeToByteArray`, ~2¾ h; supersedes "M3 complete" |
 | M4 · stream decoded from its head segment's array | done | `v3/m2-foundation` | `79621284` (merged by `64b89c90`), bench rows `8920310f` | `KotlinxIoDecoder` reads the head segment's array with a position, consumed on segment end or `release()` (`decodeFromSource` calls it in a `finally`). Stream reads +12% to +48% end to end, `ByteArray` reads unchanged, +16 B/op on stream reads. Single-object `decodeFromByteArray` and big-decimal bytes through `ByteArrayDecoder`. [`notes/m4-stream-cursor.md`](notes/m4-stream-cursor.md) |
 | v3.0.0 · README final pass | todo | — | — | **user (2026-10-15): update the README just before the v3.0.0 release**, once benchmark numbers and the 3.1 container decision are final (B8 did a first pass) |
 | M5 decomposition (`Plan` agent) | done | `v3/m2-foundation` | this commit | 12 units, [`notes/m5-decomposition.md`](notes/m5-decomposition.md); §7 Q1–Q8 for the user before any unit |
