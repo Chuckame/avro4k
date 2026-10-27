@@ -78,6 +78,13 @@ benchmark {
             include("""^com\.github\.avrokotlin\.benchmark\.\w+\.Avro4k\w*Benchmark\.(read|readFromStream|writeToStream|writeToByteArray)$""")
             include("""^com\.github\.avrokotlin\.benchmark\.\w+\.ApacheAvroReflect\w*Benchmark\.(read|readFromStream|write)$""")
         }
+        // v2 against v3: the avro4k rows both versions have (v2's on a benchmark-only branch off the M0 baseline), and
+        // Apache's specific data model for the distance to Apache. Apache's version differs between the two sides, so it is
+        // context, not a noise reference.
+        register("v2v3") {
+            include("""^com\.github\.avrokotlin\.benchmark\.\w+\.Avro4k\w*Benchmark\.(read|readFromStream|writeToStream|writeToByteArray)$""")
+            include("""^com\.github\.avrokotlin\.benchmark\.\w+\.ApacheAvroSpecific\w*Benchmark\.(read|write)$""")
+        }
         // The micro-benchmark suite: attribution instruments for a single avro4k internal each,
         // deliberately runnable on its own without paying for the ~25 min end-to-end matrix.
         register("micro") {
