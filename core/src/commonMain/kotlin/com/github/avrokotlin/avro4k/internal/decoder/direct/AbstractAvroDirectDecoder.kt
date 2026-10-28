@@ -66,6 +66,26 @@ internal abstract class AbstractAvroDirectDecoder(
     /** The items of the collection being decoded, summed over its blocks read so far. */
     private var decodedCollectionTotal = 0
 
+    /**
+     * The decoders of the records, array blocks and map blocks this decoder begins, each created on first use and then
+     * handed every next structure of its kind, by [beginStructure]: a list of records, or a record's successive fields
+     * of one kind, reuse one decoder instead of allocating one per value. Kotlinx decodes depth-first, so a decoder only
+     * ever has one structure begun at a time; one it begins inside another is begun by that other's own decoder. They
+     * belong to the decode call that created the root decoder, as this one does: nothing is shared between calls.
+     */
+    private var recordDecoder: RecordDirectDecoder? = null
+    private var arrayBlockDecoder: ArrayBlockDirectDecoder? = null
+    private var mapBlockDecoder: MapBlockDirectDecoder? = null
+
+    /**
+     * Whether this decoder decodes a structure its parent began and that is not ended yet, from [beginReuse] to
+     * [endStructure]. Its parent then begins the next structure on a new decoder, kept out of its slot: so a serializer
+     * that begins a second structure before ending the first, never ends one, or catches an error inside one and goes
+     * on, still decodes correctly, only allocating as it did before decoders were reused.
+     */
+    protected var inUse = false
+        private set
+
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
 
@@ -134,13 +154,13 @@ internal abstract class AbstractAvroDirectDecoder(
         return when (descriptor.kind) {
             StructureKind.LIST ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.ARRAY -> ArrayBlockDirectDecoder(currentAvroSchema, beginBlock(isMap = false), avro, binaryDecoder)
+                    AvroSchema.Type.ARRAY -> arrayBlockDecoder().reset(currentAvroSchema, beginBlock(isMap = false))
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
 
             StructureKind.MAP ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.MAP -> MapBlockDirectDecoder(currentAvroSchema, beginBlock(isMap = true), avro, binaryDecoder)
+                    AvroSchema.Type.MAP -> mapBlockDecoder().reset(currentAvroSchema, beginBlock(isMap = true))
 
                     AvroSchema.Type.RECORD ->
                         RecordAsMapDirectDecoder(
@@ -154,7 +174,7 @@ internal abstract class AbstractAvroDirectDecoder(
 
             StructureKind.CLASS, StructureKind.OBJECT ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.RECORD -> RecordDirectDecoder(currentAvroSchema, descriptor, avro, binaryDecoder)
+                    AvroSchema.Type.RECORD -> recordDecoder().reset(currentAvroSchema, descriptor)
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.RECORD)
                 }
 
@@ -162,6 +182,48 @@ internal abstract class AbstractAvroDirectDecoder(
 
             else -> throw AvroSerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
+    }
+
+    /** The record decoder to begin a record on: the one this decoder keeps, unless it is still in use. */
+    private fun recordDecoder(): RecordDirectDecoder {
+        val kept = recordDecoder
+        if (kept != null && !kept.inUse) return kept
+        val decoder = RecordDirectDecoder(avro, binaryDecoder)
+        if (kept == null) recordDecoder = decoder
+        return decoder
+    }
+
+    /** The array block decoder to begin a block on: the one this decoder keeps, unless it is still in use. */
+    private fun arrayBlockDecoder(): ArrayBlockDirectDecoder {
+        val kept = arrayBlockDecoder
+        if (kept != null && !kept.inUse) return kept
+        val decoder = ArrayBlockDirectDecoder(avro, binaryDecoder)
+        if (kept == null) arrayBlockDecoder = decoder
+        return decoder
+    }
+
+    /** The map block decoder to begin a block on: the one this decoder keeps, unless it is still in use. */
+    private fun mapBlockDecoder(): MapBlockDirectDecoder {
+        val kept = mapBlockDecoder
+        if (kept != null && !kept.inUse) return kept
+        val decoder = MapBlockDirectDecoder(avro, binaryDecoder)
+        if (kept == null) mapBlockDecoder = decoder
+        return decoder
+    }
+
+    /**
+     * The part of a reused decoder's reset that this class owns: marks it in use until [endStructure], and forgets the
+     * collection its previous structure decoded, as a new decoder would not know of one. Called by each reset, once
+     * nothing of it can fail any more.
+     */
+    protected fun beginReuse() {
+        inUse = true
+        decodedCollectionSize = -1
+        decodedCollectionTotal = 0
+    }
+
+    override fun endStructure(descriptor: SerialDescriptor) {
+        inUse = false
     }
 
     /**
@@ -358,6 +420,14 @@ internal abstract class AbstractAvroDirectDecoder(
         }
     }
 }
+
+/**
+ * What a decoder throws when asked for the writer schema of the field or item it decodes, or for the field's decoding
+ * step, before one is begun: a reused decoder fails there as a new one does, instead of answering with what its previous
+ * structure left behind.
+ */
+internal fun noElementBegunError(): IllegalStateException =
+    IllegalStateException("No field or item is being decoded: decodeElementIndex or a decode...Element call begins one")
 
 private class PolymorphicDecoder(
     avro: Avro,

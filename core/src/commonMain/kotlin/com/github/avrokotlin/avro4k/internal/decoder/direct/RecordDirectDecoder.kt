@@ -15,26 +15,67 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonNull
 
+private val NO_DECODING_STEPS = emptyArray<DecodingStep>()
+
+/**
+ * Decodes one record after another: its parent decoder keeps it and hands it each next record it begins, through
+ * [reset], instead of creating a decoder per record. Nothing of the previous record survives a [reset].
+ */
 internal class RecordDirectDecoder(
-    private val writerRecordSchema: AvroSchema,
-    descriptor: SerialDescriptor,
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
-    // from descriptor element index to schema field. The missing fields are at the end to decode the default values
-    private val classDescriptor = avro.recordResolver.resolveFields(writerRecordSchema, descriptor)
-    private lateinit var currentDecodingStep: DecodingStep.ValidatedDecodingStep
+    /** The writer schema of the record being decoded, and with [resolvedDescriptor], what [decodingSteps] were resolved for. */
+    private var writerRecordSchema: AvroSchema? = null
+    private var resolvedDescriptor: SerialDescriptor? = null
+
+    // in the writer schema's field order. The missing fields are at the end to decode the default values
+    private var decodingSteps: Array<DecodingStep> = NO_DECODING_STEPS
     private var nextDecodingStepIndex = 0
 
-    override lateinit var currentAvroSchema: AvroSchema
+    /** The step of the field being decoded: none until [decodeElementIndex] returns a field, as on a new decoder. */
+    private var decodingStep: DecodingStep.ValidatedDecodingStep? = null
+    private val currentDecodingStep: DecodingStep.ValidatedDecodingStep
+        get() = decodingStep ?: throw noElementBegunError()
+
+    private var fieldSchema: AvroSchema? = null
+    override var currentAvroSchema: AvroSchema
+        get() = fieldSchema ?: throw noElementBegunError()
+        set(value) {
+            fieldSchema = value
+        }
+
+    /**
+     * Begins decoding a record written with [writerRecordSchema] into [descriptor], from its first field.
+     *
+     * The decoding steps are only resolved when the schema or the descriptor is not the previous record's: the records
+     * of a list, or a field's successive values, are most often of one type, and so never reach the resolver. Compared
+     * by identity, as resolving is: a schema or descriptor equal to the previous one but another instance is resolved.
+     */
+    fun reset(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+    ): RecordDirectDecoder {
+        if (writerRecordSchema !== this.writerRecordSchema || descriptor !== resolvedDescriptor) {
+            // resolved before the keys change: a failing resolution leaves the previous record's steps with their keys
+            decodingSteps = avro.recordResolver.resolveFields(writerRecordSchema, descriptor).decoding
+            this.writerRecordSchema = writerRecordSchema
+            resolvedDescriptor = descriptor
+        }
+        nextDecodingStepIndex = 0
+        decodingStep = null
+        fieldSchema = null
+        beginReuse()
+        return this
+    }
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         var field: DecodingStep
         while (true) {
-            if (nextDecodingStepIndex == classDescriptor.decoding.size) {
+            if (nextDecodingStepIndex == decodingSteps.size) {
                 return CompositeDecoder.DECODE_DONE
             }
-            field = classDescriptor.decoding[nextDecodingStepIndex++]
+            field = decodingSteps[nextDecodingStepIndex++]
             when (field) {
                 is DecodingStep.IgnoreOptionalElement -> {
                     // loop again to ignore the optional element
@@ -46,19 +87,19 @@ internal class RecordDirectDecoder(
                     throw AvroSchemaMismatchException(
                         "Reader field '${descriptor.nonNullSerialName}.${descriptor.getElementName(
                             field.elementIndex
-                        )}' has no corresponding field in writer schema ${writerRecordSchema.toSchemaJsonString()}"
+                        )}' has no corresponding field in writer schema ${writerRecordSchema?.toSchemaJsonString()}"
                     )
                 }
 
                 is DecodingStep.DeserializeWriterField -> {
-                    currentDecodingStep = field
-                    currentAvroSchema = field.schema
+                    decodingStep = field
+                    fieldSchema = field.schema
                     return field.elementIndex
                 }
 
                 is DecodingStep.GetDefaultValue -> {
-                    currentDecodingStep = field
-                    currentAvroSchema = field.schema
+                    decodingStep = field
+                    fieldSchema = field.schema
                     return field.elementIndex
                 }
             }

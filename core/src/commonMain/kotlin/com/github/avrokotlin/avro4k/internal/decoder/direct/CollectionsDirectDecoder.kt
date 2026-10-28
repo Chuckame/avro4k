@@ -21,17 +21,40 @@ import kotlinx.serialization.encoding.CompositeDecoder
  */
 internal const val MAX_PRESIZED_BLOCK_ITEMS: Int = 1024
 
-/** The items of one array block, [blockSize] of them, already read and checked by the decoder that begins it. */
+/**
+ * The items of one array block, already read and checked by the decoder that begins it. That decoder keeps this one and
+ * hands it each next block it begins, of this array or of another, through [reset].
+ */
 internal class ArrayBlockDirectDecoder(
-    private val arraySchema: AvroSchema,
-    private val blockSize: Int,
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
-    override lateinit var currentAvroSchema: AvroSchema
+    /** The writer schema of the items, read once per block rather than per item. */
+    private var elementType: AvroSchema? = null
+    private var blockSize = 0
+
+    private var itemSchema: AvroSchema? = null
+    override var currentAvroSchema: AvroSchema
+        get() = itemSchema ?: throw noElementBegunError()
+        set(value) {
+            itemSchema = value
+        }
 
     /** The next item index [decodeElementIndex] returns, relative to the block: kotlinx adds the items of the previous blocks. */
     private var nextItemIndex = 0
+
+    /** Begins decoding a block of [blockSize] items of [arraySchema], from its first item. */
+    fun reset(
+        arraySchema: AvroSchema,
+        blockSize: Int,
+    ): ArrayBlockDirectDecoder {
+        elementType = arraySchema.elementType
+        this.blockSize = blockSize
+        itemSchema = null
+        nextItemIndex = 0
+        beginReuse()
+        return this
+    }
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int = blockSize
 
@@ -40,7 +63,7 @@ internal class ArrayBlockDirectDecoder(
         index: Int,
     ) {
         // reset the current writer schema in of the element is a union (as a union is resolved)
-        currentAvroSchema = arraySchema.elementType
+        itemSchema = elementType
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -51,14 +74,24 @@ internal class ArrayBlockDirectDecoder(
     }
 }
 
-/** The entries of one map block, [blockSize] of them, already read and checked by the decoder that begins it. */
+/**
+ * The entries of one map block, already read and checked by the decoder that begins it. That decoder keeps this one and
+ * hands it each next block it begins, of this map or of another, through [reset].
+ */
 internal class MapBlockDirectDecoder(
-    private val mapSchema: AvroSchema,
-    private val blockSize: Int,
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
-    override lateinit var currentAvroSchema: AvroSchema
+    /** The writer schema of the values, read once per block rather than per entry. */
+    private var valueType: AvroSchema? = null
+    private var blockSize = 0
+
+    private var entrySchema: AvroSchema? = null
+    override var currentAvroSchema: AvroSchema
+        get() = entrySchema ?: throw noElementBegunError()
+        set(value) {
+            entrySchema = value
+        }
 
     private var decodedEntries = 0
 
@@ -69,6 +102,20 @@ internal class MapBlockDirectDecoder(
      */
     private var pendingValueIndex = -1
 
+    /** Begins decoding a block of [blockSize] entries of [mapSchema], from its first key. */
+    fun reset(
+        mapSchema: AvroSchema,
+        blockSize: Int,
+    ): MapBlockDirectDecoder {
+        valueType = mapSchema.valueType
+        this.blockSize = blockSize
+        entrySchema = null
+        decodedEntries = 0
+        pendingValueIndex = -1
+        beginReuse()
+        return this
+    }
+
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int = blockSize
 
     override fun beginElement(
@@ -77,10 +124,10 @@ internal class MapBlockDirectDecoder(
     ) {
         // reset the current writer schema in of the element is a union (as a union is resolved)
         if (index % 2 == 0) {
-            currentAvroSchema = KEY_SCHEMA
+            entrySchema = KEY_SCHEMA
             pendingValueIndex = index + 1
         } else {
-            currentAvroSchema = mapSchema.valueType
+            entrySchema = valueType
         }
     }
 
