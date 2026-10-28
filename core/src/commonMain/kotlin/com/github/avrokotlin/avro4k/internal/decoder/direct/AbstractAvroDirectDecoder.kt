@@ -54,7 +54,13 @@ internal abstract class AbstractAvroDirectDecoder(
             return currentAvroSchema as ResolvedSchema
         }
 
-    /** -1 until the first block of the collection being decoded is read, then the item count of its last block read. */
+    /**
+     * -1 until the first block of the collection being decoded is read, then the item count of its last block read.
+     *
+     * Below -1, the count of the next block, already read and checked by [decodeCollectionBlocks] but not yet begun by
+     * [beginStructure], stored as its bitwise complement ([Int.inv]: 1 is stored as -2). Packing this into the existing
+     * field rather than adding one keeps every decoder at its current size: a record decoder is allocated per record.
+     */
     private var decodedCollectionSize = -1
 
     /** The items of the collection being decoded, summed over its blocks read so far. */
@@ -75,44 +81,66 @@ internal abstract class AbstractAvroDirectDecoder(
 
     /**
      * Avro writes an array or a map as a sequence of blocks (`count, items..., count, items..., 0`), while a kotlinx
-     * collection deserializer reads a single one. So the blocks are merged into one value here, one [AbstractCollectionSerializer.merge] per block,
-     * until the decoder reads the terminating empty block.
+     * collection deserializer reads a single one. So the blocks are merged into one value here, one [AbstractCollectionSerializer.merge] per
+     * non-empty block.
+     *
+     * The count of each block after the first is read here, between two merges, and handed to the next [beginStructure]
+     * through [decodedCollectionSize]: the terminating empty block then ends the loop without a merge of its own. avro4k
+     * and Apache write a collection as one block followed by that empty one, so most collections take a single merge.
+     * A merge of an empty block would cost a block decoder, and kotlinx copying the collection built so far into a new
+     * builder and back (an array or a primitive array into a list or a buffer, then into a new array), for no item. The
+     * codec still sees the same calls in the same order: a collection start, then one count per next block, the empty
+     * one included.
      *
      * This lives on the decoder rather than in a wrapping serializer on purpose: a wrapper would have to be allocated
      * per decoded collection, or cached in shared state that threads and differently-typed collections keep evicting
      * from each other. Here the only state is a local and this decoder's [decodedCollectionSize], and a decoder is only
-     * ever used by the one decode call, and so the one thread, that created it.
+     * ever used by the one decode call, and so the one thread, that created it. The items are decoded by the block
+     * decoder [beginStructure] returns, so a collection nested in an item keeps its state there, not here.
      */
     @OptIn(InternalSerializationApi::class)
     private fun <T> decodeCollectionBlocks(deserializer: AbstractCollectionSerializer<*, T, *>): T {
-        var result: T? = null
         decodedCollectionSize = -1
-        do {
+        var result = deserializer.merge(this, null)
+        // 0 after an empty block, -1 still when the value was not read in blocks (a record read as a map)
+        while (decodedCollectionSize > 0) {
+            val nextBlockSize = readNextBlockSize(currentAvroSchema.type == AvroSchema.Type.MAP)
+            if (nextBlockSize == 0) break
+            decodedCollectionSize = nextBlockSize.inv()
             result = deserializer.merge(this, result)
-        } while (decodedCollectionSize > 0)
+        }
         return result
+    }
+
+    /** The checked item count of the next block of the array or map being decoded, once its first block is read. */
+    private fun readNextBlockSize(isMap: Boolean): Int = checkBlockSize(if (isMap) binaryDecoder.mapNext() else binaryDecoder.arrayNext(), firstBlock = false)
+
+    /**
+     * The item count of the array or map block that [beginStructure] begins: the one [decodeCollectionBlocks] already
+     * read, or else read here, as the collection's first block, or as its next one when this decoder already read one.
+     */
+    private fun beginBlock(isMap: Boolean): Int {
+        val state = decodedCollectionSize
+        if (state < -1) {
+            val blockSize = state.inv()
+            decodedCollectionSize = blockSize
+            return blockSize
+        }
+        if (state != -1) return readNextBlockSize(isMap)
+        return checkBlockSize(if (isMap) binaryDecoder.readMapStart() else binaryDecoder.readArrayStart(), firstBlock = true)
     }
 
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
         return when (descriptor.kind) {
             StructureKind.LIST ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.ARRAY -> {
-                        val firstBlock = decodedCollectionSize == -1
-                        val blockSize = checkBlockSize(if (firstBlock) binaryDecoder.readArrayStart() else binaryDecoder.arrayNext(), firstBlock)
-                        ArrayBlockDirectDecoder(currentAvroSchema, blockSize, avro, binaryDecoder)
-                    }
-
+                    AvroSchema.Type.ARRAY -> ArrayBlockDirectDecoder(currentAvroSchema, beginBlock(isMap = false), avro, binaryDecoder)
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
 
             StructureKind.MAP ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.MAP -> {
-                        val firstBlock = decodedCollectionSize == -1
-                        val blockSize = checkBlockSize(if (firstBlock) binaryDecoder.readMapStart() else binaryDecoder.mapNext(), firstBlock)
-                        MapBlockDirectDecoder(currentAvroSchema, blockSize, avro, binaryDecoder)
-                    }
+                    AvroSchema.Type.MAP -> MapBlockDirectDecoder(currentAvroSchema, beginBlock(isMap = true), avro, binaryDecoder)
 
                     AvroSchema.Type.RECORD ->
                         RecordAsMapDirectDecoder(
