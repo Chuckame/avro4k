@@ -14,6 +14,8 @@ Each entry below was reproduced on `main` (`56dc7da8`, the pre-migration JVM cod
 
 ## 1. A non-nullable record property cannot read a writer union
 
+**GitHub:** [#541](https://github.com/avro-kotlin/avro4k/issues/541)
+
 **Repro (main and v3):** writer `{"type":"record","name":"ProbeHolder","fields":[{"name":"value","type":["null","int"]}]}`,
 bytes `02d804` (branch 1, 300), reader `data class ProbeHolder(val value: Int)` →
 `SerializationException: Unsupported schema named 'union[null, int]' for decoded type of INT, and also not matching to
@@ -46,6 +48,8 @@ reader's type. Nullable properties, non-nullable enum/record/list properties and
 
 ## 2. No `int`/`long` → `float`/`double` promotion at decoding
 
+**GitHub:** [#542](https://github.com/avro-kotlin/avro4k/issues/542)
+
 **Repro (main and v3):** `Avro.decodeFromByteArray(Schema.create(INT), Float.serializer(), byteArrayOf(2))` →
 `Unsupported schema named 'int' for decoded type of FLOAT, and also not matching to any compatible type (one of DOUBLE,
 STRING)`. Same for int → double, long → float, long → double, at root and in records.
@@ -62,6 +66,8 @@ against Apache). Also the generic decoder and `JsonDefaultDecoder` if they have 
 int → double, long → float, long → double fail with `Unsupported schema named 'int' for decoded type of FLOAT`.
 
 ## 3. Two classes with the same serial name can get each other's schema — revisit after the migration
+
+**GitHub:** none, on purpose (to decide after the migration).
 
 **Repro (main and v3):** `@SerialName("probe.Palette") data class PaletteA(val known: ColorA)` and
 `@SerialName("probe.Palette") data class PaletteB(val known: ColorB)`, both enums `@SerialName("probe.Color")` with
@@ -81,6 +87,8 @@ fresh generic descriptor; or document it. Not an issue yet.
 
 ## 4. `AvroDuration`'s fractional seconds are not ISO-8601
 
+**GitHub:** [#543](https://github.com/avro-kotlin/avro4k/issues/543)
+
 **Repro (main and v3):** `AvroDuration.parse("PT4.5S").millis` → `4005` (ISO-8601 and `java.time.Duration`: 4,500);
 `AvroDuration.parse("PT0.5S").millis` → `5` (500); `AvroDuration(0u, 0u, 4005u).toString()` → `PT4.5S` (`PT4.005S`).
 
@@ -98,6 +106,8 @@ different value after the fix.
 instead of 500 ms, and a duration of 4,005 ms prints as `PT4.5S` instead of `PT4.005S`.
 
 ## 5. A relative `@AvroAlias` on an enum is not resolved in the enum's namespace at decoding
+
+**GitHub:** [#544](https://github.com/avro-kotlin/avro4k/issues/544)
 
 **Repro (main and v3):** writer enum `{"type":"enum","name":"Color","namespace":"probe",…}`, reader
 `@SerialName("probe.Colour") @AvroAlias("Color") enum class Colour` → `Unsupported schema named 'probe.Color' for
@@ -117,6 +127,8 @@ does not match a writer enum `x.Old`, although the generated schema resolves the
 
 ## 6. The README calls `@AvroStringable` by an old name
 
+**GitHub:** none, on purpose (docs only).
+
 **Found 2026-10-13** while documenting the Kotlin/JS floating-point text (on `main` `56dc7da8` too): the README's section
 "Force a field to be a `string` type" names the annotation `@AvroString` 5 times (text and examples), which does not
 exist; the annotation is `@AvroStringable` (`@ExperimentalAvro4kApi`). **Fix:** rename in the README, mention the opt-in.
@@ -129,6 +141,8 @@ Entries 7–11 were reported by M3-17's review (`notes/m3-17.md`) as code older 
 `v3/m2-foundation`, checked by reading it.
 
 ## 7. `NaN` cannot be written to or read from a `float`
+
+**GitHub:** [#545](https://github.com/avro-kotlin/avro4k/issues/545)
 
 **Repro (main, v3):** `Avro.encodeToByteArray(Schema.create(FLOAT), Double.serializer(), Double.NaN)` →
 `SerializationException: Value NaN is not a valid Float`; same when decoding a `double` NaN into a `Float` property.
@@ -144,6 +158,8 @@ reading a `double` NaN into a `Float`, fails with "Value NaN is not a valid Floa
 
 ## 8. A `String` written to a union of fixed types picks the branch by its char count
 
+**GitHub:** [#546](https://github.com/avro-kotlin/avro4k/issues/546)
+
 **Repro (main, v3):** union `[{"type":"fixed","name":"F1","size":1},{"type":"fixed","name":"F2","size":2}]`, value
 `"é"` (1 char, 2 UTF-8 bytes) → `Fixed size mismatch for actual size of 2. Actual schema: …"F1"…`; `F2` fits.
 
@@ -155,6 +171,8 @@ the value is then written as its UTF-8 bytes.
 **Issue:** *Non-ASCII string written to a union of fixed types picks the wrong branch*.
 
 ## 9. Decoding generic data reads a whole `ByteBuffer`'s array, ignoring its position and limit
+
+**GitHub:** [#547](https://github.com/avro-kotlin/avro4k/issues/547)
 
 **Repro (main; v3 in apache-interop):** `Avro.decodeFromGenericData(Schema.create(BYTES), ByteArraySerializer(),
 ByteBuffer.wrap(byteArrayOf(9, 1, 2, 9), 1, 2))` → `[9, 1, 2, 9]` instead of `[1, 2]`. A direct or read-only buffer
@@ -169,6 +187,8 @@ values given as a `ByteBuffer`, if accepted there.
 **Issue:** *decodeFromGenericData ignores a ByteBuffer's position and limit*.
 
 ## 10. A custom serializer that delegates to `ListSerializer` fails on the next field
+
+**GitHub:** [#548](https://github.com/avro-kotlin/avro4k/issues/548)
 
 **Repro (main, v3):** record `{a: array<int>, b: array<int>}` written from `Lists(listOf(1, 2), listOf(3))`, read with
 two properties using `object WrapperSerializer : KSerializer<Wrapper> { deserialize = Wrapper(ListSerializer(Int.serializer()).deserialize(decoder)) }`
@@ -187,6 +207,8 @@ wrapper types.
 
 ## 11. kotlin-generator writes a `$` of the schema into a Kotlin string template
 
+**GitHub:** [#549](https://github.com/avro-kotlin/avro4k/issues/549)
+
 **Repro (main, v3):** `.avsc` record with `"doc":"costs $price"` → generated `@AvroGenerated("""{…"doc":"costs $price",…}""")`;
 `$price` is a string template, so the generated file does not compile (or silently embeds a variable's value). The KDoc
 and `@AvroDoc("costs ${'$'}price")` are escaped correctly. Any doc, default or prop containing `$` triggers it.
@@ -199,6 +221,8 @@ template format), which does not escape `$`.
 **Issue:** *Generated code does not compile when the schema contains a dollar sign*.
 
 ## 12. A failed root-string or root-bytes read poisons the next read on the same thread (confluent)
+
+**GitHub:** [#550](https://github.com/avro-kotlin/avro4k/issues/550)
 
 **Repro (main, v3; re-checked on `main` `6ad6c1c6` on 2026-10-15):** `SpecificAvro4kKafkaDeserializer<Rec>` (`Rec(val value: String)`), registry mock. First
 `deserialize` a truncated payload of a root `string` message (`GenericAvro4kKafkaSerializer().serialize("t", "hello")` minus its last 3 bytes)
@@ -214,6 +238,8 @@ message of the thread is wrapped as if it were a root string. The code is identi
 breaks every following message of that consumer thread.
 
 ## 13. `encodeToStream` writes nothing for a small value
+
+**GitHub:** [#560](https://github.com/avro-kotlin/avro4k/issues/560).
 
 **Repro (main `6ad6c1c6`, 2026-10-25, throwaway test):** `Avro.encodeToStream(SimpleRecord("alice", 42), ByteArrayOutputStream())`
 → the stream holds **0 bytes** (`encodeToByteArray` gives 7). Same with `AvroSingleObject.encodeToStream`. v3 removed
@@ -232,6 +258,8 @@ in `AvroSingleObject.encodeToStream`; test the stream's bytes against `encodeToB
 
 ## 14. A second `decodeFromStream` on the same stream fails
 
+**GitHub:** [#561](https://github.com/avro-kotlin/avro4k/issues/561). Related, not the same: [#289](https://github.com/avro-kotlin/avro4k/issues/289) (closed; the same 8 KiB read-ahead blocks a reader on a pipe) and [#269](https://github.com/avro-kotlin/avro4k/issues/269) (open; decoding throws other exceptions than `SerializationException`).
+
 **Repro (main `6ad6c1c6`, 2026-10-25, throwaway test):** two encoded `SimpleRecord`s in one `ByteArrayInputStream`;
 the first `Avro.decodeFromStream<SimpleRecord>(input)` returns the value and leaves **0 bytes** in the stream, the
 second throws `IllegalStateException: Unreachable`. `AvroSingleObject.decodeFromStream` has the same code (not run).
@@ -246,6 +274,8 @@ with what it did not use. The exception is not an end-of-input `SerializationExc
 **Issue:** *decodeFromStream consumes more than one value from the InputStream*.
 
 ## 15. A `bytes` value crossing a kotlinx-io segment is read short (`decodeFromSource`, `decodeFromStream`)
+
+**GitHub:** [#562](https://github.com/avro-kotlin/avro4k/issues/562).
 
 **Found by** the v2 → v3 benchmark run (2026-10-27): v2's `readFromStream` row throws on `simple` @500 and
 `complex` @15/@200 (`IndexOutOfBoundsException: Index -7926 out of bounds for length 2` in
