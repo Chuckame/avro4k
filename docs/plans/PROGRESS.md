@@ -7,11 +7,35 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-28, evening): smoke run and read profile done — batch 3 next
+### Resume here (2026-10-28, night): M5 batch 3 merged — AC-1 next
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. After the merges: jvm 1134, jsNode
+291, macosArm64 294 tests; `ACC` first invocation green, API dumps unchanged.
+- **M5-05 merged** (`4aeb264c`, merge `fc94d228`): exact, skipping, array, map and polymorphic encoders reused per
+  nesting level (slots, `inUse` busy flag, identity memo; collection start written by `reset`, codec calls unchanged).
+  Reordering records still allocate. Encoders grew (value 32 → 56 B, exact record 32 → 64, array/map 32 → 56): predicted
+  EA-off **+112 B `simple` @1, +96…+160 `complex` @1, +56/+120/+280 `NestedRecord.write` d1/3/8, +80 `writeLongs`, +56
+  flat single-record writes**; −656 `simple` @25, −6,144 `lists` @100, ≈ −2,862 `complex` @15. +16 tests. Note:
+  [`notes/m5-05.md`](notes/m5-05.md).
+- **M5-03 merged** (`06431214`, merge `cc1a234a`): records whose steps are exactly writer field i → element i decode through
+  a new `ExactRecordDirectDecoder` answering `decodeSequentially() = true` (generated deserializers take their
+  sequential branch; `decodeElementIndex` still answered). Every benchmark record is exact except `FieldOrder`
+  swapped/reversed (the controls). **The decoders' busy flag is now packed into each decoder's index (−1 = free)**: the
+  exact decoder is 64 B, no decoder grew (M5-02's open choice closed). Predicted EA-off −8 to −24 B per call; throughput
+  up on exact-record reads (a guess). Misuse after `endStructure` now fails with `ArrayIndexOutOfBoundsException` on the
+  JVM instead of answering `DECODE_DONE` (unguarded misuse, no kotlinx serializer does it). +15 tests. Note:
+  [`notes/m5-03.md`](notes/m5-03.md).
+- **Mutation checks, user (2026-10-28):** asked why so many; the orchestrator recommended limiting future briefs to the
+  guards §1 names (memo and busy guards), answer pending.
+
+**Next:** AC-1 (allocation only, EA-off, M5 base `54e0ad19` vs this head, ~20 min) → batch 4 (M5-06 ∥ M5-04 → M5-13
+re-scoped) → AB-R.
+
+### Earlier (2026-10-28, evening): smoke run and read profile done — batch 3 next
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
 - **`benchmark-common` smoke run** (22:42, AC, load 3.0, `:benchmark-common:smokeBenchmark`, 1 × 1 s, numbers not of
@@ -616,6 +640,8 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5-07 · strings written in place | done | `v3/string-write-in-place`, merged | `688c0020` (merge `db262da4`) | one-pass short strings, counted long strings, no intermediate array; +9 tests; JVM threshold candidate `afcabeef` unmerged, a side of AB-W. [`notes/m5-07.md`](notes/m5-07.md) |
 | M5-02 · decoders reused per nesting level | done | `v3/decoder-reuse`, merged | `f3ca8e9d` (merge `b120c228`) | record and block slots, busy guard, workflow memo; +16 tests; measured in AB-R. [`notes/m5-02.md`](notes/m5-02.md) |
 | M5-12 · read CPU profile, avro4k vs Apache | done | `v3/m2-foundation` | this commit | gap in the structure layer (≈17 s vs ≈8 s @15), data work a third cheaper than Apache; M5-03 ≈4–6%; M5-13 re-scoped (schema getter + union ≈7.7%). [`notes/m5-read-profile.md`](notes/m5-read-profile.md) |
+| M5-05 · encoders reused per nesting level | done | `v3/encoder-reuse`, merged | `4aeb264c` (merge `fc94d228`) | five slots, busy guard, workflow memo; reordering still allocates; +16 tests; measured in AB-W. [`notes/m5-05.md`](notes/m5-05.md) |
+| M5-03 · exact-match records decoded in order | done | `v3/exact-record-sequential`, merged | `06431214` (merge `cc1a234a`) | `decodeSequentially() = true` on exact records; busy flag packed into the index; +15 tests; measured in AB-R. [`notes/m5-03.md`](notes/m5-03.md) |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
