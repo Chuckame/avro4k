@@ -72,19 +72,19 @@ internal abstract class AbstractAvroDirectDecoder(
      * of one kind, reuse one decoder instead of allocating one per value. Kotlinx decodes depth-first, so a decoder only
      * ever has one structure begun at a time; one it begins inside another is begun by that other's own decoder. They
      * belong to the decode call that created the root decoder, as this one does: nothing is shared between calls.
+     *
+     * A record matching its writer schema exactly is decoded by [exactRecordDecoder], any other by [recordDecoder].
+     *
+     * Each of them is in use from its reset to its `endStructure`, which it tells by a position index of its own:
+     * [NOT_IN_USE] once ended, as when created. Its parent then begins the next structure of that kind on a new decoder,
+     * kept out of the slot: so a serializer that begins a second structure before ending the first, never ends one, or
+     * catches an error inside one and goes on, still decodes correctly, only allocating as it did before decoders were
+     * reused. The index rather than a flag of its own: a flag here would make every decoder 8 bytes larger on the JVM.
      */
+    private var exactRecordDecoder: ExactRecordDirectDecoder? = null
     private var recordDecoder: RecordDirectDecoder? = null
     private var arrayBlockDecoder: ArrayBlockDirectDecoder? = null
     private var mapBlockDecoder: MapBlockDirectDecoder? = null
-
-    /**
-     * Whether this decoder decodes a structure its parent began and that is not ended yet, from [beginReuse] to
-     * [endStructure]. Its parent then begins the next structure on a new decoder, kept out of its slot: so a serializer
-     * that begins a second structure before ending the first, never ends one, or catches an error inside one and goes
-     * on, still decodes correctly, only allocating as it did before decoders were reused.
-     */
-    protected var inUse = false
-        private set
 
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
@@ -174,7 +174,7 @@ internal abstract class AbstractAvroDirectDecoder(
 
             StructureKind.CLASS, StructureKind.OBJECT ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.RECORD -> recordDecoder().reset(currentAvroSchema, descriptor)
+                    AvroSchema.Type.RECORD -> beginRecord(currentAvroSchema, descriptor)
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.RECORD)
                 }
 
@@ -182,6 +182,44 @@ internal abstract class AbstractAvroDirectDecoder(
 
             else -> throw AvroSerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
+    }
+
+    /**
+     * Begins a record written with [writerRecordSchema] into [descriptor], on the exact record decoder when its fields
+     * match exactly, or else on the general one.
+     *
+     * A kept decoder that is free and was last resolved for this very schema and descriptor begins it at once: the records
+     * of a list, or a field's successive values, are most often of one type, and so never reach the resolver. Compared by
+     * identity, as resolving is: a schema or descriptor equal to the previous one but another instance is resolved. The
+     * memo of each kind is checked, so two record types alternating, one exact and one not, both stay remembered.
+     *
+     * Resolved before any decoder is touched: a resolution that fails (two elements matching one writer field) leaves
+     * each kept decoder with the steps it had, and the same record begun again fails again.
+     */
+    private fun beginRecord(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+    ): CompositeDecoder {
+        val exact = exactRecordDecoder
+        if (exact != null && !exact.inUse && exact.isResolvedFor(writerRecordSchema, descriptor)) return exact.reset()
+        val general = recordDecoder
+        if (general != null && !general.inUse && general.isResolvedFor(writerRecordSchema, descriptor)) return general.reset()
+        val workflow = avro.recordResolver.resolveFields(writerRecordSchema, descriptor)
+        val fieldSchemas = workflow.exactFieldSchemas
+        return if (fieldSchemas != null) {
+            exactRecordDecoder().reset(writerRecordSchema, descriptor, fieldSchemas)
+        } else {
+            recordDecoder().reset(writerRecordSchema, descriptor, workflow.decoding)
+        }
+    }
+
+    /** The exact record decoder to begin a record on: the one this decoder keeps, unless it is still in use. */
+    private fun exactRecordDecoder(): ExactRecordDirectDecoder {
+        val kept = exactRecordDecoder
+        if (kept != null && !kept.inUse) return kept
+        val decoder = ExactRecordDirectDecoder(avro, binaryDecoder)
+        if (kept == null) exactRecordDecoder = decoder
+        return decoder
     }
 
     /** The record decoder to begin a record on: the one this decoder keeps, unless it is still in use. */
@@ -212,18 +250,12 @@ internal abstract class AbstractAvroDirectDecoder(
     }
 
     /**
-     * The part of a reused decoder's reset that this class owns: marks it in use until [endStructure], and forgets the
-     * collection its previous structure decoded, as a new decoder would not know of one. Called by each reset, once
-     * nothing of it can fail any more.
+     * The part of a reused decoder's reset that this class owns: forgets the collection its previous structure decoded,
+     * as a new decoder would not know of one. Called by each reset, which then marks its decoder in use.
      */
     protected fun beginReuse() {
-        inUse = true
         decodedCollectionSize = -1
         decodedCollectionTotal = 0
-    }
-
-    override fun endStructure(descriptor: SerialDescriptor) {
-        inUse = false
     }
 
     /**
@@ -428,6 +460,12 @@ internal abstract class AbstractAvroDirectDecoder(
  */
 internal fun noElementBegunError(): IllegalStateException =
     IllegalStateException("No field or item is being decoded: decodeElementIndex or a decode...Element call begins one")
+
+/**
+ * The position index of a reusable decoder that decodes no structure: created and not reset yet, or ended. Any index of
+ * a structure being decoded is 0 or more, so the index also tells whether the decoder is in use.
+ */
+internal const val NOT_IN_USE = -1
 
 private class PolymorphicDecoder(
     avro: Avro,

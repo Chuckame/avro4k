@@ -40,8 +40,15 @@ internal class ArrayBlockDirectDecoder(
             itemSchema = value
         }
 
-    /** The next item index [decodeElementIndex] returns, relative to the block: kotlinx adds the items of the previous blocks. */
-    private var nextItemIndex = 0
+    /**
+     * The next item index [decodeElementIndex] returns, relative to the block: kotlinx adds the items of the previous
+     * blocks. [NOT_IN_USE] when no block is begun or once it is ended.
+     */
+    private var nextItemIndex = NOT_IN_USE
+
+    /** Whether a block is begun on this decoder and not ended yet. */
+    val inUse: Boolean
+        get() = nextItemIndex >= 0
 
     /** Begins decoding a block of [blockSize] items of [arraySchema], from its first item. */
     fun reset(
@@ -51,9 +58,13 @@ internal class ArrayBlockDirectDecoder(
         elementType = arraySchema.elementType
         this.blockSize = blockSize
         itemSchema = null
-        nextItemIndex = 0
         beginReuse()
+        nextItemIndex = 0
         return this
+    }
+
+    override fun endStructure(descriptor: SerialDescriptor) {
+        nextItemIndex = NOT_IN_USE
     }
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int = blockSize
@@ -93,7 +104,8 @@ internal class MapBlockDirectDecoder(
             entrySchema = value
         }
 
-    private var decodedEntries = 0
+    /** The entries of the block whose key is decoded so far. [NOT_IN_USE] when no block is begun or once it is ended. */
+    private var decodedEntries = NOT_IN_USE
 
     /**
      * The element index of the value of the key just decoded, for [decodeElementIndex]; -1 when a key comes next.
@@ -110,10 +122,18 @@ internal class MapBlockDirectDecoder(
         valueType = mapSchema.valueType
         this.blockSize = blockSize
         entrySchema = null
-        decodedEntries = 0
         pendingValueIndex = -1
         beginReuse()
+        decodedEntries = 0
         return this
+    }
+
+    /** Whether a block is begun on this decoder and not ended yet. */
+    val inUse: Boolean
+        get() = decodedEntries >= 0
+
+    override fun endStructure(descriptor: SerialDescriptor) {
+        decodedEntries = NOT_IN_USE
     }
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int = blockSize

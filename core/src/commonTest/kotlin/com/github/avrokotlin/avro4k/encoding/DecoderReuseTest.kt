@@ -298,10 +298,116 @@ class DecoderReuseTest {
     }
 
     @Test
+    fun `successive lists and maps are decoded by one block decoder per level`() {
+        // the items record the decoder they are decoded on: the block decoder of their list or map, which the decoder of
+        // the enclosing list keeps for each next list or map once the previous one is ended
+        val value = BlockItems(listOf(listOf(1, 2), listOf(3), listOf(4, 5, 6)), listOf(mapOf("a" to 1, "e" to 5), mapOf("b" to 2, "c" to 3), mapOf("d" to 4, "f" to 6)))
+        for (avro in AVROS) {
+            BLOCK_ITEM_DECODERS.clear()
+            avro.decodeFromByteArray(BlockItems.serializer(), avro.encodeToByteArray(BlockItems.serializer(), value)) shouldBe value
+            BLOCK_ITEM_DECODERS.size shouldBe 12
+            // the lists' 6 items, then the maps' 6 values
+            BLOCK_ITEM_DECODERS.subList(0, 6).all { it === BLOCK_ITEM_DECODERS[0] } shouldBe true
+            BLOCK_ITEM_DECODERS.subList(6, 12).all { it === BLOCK_ITEM_DECODERS[6] } shouldBe true
+            (BLOCK_ITEM_DECODERS[0] === BLOCK_ITEM_DECODERS[6]) shouldBe false
+        }
+    }
+
+    @Test
+    fun `the busy cases decode records read in order and records read by their decoding steps alike`() {
+        // Inner read with its own schema is decoded in order, by the exact record decoder; read with a field more, it is
+        // decoded by its decoding steps, by the general one. Each keeps its own busy state.
+        for ((inner, writeOne) in listOf<Pair<AvroSchema, ByteArrayEncoder.(Inner) -> Unit>>(
+            Avro.schema<Inner>() to { writeInner(it) },
+            EXTENDED_INNER to { writeExtendedInner(it) }
+        )) {
+            Avro.decodeFromByteArray(
+                inner,
+                TwoAtOnceSerializer,
+                bytes {
+                    writeOne(A)
+                    writeOne(B)
+                }
+            ) shouldBe Twins(A, B)
+            val twinsHolder = record("TwinsHolder", "before" to inner, "twins" to inner, "after" to inner, "list" to AvroSchema.ArraySchema(inner))
+            val twinsBytes =
+                bytes {
+                    writeOne(C)
+                    writeOne(A)
+                    writeOne(B)
+                    writeOne(D)
+                    writeLong(2)
+                    listOf(A, B, C, D).forEach { writeOne(it) }
+                    writeLong(0)
+                }
+            Avro.decodeFromByteArray(twinsHolder, TwinsHolder.serializer(), twinsBytes) shouldBe TwinsHolder(C, Twins(A, B), D, listOf(Twins(A, B), Twins(C, D)))
+
+            val innerList = AvroSchema.ArraySchema(inner)
+            val noEnd = NoEndHolder(A, B, C, listOf(A, B, C), listOf(D, A), mapOf("a" to listOf(B), "b" to listOf(C, D)))
+            val noEndHolder =
+                record(
+                    "NoEndHolder",
+                    "a" to inner,
+                    "b" to inner,
+                    "c" to inner,
+                    "list" to innerList,
+                    "after" to innerList,
+                    "byName" to AvroSchema.MapSchema(innerList)
+                )
+            val noEndBytes =
+                bytes {
+                    writeOne(noEnd.a)
+                    writeOne(noEnd.b)
+                    writeOne(noEnd.c)
+                    writeBlocks(noEnd.list, listOf(3)) { writeOne(it) }
+                    writeBlocks(noEnd.after, listOf(2)) { writeOne(it) }
+                    writeBlocks(noEnd.byName.entries.toList(), listOf(2)) { entry ->
+                        writeString(entry.key)
+                        writeBlocks(entry.value, listOf(entry.value.size)) { writeOne(it) }
+                    }
+                }
+            val errors = ErrorsHolder(A, B, C, listOf(A, B, C), listOf(D, A), listOf(B, C))
+            val errorsHolder =
+                record(
+                    "ErrorsHolder",
+                    "caught" to inner,
+                    "abandoned" to inner,
+                    "after" to inner,
+                    "abandonedList" to innerList,
+                    "list" to innerList,
+                    "caughtList" to innerList
+                )
+            val errorsBytes =
+                bytes {
+                    writeOne(errors.caught)
+                    writeOne(errors.abandoned)
+                    writeOne(errors.after)
+                    writeBlocks(errors.abandonedList, listOf(3)) { writeOne(it) }
+                    writeBlocks(errors.list, listOf(2)) { writeOne(it) }
+                    writeBlocks(errors.caughtList, listOf(2)) { writeOne(it) }
+                }
+            for (avro in AVROS) {
+                avro.decodeFromByteArray(noEndHolder, NoEndHolder.serializer(), noEndBytes) shouldBe noEnd
+                avro.decodeFromByteArray(errorsHolder, ErrorsHolder.serializer(), errorsBytes) shouldBe errors
+            }
+
+            val listBytes = bytes { writeBlocks(listOf(A, B, C), listOf(3)) { writeOne(it) } }
+            val ending = RecordingSerializer(endsStructure = true)
+            Avro.decodeFromByteArray(innerList, ListSerializer(ending), listBytes) shouldBe listOf(A, B, C)
+            (ending.decoders[0] === ending.decoders[1] && ending.decoders[1] === ending.decoders[2]) shouldBe true
+            val notEnding = RecordingSerializer(endsStructure = false)
+            Avro.decodeFromByteArray(innerList, ListSerializer(notEnding), listBytes) shouldBe listOf(A, B, C)
+            (notEnding.decoders[0] === notEnding.decoders[1] || notEnding.decoders[1] === notEnding.decoders[2]) shouldBe false
+        }
+    }
+
+    @Test
     fun `a reused decoder knows no field or item before one is begun`() {
-        // as a new decoder: the peeking serializers expect it to fail, then decode normally
-        val inner = Avro.schema<Inner>()
-        Avro.decodeFromByteArray(inner, PeekingRecordSerializer, bytes { writeInner(A) }) shouldBe A
+        // as a new decoder: the peeking serializers expect it to fail, then decode normally. The record is written with a
+        // field more than it reads: a record written exactly as read is decoded in order, so it answers an element read
+        // without decodeElementIndex (see ExactRecordDecodingTest)
+        val inner = EXTENDED_INNER
+        Avro.decodeFromByteArray(inner, PeekingRecordSerializer, bytes { writeExtendedInner(A) }) shouldBe A
         Avro.decodeFromByteArray(AvroSchema.ArraySchema(AvroSchema.IntSchema()), PeekingListSerializer, bytes { writeLong(0) }) shouldBe emptyList()
         Avro.decodeFromByteArray(AvroSchema.MapSchema(AvroSchema.IntSchema()), PeekingMapSerializer, bytes { writeLong(0) }) shouldBe emptyMap()
 
@@ -323,7 +429,7 @@ class DecoderReuseTest {
         val bytes =
             bytes {
                 writeInt(1)
-                writeInner(B)
+                writeExtendedInner(B)
                 writeBlocks(listOf(2, 3), listOf(2)) { writeInt(it) }
                 writeLong(0)
                 writeBlocks(listOf("a" to 4), listOf(1)) {
@@ -500,6 +606,17 @@ private data class Blocks(
 private data class Inner(val x: Int, val s: String)
 
 private val INNER: SerialDescriptor = Inner.serializer().descriptor
+
+/** [Inner]'s writer schema with a field more, at the end: [Inner] is then decoded by its decoding steps, not in order. */
+private val EXTENDED_INNER =
+    AvroSchema.RecordSchema(
+        Name("Inner"),
+        listOf(
+            AvroSchema.RecordSchema.Field("x", AvroSchema.IntSchema()),
+            AvroSchema.RecordSchema.Field("s", AvroSchema.StringSchema()),
+            AvroSchema.RecordSchema.Field("extra", AvroSchema.BooleanSchema())
+        )
+    )
 
 /** The fields of an [Inner] record begun on this decoder, read with [CompositeDecoder.decodeElementIndex]. */
 private fun CompositeDecoder.readInner(): Inner {
@@ -807,11 +924,56 @@ private data class ResolveHolder(
     @Serializable(with = ResolvingTwiceSerializer::class) val b: OnlyX,
 )
 
+/** The decoders [RecordingIntSerializer] decoded on, in order. */
+private val BLOCK_ITEM_DECODERS = mutableListOf<Decoder>()
+
+/** Decodes an int, and records the decoder it is decoded on. */
+private object RecordingIntSerializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor = Int.serializer().descriptor
+
+    override fun serialize(
+        encoder: Encoder,
+        value: Int,
+    ) = encoder.encodeInt(value)
+
+    override fun deserialize(decoder: Decoder): Int {
+        BLOCK_ITEM_DECODERS += decoder
+        return decoder.decodeInt()
+    }
+}
+
+@Serializable
+private data class BlockItems(
+    val lists: List<
+        List<
+            @Serializable(with = RecordingIntSerializer::class)
+            Int
+        >
+    >,
+    val maps: List<
+        Map<
+            String,
+            @Serializable(with = RecordingIntSerializer::class)
+            Int
+        >
+    >,
+)
+
+private fun record(
+    name: String,
+    vararg fields: Pair<String, AvroSchema>,
+): AvroSchema.RecordSchema = AvroSchema.RecordSchema(Name(name), fields.map { AvroSchema.RecordSchema.Field(it.first, it.second) })
+
 private fun bytes(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
 
 private fun ByteArrayEncoder.writeInner(value: Inner) {
     writeInt(value.x)
     writeString(value.s)
+}
+
+private fun ByteArrayEncoder.writeExtendedInner(value: Inner) {
+    writeInner(value)
+    writeBoolean(value.x % 2 == 0)
 }
 
 private fun ByteArrayEncoder.writeShared(
