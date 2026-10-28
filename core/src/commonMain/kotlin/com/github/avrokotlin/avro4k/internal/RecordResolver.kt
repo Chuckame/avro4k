@@ -151,9 +151,11 @@ internal class RecordResolver(
         writerSchema: AvroSchema,
     ): SerializationWorkflow {
         val writerRecordSchema = writerSchema as? RecordSchema ?: throw AvroSchemaMismatchException("Expected a record writer schema, but had $writerSchema")
+        val decodingSteps = computeDecodingSteps(classDescriptor, writerRecordSchema)
         return SerializationWorkflow(
-            computeDecodingSteps(classDescriptor, writerRecordSchema),
-            computeEncodingWorkflow(classDescriptor, writerRecordSchema)
+            decodingSteps,
+            computeEncodingWorkflow(classDescriptor, writerRecordSchema),
+            exactFieldSchemas(decodingSteps, classDescriptor.elementsCount, writerRecordSchema.fields.size)
         )
     }
 
@@ -348,6 +350,31 @@ internal class RecordResolver(
 }
 
 /**
+ * The writer schema of each field, by element index, when a record decodes exactly as written: as many [decodingSteps]
+ * as elements and as writer fields, and step i decoding writer field i into element i. No writer field is skipped, no
+ * element takes a default value or is left to its kotlin default, and no element is read out of order. Otherwise null.
+ *
+ * Such a record can be decoded in order, each element read straight from its field
+ * ([kotlinx.serialization.encoding.CompositeDecoder.decodeSequentially]), with nothing to decide per field. A field
+ * matched by an alias, or whose writer type differs from the element's but converts to it (an int read as a long), is
+ * decoded the same way on both paths, so it does not prevent this.
+ *
+ * Runs once per (writer schema, descriptor) pair, when its workflow is resolved. `internal` for tests.
+ */
+internal fun exactFieldSchemas(
+    decodingSteps: Array<DecodingStep>,
+    elementsCount: Int,
+    writerFieldsCount: Int,
+): Array<AvroSchema>? {
+    if (decodingSteps.size != elementsCount || decodingSteps.size != writerFieldsCount) return null
+    for (index in decodingSteps.indices) {
+        val step = decodingSteps[index]
+        if (step !is DecodingStep.DeserializeWriterField || step.elementIndex != index || step.writerFieldIndex != index) return null
+    }
+    return Array(decodingSteps.size) { (decodingSteps[it] as DecodingStep.DeserializeWriterField).schema }
+}
+
+/**
  * How the elements of a class descriptor map to the fields of a writer record schema, resolved once per pair by
  * [RecordResolver.resolveFields].
  *
@@ -364,6 +391,12 @@ public class SerializationWorkflow internal constructor(
      * Encoding steps are ordered regarding the class descriptor and not the writer schema.
      */
     public val encoding: EncodingWorkflow,
+    /**
+     * The writer schema of each field, by element index, when the record decodes exactly as written, field i into
+     * element i with nothing skipped or defaulted; otherwise null. The direct decoder then decodes the record's elements
+     * in order, without its per-field decoding steps.
+     */
+    internal val exactFieldSchemas: Array<AvroSchema>?,
 ) {
     /**
      * The step of each element, by element index, when its value is missing: a [DecodingStep.GetDefaultValue],

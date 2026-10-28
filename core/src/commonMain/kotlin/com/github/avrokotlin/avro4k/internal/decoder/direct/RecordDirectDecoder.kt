@@ -11,15 +11,21 @@ import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.schema.skip
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonNull
 
 private val NO_DECODING_STEPS = emptyArray<DecodingStep>()
 
+private val NO_FIELD_SCHEMAS = emptyArray<AvroSchema>()
+
 /**
  * Decodes one record after another: its parent decoder keeps it and hands it each next record it begins, through
  * [reset], instead of creating a decoder per record. Nothing of the previous record survives a [reset].
+ *
+ * Decodes the records whose fields do not match the writer schema's exactly: reordered, skipped, or taking a default
+ * value. The others are decoded by [ExactRecordDirectDecoder].
  */
 internal class RecordDirectDecoder(
     avro: Avro,
@@ -31,7 +37,9 @@ internal class RecordDirectDecoder(
 
     // in the writer schema's field order. The missing fields are at the end to decode the default values
     private var decodingSteps: Array<DecodingStep> = NO_DECODING_STEPS
-    private var nextDecodingStepIndex = 0
+
+    /** The next step [decodeElementIndex] takes; [NOT_IN_USE] when no record is begun or once it is ended. */
+    private var nextDecodingStepIndex = NOT_IN_USE
 
     /** The step of the field being decoded: none until [decodeElementIndex] returns a field, as on a new decoder. */
     private var decodingStep: DecodingStep.ValidatedDecodingStep? = null
@@ -45,28 +53,39 @@ internal class RecordDirectDecoder(
             fieldSchema = value
         }
 
-    /**
-     * Begins decoding a record written with [writerRecordSchema] into [descriptor], from its first field.
-     *
-     * The decoding steps are only resolved when the schema or the descriptor is not the previous record's: the records
-     * of a list, or a field's successive values, are most often of one type, and so never reach the resolver. Compared
-     * by identity, as resolving is: a schema or descriptor equal to the previous one but another instance is resolved.
-     */
+    /** Whether a record is begun on this decoder and not ended yet. */
+    val inUse: Boolean
+        get() = nextDecodingStepIndex >= 0
+
+    /** Whether the [decodingSteps] are the ones resolved for [writerRecordSchema] read into [descriptor], by identity. */
+    fun isResolvedFor(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+    ): Boolean = writerRecordSchema === this.writerRecordSchema && descriptor === resolvedDescriptor
+
+    /** Begins decoding a record written with [writerRecordSchema] into [descriptor], with its resolved [decodingSteps]. */
     fun reset(
         writerRecordSchema: AvroSchema,
         descriptor: SerialDescriptor,
+        decodingSteps: Array<DecodingStep>,
     ): RecordDirectDecoder {
-        if (writerRecordSchema !== this.writerRecordSchema || descriptor !== resolvedDescriptor) {
-            // resolved before the keys change: a failing resolution leaves the previous record's steps with their keys
-            decodingSteps = avro.recordResolver.resolveFields(writerRecordSchema, descriptor).decoding
-            this.writerRecordSchema = writerRecordSchema
-            resolvedDescriptor = descriptor
-        }
-        nextDecodingStepIndex = 0
+        this.decodingSteps = decodingSteps
+        this.writerRecordSchema = writerRecordSchema
+        resolvedDescriptor = descriptor
+        return reset()
+    }
+
+    /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
+    fun reset(): RecordDirectDecoder {
         decodingStep = null
         fieldSchema = null
         beginReuse()
+        nextDecodingStepIndex = 0
         return this
+    }
+
+    override fun endStructure(descriptor: SerialDescriptor) {
+        nextDecodingStepIndex = NOT_IN_USE
     }
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
@@ -204,5 +223,96 @@ internal class RecordDirectDecoder(
             is DecodingStep.DeserializeWriterField -> super.decodeBytes()
             is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeBytes()
         }
+    }
+}
+
+/**
+ * Decodes the records whose elements are exactly the writer schema's fields, in its order: field i is element i, no
+ * writer field is skipped and no element takes a default value (the workflow's `exactFieldSchemas`). Most records are
+ * read with the schema they were written with, and so are such records.
+ *
+ * Their elements are read in order: [decodeSequentially] lets kotlinx's generated deserializers decode each element in
+ * turn, without asking [decodeElementIndex] which one comes next and dispatching on its answer. Each element's schema is
+ * taken by its index when it is begun, and each value decoded as it is, without the per-field decoding step checks that
+ * [RecordDirectDecoder] makes for default values. A serializer that ignores [decodeSequentially] still gets every element
+ * in order from [decodeElementIndex], then [CompositeDecoder.DECODE_DONE].
+ *
+ * Like [RecordDirectDecoder], its parent decoder keeps it and hands it each next exact record it begins, through
+ * [reset]. Nothing of the previous record survives a [reset].
+ */
+internal class ExactRecordDirectDecoder(
+    avro: Avro,
+    binaryDecoder: AvroBinaryDecoder,
+) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
+    /** The writer schema of the record being decoded, and with [resolvedDescriptor], what [fieldSchemas] were resolved for. */
+    private var writerRecordSchema: AvroSchema? = null
+    private var resolvedDescriptor: SerialDescriptor? = null
+
+    /** The writer schema of each field, by element index. */
+    private var fieldSchemas: Array<AvroSchema> = NO_FIELD_SCHEMAS
+
+    /** The next element [decodeElementIndex] returns; [NOT_IN_USE] when no record is begun or once it is ended. */
+    private var nextElementIndex = NOT_IN_USE
+
+    private var fieldSchema: AvroSchema? = null
+    override var currentAvroSchema: AvroSchema
+        get() = fieldSchema ?: throw noElementBegunError()
+        set(value) {
+            fieldSchema = value
+        }
+
+    /** Whether a record is begun on this decoder and not ended yet. */
+    val inUse: Boolean
+        get() = nextElementIndex >= 0
+
+    /** Whether the [fieldSchemas] are the ones resolved for [writerRecordSchema] read into [descriptor], by identity. */
+    fun isResolvedFor(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+    ): Boolean = writerRecordSchema === this.writerRecordSchema && descriptor === resolvedDescriptor
+
+    /** Begins decoding a record written with [writerRecordSchema] into [descriptor], whose fields have [fieldSchemas]. */
+    fun reset(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+        fieldSchemas: Array<AvroSchema>,
+    ): ExactRecordDirectDecoder {
+        this.fieldSchemas = fieldSchemas
+        this.writerRecordSchema = writerRecordSchema
+        resolvedDescriptor = descriptor
+        return reset()
+    }
+
+    /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
+    fun reset(): ExactRecordDirectDecoder {
+        fieldSchema = null
+        beginReuse()
+        nextElementIndex = 0
+        return this
+    }
+
+    override fun endStructure(descriptor: SerialDescriptor) {
+        nextElementIndex = NOT_IN_USE
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    override fun decodeSequentially(): Boolean = true
+
+    override fun beginElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+    ) {
+        // The element decodeElementIndex just returned keeps the schema it was given there, as on the general record
+        // decoder: a union branch already read (asking for currentWriterSchema reads it) must not be read again. Read in
+        // order, decodeElementIndex is never called, and every element is given its field's schema here.
+        if (index != nextElementIndex - 1) fieldSchema = fieldSchemas[index]
+    }
+
+    override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
+        val index = nextElementIndex
+        if (index >= fieldSchemas.size) return CompositeDecoder.DECODE_DONE
+        nextElementIndex = index + 1
+        fieldSchema = fieldSchemas[index]
+        return index
     }
 }
