@@ -1514,6 +1514,95 @@ its `read`, writes against its `write`, which writes into a reused buffered enco
 - **Open point for M5:** the per-call chunk allocation of writes (above); a reused or pooled first chunk is the
   candidate, measured against this run.
 
+## Results — objects reused per nesting level, allocation only (54e0ad19 vs 90ca45cf)
+
+**Did the first three rounds of structural work allocate what their notes predicted?** Yes, to the byte on every row
+whose allocation does not depend on the generated data, and within the estimates on `complex`, whose does. Reads and
+writes of more than one record or collection allocate 12% to 77% less; single records, deep nesting and polymorphic reads
+allocate a few dozen bytes more, as predicted, until the polymorphic decoder is reused too.
+
+| | |
+|---|---|
+| Date | 2026-10-28 23:25 → 23:35 |
+| Machine, power | Apple M2 Pro, OpenJDK 21.0.11 (JBR 21.0.11+10-b1163.116), JMH 1.37; AC power and Low Power Mode checked before each side, one `caffeinate -dimsu` over both |
+| Load | Each side started once the 1-min load average was below 3 (2.73, 2.49) |
+| Sides | **base** `54e0ad19` (the multiplatform benchmark module added, nothing else changed since the JVM streams); **head** `90ca45cf`: one merge per single-block collection, strings written straight into the encoder's chunks, decoders and encoders reused per nesting level, records matching the writer schema exactly decoded in order |
+
+**Method:** `benchmarkAlloc`, escape analysis off (`-XX:-DoEscapeAnalysis`), 1 fork, 2 × 1 s warmup, 3 × 1 s measurement,
+once per side: the avro4k `read` and `writeToByteArray` rows and the `Collection`, `NestedRecord`, `Polymorphic` and
+`StringField` micros. Allocation per operation is deterministic here, so one invocation per side answers the question;
+throughput is not measured (that is the read and write comparisons still to come).
+
+| Row | Param | base | head | Δ | Δ % |
+|---|---|---:|---:|---:|---:|
+| `complex.Avro4kBenchmark.read` | clientCount 1 | 4,408 | 3,720 | -688 | -15.6% |
+| `complex.Avro4kBenchmark.read` | clientCount 15 | 105,960 | 93,016 | -12,944 | -12.2% |
+| `complex.Avro4kBenchmark.read` | clientCount 200 | 1,415,395 | 1,240,651 | -174,745 | -12.3% |
+| `complex.Avro4kBenchmark.writeToByteArray` | clientCount 1 | 3,304 | 2,304 | -1,000 | -30.3% |
+| `complex.Avro4kBenchmark.writeToByteArray` | clientCount 15 | 133,552 | 112,504 | -21,048 | -15.8% |
+| `complex.Avro4kBenchmark.writeToByteArray` | clientCount 200 | 1,716,610 | 1,426,234 | -290,376 | -16.9% |
+| `lists.Avro4kListsBenchmark.read` | entryCount 100 | 301,705 | 287,417 | -14,288 | -4.7% |
+| `lists.Avro4kListsBenchmark.read` | entryCount 10000 | 30,249,515 | 28,809,622 | -1,439,892 | -4.8% |
+| `lists.Avro4kListsBenchmark.writeToByteArray` | entryCount 100 | 237,801 | 231,657 | -6,144 | -2.6% |
+| `lists.Avro4kListsBenchmark.writeToByteArray` | entryCount 10000 | 20,346,136 | 19,706,379 | -639,757 | -3.1% |
+| `micro.CollectionMicroBenchmark.readLongs` | size 10 | 536 | 536 | +0 | +0.0% |
+| `micro.CollectionMicroBenchmark.readLongs` | size 1000 | 28,256 | 28,256 | +0 | -0.0% |
+| `micro.CollectionMicroBenchmark.readLongs` | size 100000 | 3,681,182 | 3,681,182 | -1 | -0.0% |
+| `micro.CollectionMicroBenchmark.readRecords` | size 10 | 1,016 | 600 | -416 | -40.9% |
+| `micro.CollectionMicroBenchmark.readRecords` | size 1000 | 76,256 | 28,320 | -47,936 | -62.9% |
+| `micro.CollectionMicroBenchmark.readRecords` | size 100000 | 8,481,190 | 3,681,246 | -4,799,944 | -56.6% |
+| `micro.CollectionMicroBenchmark.readTwoCollections` | size 10 | 5,016 | 2,744 | -2,272 | -45.3% |
+| `micro.CollectionMicroBenchmark.readTwoCollections` | size 1000 | 476,257 | 236,385 | -239,872 | -50.4% |
+| `micro.CollectionMicroBenchmark.readTwoCollections` | size 100000 | 48,481,291 | 24,481,403 | -23,999,888 | -49.5% |
+| `micro.CollectionMicroBenchmark.writeLongs` | size 10 | 576 | 656 | +80 | +13.9% |
+| `micro.CollectionMicroBenchmark.writeLongs` | size 1000 | 26,024 | 26,104 | +80 | +0.3% |
+| `micro.CollectionMicroBenchmark.writeLongs` | size 100000 | 1,933,193 | 1,933,273 | +80 | +0.0% |
+| `micro.CollectionMicroBenchmark.writeRecords` | size 10 | 904 | 728 | -176 | -19.5% |
+| `micro.CollectionMicroBenchmark.writeRecords` | size 1000 | 59,032 | 27,176 | -31,856 | -54.0% |
+| `micro.CollectionMicroBenchmark.writeRecords` | size 100000 | 5,364,519 | 2,164,658 | -3,199,861 | -59.6% |
+| `micro.NestedRecordMicroBenchmark.read` | depth 1 | 128 | 160 | +32 | +25.0% |
+| `micro.NestedRecordMicroBenchmark.read` | depth 3 | 256 | 320 | +64 | +25.0% |
+| `micro.NestedRecordMicroBenchmark.read` | depth 8 | 576 | 720 | +144 | +25.0% |
+| `micro.NestedRecordMicroBenchmark.write` | depth 1 | 416 | 472 | +56 | +13.5% |
+| `micro.NestedRecordMicroBenchmark.write` | depth 3 | 480 | 600 | +120 | +25.0% |
+| `micro.NestedRecordMicroBenchmark.write` | depth 8 | 640 | 920 | +280 | +43.7% |
+| `micro.PolymorphicMicroBenchmark.readConcrete` | shapeCount 10 | 1,016 | 600 | -416 | -40.9% |
+| `micro.PolymorphicMicroBenchmark.readConcrete` | shapeCount 1000 | 76,256 | 28,320 | -47,936 | -62.9% |
+| `micro.PolymorphicMicroBenchmark.readPolymorphic` | shapeCount 10 | 2,056 | 2,376 | +320 | +15.6% |
+| `micro.PolymorphicMicroBenchmark.readPolymorphic` | shapeCount 1000 | 180,256 | 212,256 | +32,000 | +17.8% |
+| `micro.PolymorphicMicroBenchmark.writeConcrete` | shapeCount 10 | 880 | 704 | -176 | -20.0% |
+| `micro.PolymorphicMicroBenchmark.writeConcrete` | shapeCount 1000 | 56,560 | 24,704 | -31,856 | -56.3% |
+| `micro.PolymorphicMicroBenchmark.writePolymorphic` | shapeCount 10 | 1,448 | 800 | -648 | -44.8% |
+| `micro.PolymorphicMicroBenchmark.writePolymorphic` | shapeCount 1000 | 113,560 | 25,792 | -87,768 | -77.3% |
+| `micro.StringFieldMicroBenchmark.readNonNull` |  | 840 | 872 | +32 | +3.8% |
+| `micro.StringFieldMicroBenchmark.readNullable` |  | 840 | 872 | +32 | +3.8% |
+| `micro.StringFieldMicroBenchmark.writeNonNull` |  | 1,000 | 672 | -328 | -32.8% |
+| `micro.StringFieldMicroBenchmark.writeNullable` |  | 1,008 | 680 | -328 | -32.5% |
+| `simple.Avro4kSimpleBenchmark.read` | recordCount 1 | 552 | 568 | +16 | +2.9% |
+| `simple.Avro4kSimpleBenchmark.read` | recordCount 25 | 6,760 | 5,624 | -1,136 | -16.8% |
+| `simple.Avro4kSimpleBenchmark.read` | recordCount 500 | 130,257 | 106,320 | -23,936 | -18.4% |
+| `simple.Avro4kSimpleBenchmark.writeToByteArray` | recordCount 1 | 672 | 736 | +64 | +9.5% |
+| `simple.Avro4kSimpleBenchmark.writeToByteArray` | recordCount 25 | 9,008 | 7,152 | -1,856 | -20.6% |
+| `simple.Avro4kSimpleBenchmark.writeToByteArray` | recordCount 500 | 161,072 | 121,216 | -39,856 | -24.7% |
+
+**Predicted against measured** (each unit's note gives the formula):
+- `simple` read: −48 (one merge) + (128 − 48·N) (decoder reuse) − 16 (exact records) = +16 / −1,136 / −23,936 at
+  N = 1 / 25 / 500: measured exactly. `simple` write: −48·N (strings) + (144 − 32·N) (encoder reuse) = +64 / −1,856 /
+  −39,856: exactly.
+- `lists`: read −14,288 @100 exactly, @10000 4 B off −1,439,888; write −6,144 @100 exactly, @10000 13 B off −639,744.
+- Every micro row matches its formula to the byte, the regressions included: `NestedRecord.read` +32 / +64 / +144
+  (+16 + 24·d for the decoders now built per call, −8 per level for the exact decoder), `NestedRecord.write` +56 / +120 /
+  +280, `readPolymorphic` +320 / +32,000 (a new value decoder per polymorphic value, now larger), `writeLongs` +80.
+- `complex` depends on the generated clients (e-mail and phone counts, partner kinds): read @15 −12,944 against
+  ≈ −12,036 estimated from averages, write @15 −21,048 against ≈ −20,934.
+
+### Verdict, in plain words
+
+The allocation side of the reuse work is done and exactly as designed. What is left on it: polymorphic values still get
+a fresh decoder each (the next decoder change), and a call that decodes or encodes a single small record now builds a few
+reusable objects it uses once (+16 to +64 B on `simple` @1, +32 to +280 B on single nested records), the price of reuse
+on everything larger. Whether any of it shows in throughput is for the read and write comparisons.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 *Superseded as the current state by "v2 against v3 on the JVM" above (2026-10-27).*

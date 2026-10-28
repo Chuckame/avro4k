@@ -11,7 +11,7 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-28, night): M5 batch 3 merged — AC-1 next
+### Resume here (2026-10-28, night): M5 batch 3 merged, AC-1 done — batch 4 next
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. After the merges: jvm 1134, jsNode
 291, macosArm64 294 tests; `ACC` first invocation green, API dumps unchanged.
@@ -32,8 +32,14 @@ batches, and its §1 rules in every brief. The current state is in the newest "R
 - **Mutation checks, user (2026-10-28):** asked why so many; the orchestrator recommended limiting future briefs to the
   guards §1 names (memo and busy guards), answer pending.
 
-**Next:** AC-1 (allocation only, EA-off, M5 base `54e0ad19` vs this head, ~20 min) → batch 4 (M5-06 ∥ M5-04 → M5-13
-re-scoped) → AB-R.
+- **AC-1 done** (2026-10-28 23:25 → 23:35, AC, load < 3; base `54e0ad19` vs head `90ca45cf`, EA-off, 49 rows):
+  **every deterministic row matches the units' predicted formulas to the byte**; `complex` within the data-dependent
+  estimates (read @15 −12,944 vs ≈ −12,036; write @15 −21,048 vs ≈ −20,934). Multi-record rows −12% to −77%; the
+  predicted regressions are there (`NestedRecord` read +32…+144 / write +56…+280, `readPolymorphic` +16–18% until M5-04,
+  `writeLongs` +80, `simple` @1 +16 read / +64 write). `benchmark/README.md` → "Results — objects reused per nesting
+  level, allocation only". Worktrees `ac1/{base,head}` in this session's scratchpad.
+
+**Next:** batch 4 (M5-06 ∥ M5-04 → M5-13 re-scoped) → AB-R.
 
 ### Earlier (2026-10-28, evening): smoke run and read profile done — batch 3 next
 
@@ -642,6 +648,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5-12 · read CPU profile, avro4k vs Apache | done | `v3/m2-foundation` | this commit | gap in the structure layer (≈17 s vs ≈8 s @15), data work a third cheaper than Apache; M5-03 ≈4–6%; M5-13 re-scoped (schema getter + union ≈7.7%). [`notes/m5-read-profile.md`](notes/m5-read-profile.md) |
 | M5-05 · encoders reused per nesting level | done | `v3/encoder-reuse`, merged | `4aeb264c` (merge `fc94d228`) | five slots, busy guard, workflow memo; reordering still allocates; +16 tests; measured in AB-W. [`notes/m5-05.md`](notes/m5-05.md) |
 | M5-03 · exact-match records decoded in order | done | `v3/exact-record-sequential`, merged | `06431214` (merge `cc1a234a`) | `decodeSequentially() = true` on exact records; busy flag packed into the index; +15 tests; measured in AB-R. [`notes/m5-03.md`](notes/m5-03.md) |
+| M5 · AC-1 allocation checkpoint | done | `v3/m2-foundation` | this commit | `54e0ad19` vs `90ca45cf`, EA-off, 49 rows: predictions exact on every deterministic row; regressions as predicted. `benchmark/README.md` |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
