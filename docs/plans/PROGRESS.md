@@ -7,11 +7,35 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is in progress** (B5 single-object, B7, B8 and the `ByteArray` decoder done). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batch 1: M5-00 and M5-01 merged). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-27, later): IO-9 done — M4's stream work closed, M5 batch 1 next
+### Resume here (2026-10-28): M5 batch 1 merged — smoke run of the common benchmarks pending
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
+- **M5-00 merged** (`ea7bf6a0`, merge `54e0ad19`): module `benchmark-common/` (jvm, jsNode, macosArm64; not published,
+  not in `bom`, skipped by `actionsBeforeCommit`). `simple` @1/@25, `complex` @1/@15, `lists` @100, `read` from a
+  `ByteArray` and `write` through `encodeToByteArray`; a common `Client` (`String` balance, `Int` epoch day,
+  `kotlin.time.Instant` through core's `KotlinInstantSerializer`). Seeded data, its bytes pinned on all three targets by
+  `BenchmarkDataTest`. Tasks `:benchmark-common:{jvm,js,macosArm64}{,Smoke,Read,Write}Benchmark`, all behind
+  `:benchmark:checkBenchmarkPower`; native release link ≈37 s. Numbers not comparable with `benchmark/`'s (other
+  values, same shape). Note: [`notes/m5-00.md`](notes/m5-00.md).
+- **M5-01 merged** (`0215bc80`, merge `8cb845ed`): `decodeCollectionBlocks` reads each next block count itself and
+  merges only non-empty blocks; the pending count is stored as the complement of the existing
+  `decodedCollectionSize` (no field added, decoders stay 48 B). Codec calls unchanged (pinned by a recording test).
+  12 tests added: jvm 1078, jsNode 237, macosArm64 240. Predicted EA-off: −48 B per non-empty collection plus the
+  array copies; `lists` −4,896 B @100; `complex` ≈ −595 B per client (above the decomposition's ~510 B). Measured in
+  AB-R. Note: [`notes/m5-01.md`](notes/m5-01.md).
+- **Not done yet:** the orchestrator's 1-iteration smoke run of `benchmark-common` (`:benchmark-common:smokeBenchmark`),
+  deferred because an Android emulator held the load average at ~21. Run it on AC power with load < 3 before M5-12.
+- Agent worktrees `.claude/worktrees/agent-*` and branches `v3/common-benchmarks`, `v3/collection-single-merge` can be
+  deleted.
+
+**Next:** the smoke run above → M5-12 (orchestrator: CPU profile of a `complex` read, avro4k and Apache) → batch 2
+(M5-07 ∥ M5-02). The encoder's open points (shared empty `IntArray`, first chunk 64 B vs 256 B) ride along in AB-W.
+
+### Earlier (2026-10-27, later): IO-9 done — M4's stream work closed, M5 batch 1 next
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
 - **IO-9, v2 → v3 on the JVM (`9f6566d6` on `bench/v2-rows` vs `9c1325ce`, 2026-10-27 01:29 → 04:29, AC power, no
@@ -543,6 +567,8 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M4 · stream decoded from its head segment's array | done | `v3/m2-foundation` | `79621284` (merged by `64b89c90`), bench rows `8920310f` | `KotlinxIoDecoder` reads the head segment's array with a position, consumed on segment end or `release()` (`decodeFromSource` calls it in a `finally`). Stream reads +12% to +48% end to end, `ByteArray` reads unchanged, +16 B/op on stream reads. Single-object `decodeFromByteArray` and big-decimal bytes through `ByteArrayDecoder`. [`notes/m4-stream-cursor.md`](notes/m4-stream-cursor.md) |
 | v3.0.0 · README final pass | todo | — | — | **user (2026-10-15): update the README just before the v3.0.0 release**, once benchmark numbers and the 3.1 container decision are final (B8 did a first pass) |
 | M5 decomposition (`Plan` agent) | done | `v3/m2-foundation` | this commit | 12 units, [`notes/m5-decomposition.md`](notes/m5-decomposition.md); §7 Q1–Q8 for the user before any unit |
+| M5-00 · common benchmarks (jvm, jsNode, macosArm64) | done | `v3/common-benchmarks`, merged | `ea7bf6a0` (merge `54e0ad19`) | `benchmark-common/`, 10 rows per target, data pinned by a test on 3 targets; instrument, not measured; smoke run pending. [`notes/m5-00.md`](notes/m5-00.md) |
+| M5-01 · one merge per single-block collection | done | `v3/collection-single-merge`, merged | `0215bc80` (merge `8cb845ed`) | closing empty block no longer merged; codec calls unchanged; +12 tests (jvm 1078, jsNode 237, macosArm64 240); measured in AB-R. [`notes/m5-01.md`](notes/m5-01.md) |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
