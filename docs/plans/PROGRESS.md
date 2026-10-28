@@ -7,11 +7,37 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batch 1: M5-00 and M5-01 merged). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-28): M5 batch 1 merged — smoke run of the common benchmarks pending
+### Resume here (2026-10-28, later): M5 batch 2 merged — smoke run and read profile next
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
+- **M5-07 merged** (`688c0020`, merge `db262da4`): `ByteArrayEncoder.writeString` encodes straight into the chunk. Up
+  to 21 chars (≤63 bytes, so a one-byte length) in one pass with the length written back; longer ones counted by a
+  common `utf8Length()` first; a string that does not fit runs over chunks by `room / 3` chars, never splitting a
+  surrogate pair. One UTF-8 loop in common code (`Utf8.kt`), the non-JVM `encodeToUtf8` uses it. +9 tests. Predicted
+  EA-off: `simple` −48 B per record, `complex` −1,128 / −18,072 / −246,672 B @1/@15/@200, `lists` 0. Note:
+  [`notes/m5-07.md`](notes/m5-07.md).
+- **Candidate `v3/string-write-jvm-threshold`** (`afcabeef`, on top of M5-07, **not merged**): on the JVM, strings over
+  64 chars go back to `getBytes` + copy. No benchmark row has a string over 30 chars, so **AB-W needs a long-string
+  row (e.g. 256 and 4,096-char ASCII, committed alone before the run)** to decide it; it is a side of AB-W.
+- **M5-02 merged** (`f3ca8e9d`, merge `b120c228`): record, array-block and map-block decoders reused per
+  nesting level (lazy child slots, busy flag cleared by `endStructure`, identity memo of the record workflow). +16
+  tests. After both merges: jvm 1103, jsNode 260, macosArm64 263; the combined `ACC` first invocation passed. Decoders grew (record 48 → 72 B, blocks 48 → 64 B): predicted EA-off **+80 B on `simple` @1,
+  +16…+56 on `complex` @1, +40/+88/+208 on `NestedRecord.read` depth 1/3/8**, gains from 2 records/blocks per call on.
+  Open choice for after AB-R: an index sentinel instead of the `Boolean` busy flag (−8 B on record and array block).
+  Misuse before `decodeElementIndex` now throws `IllegalStateException` instead of `UninitializedPropertyAccessException`
+  (the latter is internal on native). Note: [`notes/m5-02.md`](notes/m5-02.md).
+- Agent worktrees `.claude/worktrees/agent-*` and their `worktree-agent-*` branches, plus `v3/common-benchmarks`,
+  `v3/collection-single-merge`, `v3/string-write-in-place`, `v3/decoder-reuse` can be deleted (keep
+  `v3/string-write-jvm-threshold`).
+
+**Next:** the `benchmark-common` smoke run → M5-12 (read profile; async-profiler installed with Homebrew; run on this
+head, which already has M5-01 and M5-02) → batch 3 (M5-05 ∥ M5-03, M5-03 aimed by the profile) → AC-1.
+
+### Earlier (2026-10-28): M5 batch 1 merged — smoke run of the common benchmarks pending
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
 - **M5-00 merged** (`ea7bf6a0`, merge `54e0ad19`): module `benchmark-common/` (jvm, jsNode, macosArm64; not published,
@@ -569,6 +595,8 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5 decomposition (`Plan` agent) | done | `v3/m2-foundation` | this commit | 12 units, [`notes/m5-decomposition.md`](notes/m5-decomposition.md); §7 Q1–Q8 for the user before any unit |
 | M5-00 · common benchmarks (jvm, jsNode, macosArm64) | done | `v3/common-benchmarks`, merged | `ea7bf6a0` (merge `54e0ad19`) | `benchmark-common/`, 10 rows per target, data pinned by a test on 3 targets; instrument, not measured; smoke run pending. [`notes/m5-00.md`](notes/m5-00.md) |
 | M5-01 · one merge per single-block collection | done | `v3/collection-single-merge`, merged | `0215bc80` (merge `8cb845ed`) | closing empty block no longer merged; codec calls unchanged; +12 tests (jvm 1078, jsNode 237, macosArm64 240); measured in AB-R. [`notes/m5-01.md`](notes/m5-01.md) |
+| M5-07 · strings written in place | done | `v3/string-write-in-place`, merged | `688c0020` (merge `db262da4`) | one-pass short strings, counted long strings, no intermediate array; +9 tests; JVM threshold candidate `afcabeef` unmerged, a side of AB-W. [`notes/m5-07.md`](notes/m5-07.md) |
+| M5-02 · decoders reused per nesting level | done | `v3/decoder-reuse`, merged | `f3ca8e9d` (merge `b120c228`) | record and block slots, busy guard, workflow memo; +16 tests; measured in AB-R. [`notes/m5-02.md`](notes/m5-02.md) |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
