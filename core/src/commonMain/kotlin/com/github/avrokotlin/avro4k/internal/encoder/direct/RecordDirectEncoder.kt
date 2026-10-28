@@ -10,36 +10,24 @@ import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
 
-@Suppress("FunctionName")
-internal fun RecordDirectEncoder(
-    descriptor: SerialDescriptor,
-    writerSchema: AvroSchema,
+/** A new encoder for a record whose fields are written in another order than its elements: buffered, then replayed. */
+internal fun reorderingRecordEncoder(
+    schema: RecordSchema,
+    encodingWorkflow: EncodingWorkflow.NonContiguous,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
-): CompositeEncoder {
-    // the caller checked the type: a record
-    val schema = writerSchema as RecordSchema
-    return when (val encodingWorkflow = avro.recordResolver.resolveFields(schema, descriptor).encoding) {
-        is EncodingWorkflow.ExactMatch -> RecordContiguousExactEncoder(schema, avro, binaryEncoder)
-
-        is EncodingWorkflow.ContiguousWithSkips -> RecordContiguousSkippingEncoder(encodingWorkflow.fieldsToSkip, schema, avro, binaryEncoder)
-
-        is EncodingWorkflow.NonContiguous ->
-            ReorderingCompositeEncoder(
-                schema.fields.size,
-                RecordNonContiguousEncoder(
-                    encodingWorkflow.descriptorToWriterFieldIndex,
-                    schema,
-                    avro,
-                    binaryEncoder
-                )
-            ) { _, index ->
-                encodingWorkflow.descriptorToWriterFieldIndex[index]
-            }
-
-        is EncodingWorkflow.MissingWriterFields -> throw missingFieldsError(schema, encodingWorkflow, descriptor)
+): CompositeEncoder =
+    ReorderingCompositeEncoder(
+        schema.fields.size,
+        RecordNonContiguousEncoder(
+            encodingWorkflow.descriptorToWriterFieldIndex,
+            schema,
+            avro,
+            binaryEncoder
+        )
+    ) { _, index ->
+        encodingWorkflow.descriptorToWriterFieldIndex[index]
     }
-}
 
 internal fun missingFieldsError(
     schema: RecordSchema,
@@ -69,14 +57,47 @@ private class RecordNonContiguousEncoder(
     }
 }
 
-private class RecordContiguousSkippingEncoder(
-    private val skippedElements: BooleanArray,
-    private val schema: RecordSchema,
+/**
+ * Encodes one record after another whose elements map to the writer fields in order, some elements having no field:
+ * its parent keeps it and hands it each next record resolved to this workflow, through [reset]. [schema] and
+ * [resolvedDescriptor] are what [skippedElements] was resolved for, compared by identity by the parent before reusing it.
+ */
+internal class RecordContiguousSkippingEncoder(
+    schema: RecordSchema,
+    resolvedDescriptor: SerialDescriptor,
+    skippedElements: BooleanArray,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
+    var schema: RecordSchema = schema
+        private set
+    var resolvedDescriptor: SerialDescriptor = resolvedDescriptor
+        private set
+    var skippedElements: BooleanArray = skippedElements
+        private set
     private var nextWriterFieldIndex = 0
-    override lateinit var currentAvroSchema: AvroSchema
+
+    /** The schema of the field being encoded: none until [encodeElement] begins one, as on a new encoder. */
+    private var fieldSchema: AvroSchema? = null
+    override var currentAvroSchema: AvroSchema
+        get() = fieldSchema ?: throw noElementBegunError()
+        set(value) {
+            fieldSchema = value
+        }
+
+    fun reset(
+        schema: RecordSchema,
+        resolvedDescriptor: SerialDescriptor,
+        skippedElements: BooleanArray,
+    ): RecordContiguousSkippingEncoder {
+        this.schema = schema
+        this.resolvedDescriptor = resolvedDescriptor
+        this.skippedElements = skippedElements
+        nextWriterFieldIndex = 0
+        fieldSchema = null
+        beginReuse()
+        return this
+    }
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
@@ -86,24 +107,52 @@ private class RecordContiguousSkippingEncoder(
             return false
         }
         super.encodeElement(descriptor, index)
-        currentAvroSchema = schema.fields[nextWriterFieldIndex++].schema
+        fieldSchema = schema.fields[nextWriterFieldIndex++].schema
         return true
     }
 }
 
-private class RecordContiguousExactEncoder(
-    private val schema: RecordSchema,
+/**
+ * Encodes one record after another whose elements map one to one to the writer fields, in order: its parent keeps it
+ * and hands it each next record resolved to this workflow, through [reset]. [schema] and [resolvedDescriptor] are what it
+ * was resolved for, compared by identity by the parent before reusing it.
+ */
+internal class RecordContiguousExactEncoder(
+    schema: RecordSchema,
+    resolvedDescriptor: SerialDescriptor,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
-    override lateinit var currentAvroSchema: AvroSchema
+    var schema: RecordSchema = schema
+        private set
+    var resolvedDescriptor: SerialDescriptor = resolvedDescriptor
+        private set
+
+    /** The schema of the field being encoded: none until [encodeElement] begins one, as on a new encoder. */
+    private var fieldSchema: AvroSchema? = null
+    override var currentAvroSchema: AvroSchema
+        get() = fieldSchema ?: throw noElementBegunError()
+        set(value) {
+            fieldSchema = value
+        }
+
+    fun reset(
+        schema: RecordSchema,
+        resolvedDescriptor: SerialDescriptor,
+    ): RecordContiguousExactEncoder {
+        this.schema = schema
+        this.resolvedDescriptor = resolvedDescriptor
+        fieldSchema = null
+        beginReuse()
+        return this
+    }
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        currentAvroSchema = schema.fields[index].schema
+        fieldSchema = schema.fields[index].schema
         return true
     }
 }

@@ -7,17 +7,39 @@ import com.github.avrokotlin.avro4k.internal.schema.elementType
 import com.github.avrokotlin.avro4k.internal.schema.valueType
 import kotlinx.serialization.descriptors.SerialDescriptor
 
-internal class MapDirectEncoder(private val schema: AvroSchema, mapSize: Int, avro: Avro, binaryEncoder: AvroBinaryEncoder) :
+/**
+ * Encodes one map after another: its parent keeps it and hands it each next map it begins, through [reset], instead of
+ * creating an encoder per map. Nothing of the previous map survives a [reset].
+ */
+internal class MapDirectEncoder(avro: Avro, binaryEncoder: AvroBinaryEncoder) :
     AbstractAvroDirectEncoder(avro, binaryEncoder) {
-    init {
+    /** The writer schema of the map's values, read once per map. */
+    private var valueType: AvroSchema? = null
+
+    /** The schema of the key or value being encoded: none until [encodeElement] begins one, as on a new encoder. */
+    private var entrySchema: AvroSchema? = null
+    override var currentAvroSchema: AvroSchema
+        get() = entrySchema ?: throw noElementBegunError()
+        set(value) {
+            entrySchema = value
+        }
+
+    /** Begins a map of [mapSize] entries written with [mapSchema]: writes its start, as a new encoder did when created. */
+    fun reset(
+        mapSchema: AvroSchema,
+        mapSize: Int,
+    ): MapDirectEncoder {
+        valueType = mapSchema.valueType
+        entrySchema = null
         binaryEncoder.writeMapStart(mapSize.toLong())
+        beginReuse()
+        return this
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
         binaryEncoder.writeMapEnd()
+        super.endStructure(descriptor)
     }
-
-    override lateinit var currentAvroSchema: AvroSchema
 
     companion object {
         private val STRING_SCHEMA = AvroSchema.StringSchema()
@@ -28,28 +50,47 @@ internal class MapDirectEncoder(private val schema: AvroSchema, mapSize: Int, av
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        currentAvroSchema =
+        entrySchema =
             if (index % 2 == 0) {
                 binaryEncoder.startItem()
                 STRING_SCHEMA
             } else {
-                schema.valueType
+                valueType
             }
         return true
     }
 }
 
+/**
+ * Encodes one array after another: its parent keeps it and hands it each next array it begins, through [reset], instead
+ * of creating an encoder per array. Nothing of the previous array survives a [reset].
+ */
 internal class ArrayDirectEncoder(
-    private val arraySchema: AvroSchema,
-    arraySize: Int,
     avro: Avro,
     binaryEncoder: AvroBinaryEncoder,
 ) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
-    init {
-        binaryEncoder.writeArrayStart(arraySize.toLong())
-    }
+    /** The writer schema of the array's items, read once per array. */
+    private var elementType: AvroSchema? = null
 
-    override lateinit var currentAvroSchema: AvroSchema
+    /** The schema of the item being encoded: none until [encodeElement] begins one, as on a new encoder. */
+    private var itemSchema: AvroSchema? = null
+    override var currentAvroSchema: AvroSchema
+        get() = itemSchema ?: throw noElementBegunError()
+        set(value) {
+            itemSchema = value
+        }
+
+    /** Begins an array of [arraySize] items written with [arraySchema]: writes its start, as a new encoder did when created. */
+    fun reset(
+        arraySchema: AvroSchema,
+        arraySize: Int,
+    ): ArrayDirectEncoder {
+        elementType = arraySchema.elementType
+        itemSchema = null
+        binaryEncoder.writeArrayStart(arraySize.toLong())
+        beginReuse()
+        return this
+    }
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
@@ -57,11 +98,12 @@ internal class ArrayDirectEncoder(
     ): Boolean {
         super.encodeElement(descriptor, index)
         binaryEncoder.startItem()
-        currentAvroSchema = arraySchema.elementType
+        itemSchema = elementType
         return true
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
         binaryEncoder.writeArrayEnd()
+        super.endStructure(descriptor)
     }
 }
