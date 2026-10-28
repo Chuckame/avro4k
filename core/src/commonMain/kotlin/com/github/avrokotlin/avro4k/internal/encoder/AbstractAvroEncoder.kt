@@ -178,6 +178,15 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
         return true
     }
 
+    /**
+     * Forgets the union branch selected for the previous value, as a new encoder has none: for an encoder that core reuses
+     * for another structure or value. [encodeElement] does the same for each element, but a polymorphic value is encoded
+     * without one.
+     */
+    internal fun clearSelectedUnionIndex() {
+        selectedUnionIndex = -1
+    }
+
     override fun encodeNull() {
         if (currentAvroSchema.isUnion) {
             trySelectTypeNameFromUnion(AvroSchema.Type.NULL) ||
