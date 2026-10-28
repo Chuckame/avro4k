@@ -24,6 +24,9 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.serializer
 import org.apache.avro.Schema
 import org.apache.avro.io.DecoderFactory
@@ -104,7 +107,131 @@ internal class ValidatingCodecDifferentialTest : StringSpec({
         report.unexplained.shouldBeEmpty()
         report.bothRejected shouldBeGreaterThan 1000
     }
+
+    "the direct decoder reads each collection block count once and in order" {
+        // The decoder reads the count of the next block itself before merging another block into the collection: the
+        // codec must still see one count per block, the first one as a collection start, and the closing empty block.
+        val serializer = ValidatingCodecDifferentialTest.Blocks.serializer()
+        val schema = Avro.schema(serializer)
+        val mapBranch = ((schema as RecordSchema).fields[5].schema as UnionSchema).types.indexOfFirst { it.type == Type.MAP }
+        val nullBranch = (schema.fields[5].schema as UnionSchema).types.indexOfFirst { it.type == Type.NULL }
+
+        val oneBlock =
+            Avro.encodeToByteArray(
+                schema,
+                serializer,
+                ValidatingCodecDifferentialTest.Blocks(listOf(1, 2), mapOf("k" to 5L), listOf(listOf(3)), arrayOf("s"), longArrayOf(4), mapOf("m" to 1))
+            )
+        val severalBlocks =
+            ByteArrayEncoder().apply {
+                // list = [1, 2, 3]: a block of one item, a block of two written with its byte size
+                writeBlocks(1, -2) { writeInt(it + 1) }
+                // map = {a: 1, b: 2, c: 3}
+                writeBlocks(2, -1) {
+                    writeString("abc"[it].toString())
+                    writeLong(it + 1L)
+                }
+                // nested = [[1], [2, 3]]: one item per outer block, the second inner list in two blocks
+                writeBlocks(1, 1) { outer ->
+                    if (outer == 0) writeBlocks(1) { writeInt(1) } else writeBlocks(1, -1) { writeInt(it + 2) }
+                }
+                // strings = [x, y, z]
+                writeBlocks(1, 1, 1) { writeString("xyz"[it].toString()) }
+                // longs = [4, 5]
+                writeBlocks(-1, 1) { writeLong(it + 4L) }
+                // maybe = {m: 1, n: 2}
+                writeIndex(mapBranch)
+                writeBlocks(1, 1) {
+                    writeString("mn"[it].toString())
+                    writeInt(it + 1)
+                }
+            }.toByteArray()
+        val empty =
+            ByteArrayEncoder().apply {
+                repeat(5) { writeLong(0) }
+                writeIndex(nullBranch)
+            }.toByteArray()
+
+        val cases =
+            listOf(
+                Triple(
+                    "one block",
+                    oneBlock,
+                    calls(
+                        "ARRAY_START(2) INT INT ARRAY_NEXT(0)",
+                        "MAP_START(1) STRING LONG MAP_NEXT(0)",
+                        "ARRAY_START(1) ARRAY_START(1) INT ARRAY_NEXT(0) ARRAY_NEXT(0)",
+                        "ARRAY_START(1) STRING ARRAY_NEXT(0)",
+                        "ARRAY_START(1) LONG ARRAY_NEXT(0)",
+                        "INDEX($mapBranch) MAP_START(1) STRING INT MAP_NEXT(0)"
+                    )
+                ),
+                Triple(
+                    "several blocks",
+                    severalBlocks,
+                    calls(
+                        "ARRAY_START(1) INT ARRAY_NEXT(2) INT INT ARRAY_NEXT(0)",
+                        "MAP_START(2) STRING LONG STRING LONG MAP_NEXT(1) STRING LONG MAP_NEXT(0)",
+                        "ARRAY_START(1) ARRAY_START(1) INT ARRAY_NEXT(0) ARRAY_NEXT(1) ARRAY_START(1) INT ARRAY_NEXT(1) INT ARRAY_NEXT(0) ARRAY_NEXT(0)",
+                        "ARRAY_START(1) STRING ARRAY_NEXT(1) STRING ARRAY_NEXT(1) STRING ARRAY_NEXT(0)",
+                        "ARRAY_START(1) LONG ARRAY_NEXT(1) LONG ARRAY_NEXT(0)",
+                        "INDEX($mapBranch) MAP_START(1) STRING INT MAP_NEXT(1) STRING INT MAP_NEXT(0)"
+                    )
+                ),
+                Triple(
+                    "empty",
+                    empty,
+                    calls("ARRAY_START(0) MAP_START(0) ARRAY_START(0) ARRAY_START(0) ARRAY_START(0) INDEX($nullBranch) NULL")
+                )
+            )
+        for ((name, bytes, expected) in cases) {
+            withClue(name) {
+                val decoder = RecordingAbiDecoder(ByteArrayDecoder(bytes))
+                Avro.decodeWithBinaryDecoder(schema, serializer, decoder)
+                decoder.calls shouldBe expected
+                runApacheDecoder(avro4kToApacheUncached(schema), decoder.calls) shouldBe null
+                runAvro4kDecoder(schema, decoder.calls) shouldBe Avro4kResult.Accepted
+            }
+        }
+    }
+
+    "a list read through the list serializer's deserialize keeps reading its count as the decoder's next block" {
+        // Only a collection read through decodeSerializableValue has its blocks merged and its closing block read. A
+        // serializer calling ListSerializer's deserialize itself begins the list directly: after another collection
+        // on the same decoder, its count is read as that collection's next block, and its closing block stays unread
+        // (a known limitation, kept as is here: only the calls must not change).
+        val serializer = ValidatingCodecDifferentialTest.Delegating.serializer()
+        val schema = Avro.schema(serializer)
+        val bytes = Avro.encodeToByteArray(schema, serializer, ValidatingCodecDifferentialTest.Delegating(listOf(1, 2), listOf(3)))
+
+        val decoder = RecordingAbiDecoder(ByteArrayDecoder(bytes))
+        Avro.decodeWithBinaryDecoder(schema, serializer, decoder)
+
+        decoder.calls shouldBe calls("ARRAY_START(2) INT INT ARRAY_NEXT(0)", "ARRAY_NEXT(1) INT")
+    }
 }) {
+    @Serializable
+    @SerialName("DiffDelegating")
+    internal class Delegating(
+        val first: List<Int>,
+        @Serializable(with = DelegatingListSerializer::class) val second: List<Int>,
+    )
+
+    internal object DelegatingListSerializer : KSerializer<List<Int>> by ListSerializer(Int.serializer()) {
+        override fun deserialize(decoder: Decoder): List<Int> = ListSerializer(Int.serializer()).deserialize(decoder)
+    }
+
+    @Serializable
+    @SerialName("DiffBlocks")
+    internal class Blocks(
+        val list: List<Int>,
+        val map: Map<String, Long>,
+        val nested: List<List<Int>>,
+        val strings: Array<String>,
+        val longs: LongArray,
+        val maybe: Map<String, Int>?,
+    )
+
     @Serializable
     @SerialName("DiffEveryType")
     internal data class EveryType(
@@ -618,6 +745,32 @@ private fun generateCollection(
         0
     )
     encoder += Call(if (isMap) Kind.MAP_END else Kind.ARRAY_END)
+}
+
+/** Parses `"KIND(arg) KIND ..."`, as [Call.toString] prints the calls, one group per argument. */
+private fun calls(vararg groups: String): List<Call> =
+    groups.flatMap { it.split(' ') }.filter { it.isNotEmpty() }.map { token ->
+        val open = token.indexOf('(')
+        if (open < 0) Call(Kind.valueOf(token)) else Call(Kind.valueOf(token.substring(0, open)), token.substring(open + 1, token.length - 1).toLong())
+    }
+
+/**
+ * Writes one collection as one block per count of [blocks], then the closing empty block. A negative count writes a
+ * block of as many items with its byte size, as the spec allows. Item `i` counts across the blocks.
+ */
+private fun ByteArrayEncoder.writeBlocks(
+    vararg blocks: Int,
+    writeItem: ByteArrayEncoder.(Int) -> Unit,
+) {
+    var item = 0
+    for (block in blocks) {
+        val count = kotlin.math.abs(block)
+        val content = ByteArrayEncoder().apply { repeat(count) { writeItem(item++) } }.toByteArray()
+        writeLong(block.toLong())
+        if (block < 0) writeLong(content.size.toLong())
+        writeFixed(content)
+    }
+    writeLong(0)
 }
 
 // ---- codecs that only record, or do nothing ----
