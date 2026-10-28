@@ -39,7 +39,7 @@ Path shorthands:
 
 ### Units
 
-12 units, one commit and one agent each (§4):
+14 units, one commit and one agent each, except M5-12, which the orchestrator runs (§4):
 
 | Unit | What | Plan item |
 |---|---|---|
@@ -55,6 +55,8 @@ Path shorthands:
 | M5-09 | `fixed`/`bytes` logical types without a copy (conditional on Q3) | C5 part A |
 | M5-10 | Reordering encoder without closures | C8 |
 | M5-11 | Re-baseline, review, known limits | — |
+| M5-12 | CPU profile of a `complex` read, avro4k and Apache (added 2026-10-28, no code) | — |
+| M5-13 | Nullable fields decoded on a short path (added 2026-10-28, conditional on M5-12) | — |
 
 ### C1 decision
 
@@ -625,21 +627,78 @@ Run by the orchestrator.
 - Ledger rows.
 - If the review finds `PrintInlining` misses on decode methods, the decode-side split of M5-06 becomes a follow-up.
 
+### M5-12 · CPU profile of a `complex` read, avro4k and Apache (added 2026-10-28)
+
+**Why:** IO-9 (2026-10-27) left reads at 0.54× (`complex` @1) to 0.93× Apache 1.12.2 `SpecificData`, while writes match or beat
+it except on `lists`. A8 ruled allocation out as the cause, and "Where the read gap really is" names two decoder-structure
+costs (M5-01, M5-03), but nobody has measured where a `complex` read spends its CPU time per field kind: the
+`decodeElementIndex` loop and step `when`, the per-value `when (currentAvroSchema.type)`, nullable fields,
+`BigDecimal`, `ByteArray`, enum symbol lookup, strings. A ranking aims M5-03 and decides M5-13 before they are written.
+
+**What:**
+- Run by the orchestrator, no code in `core`. It is CPU-heavy: never at the same time as a benchmark, and under the
+  same AC-power and Low Power Mode checks.
+- async-profiler in CPU mode (`-e cpu`, or `-e itimer` if perf events are unavailable) on `ManualProfilingRead`
+  (`benchmark/src/main/kotlin/com/github/avrokotlin/benchmark/ManualProfiling.kt`), launched as `benchmark/README.md` →
+  "Allocation flame graphs with async-profiler" describes, with flat and tree output.
+- The same on a plain loop around the Apache `SpecificData` read of the same `complex` data. `ManualProfiling.kt` has no
+  Apache loop; add one in the benchmark module only, in the commit that records the result.
+- Profile on the M5-01 head (after batch 1), so that M5-01's own cost is already gone from the picture.
+
+**Output:** a short `notes/m5-read-profile.md`: the top frames of both sides, self time grouped per field kind and per
+layer (kotlinx generated deserializer, avro4k decoder, codec), and which of M5-02, M5-03, M5-13 each share points to.
+No numbers go into `benchmark/README.md` (a profile is not a measurement of record).
+
+**Time:** ~30 min of machine time.
+
+### M5-13 · Nullable fields decoded on a short path (added 2026-10-28, conditional on M5-12)
+
+**Scheduled only if** M5-12 shows nullable fields as a distinct share of `complex` read time, beyond the per-field
+costs M5-03 already removes.
+
+**What is already cheap:** the union read itself is one varint and an array lookup
+(`decodeAndResolveUnion`, `D/AbstractAvroDirectDecoder.kt:159-166`). What surrounds it per nullable field today:
+- `RecordDirectDecoder.decodeNotNullMark` checks the decoding step's kind, then calls the general path;
+- `decodeNotNullMark` reads `currentAvroSchema.type` twice (union, then null), then the value's `decode*` reads it again
+  in its `when`;
+- kotlinx's `decodeNullableSerializableElement` goes through `decodeNullableSerializableValue`, which calls back into
+  the decoder.
+
+**Design sketch, to confirm against the profile:**
+- When the record workflow is computed, mark each writer field whose schema is `["null", T]` or `[T, "null"]`, keeping
+  the null branch's index and `T`'s schema, in the same internal array as M5-03's `exactFieldSchemas`.
+- On such a field, `decodeNotNullMark` reads the index, compares it with the null index, and sets `currentAvroSchema`
+  to `T` directly, with no `types` lookup and no type check. An out-of-range index still throws the same error.
+- Nothing changes for other unions, for missing fields with defaults, or for `JsonDefaultDecoder`.
+
+**Files:** `C/internal/RecordResolver.kt`, `D/RecordDirectDecoder.kt`, `D/AbstractAvroDirectDecoder.kt`. Tests: null and
+non-null values for both branch orders, an out-of-range index, a nullable field read from a non-union writer field, a
+non-nullable field read from a nullable writer union (today's behaviour, pre-existing bug #1 unchanged).
+
+**Acceptance:** `ACC`.
+
+**Judged by:** AB-R, as a fifth side: `complex` read rows; `StringField.readNullable` against `readNonNull` (the control).
+
+**Risk:** low semantically; the gain may be within noise once M5-03 lands, which is why it is conditional.
+
+**Parallel with:** M5-06 (after M5-04, same decoder files).
+
 ## 5. Order, batches, parallelism (max 2 agents, api units alone — none expected)
 
 | Step | Units | Disjoint because | Then |
 |---|---|---|---|
 | 0 | user answers Q1–Q8 | | |
 | Batch 1 | M5-00 ∥ M5-01 | new module vs `AbstractAvroDirectDecoder.kt` | merge M5-00 first (A/B base) |
+| 1b | M5-12 (orchestrator) | profile only, no code in `core` | decides M5-13; may re-aim M5-03 |
 | Batch 2 | M5-07 ∥ M5-02 | codec encoder + `Platform*` vs decoder files | |
 | Batch 3 | M5-05 ∥ M5-03 | encoder files vs `RecordResolver`/decoder files | **AC-1** |
-| Batch 4 | M5-06 ∥ M5-04 | `AvroSchema`/`AvroEncoder`/`AbstractAvroEncoder` vs polymorphic decoders + `apache-interop` | **AB-R** |
+| Batch 4 | M5-06 ∥ M5-04 → M5-13 (if M5-12 points to it) | `AvroSchema`/`AvroEncoder`/`AbstractAvroEncoder` vs polymorphic decoders + `apache-interop`, then record decoders | **AB-R** |
 | Batch 5 | M5-10 (∥ M5-08 if Q1 = threshold) | reordering + direct encoders vs codec decoders | **AB-W** (+ AB-S) |
 | 6 | M5-09 if Q3 | benchmark-rows commit alone, then the unit | AB-L |
 | 7 | M5-11 | | |
 
 Notes on the chains:
-- The decoder chain 01→02→03→04 and the encoder chain 05→06→10 are each serial (same files). The two chains are mutually disjoint.
+- The decoder chain 01→02→03→04→13 and the encoder chain 05→06→10 are each serial (same files). The two chains are mutually disjoint.
 - The read A/B's sides are commits within the branch. They also contain encoder units, which no read row executes; the write A/B is the mirror image. The benchmark `@Setup` encodes with avro4k, but the bytes are pinned by the golden tests.
 
 ## 6. Measurement
@@ -653,7 +712,7 @@ Notes on the chains:
 | Checkpoint | When | Sides | Rows | Est. time |
 |---|---|---|---|---|
 | **AC-1**, allocation only | after batch 3 | M5 base, head | EA-off, 1 fork: the 16 avro4k read and write rows + `NestedRecord`, `Collection`, `Polymorphic`, `StringField` (~15 rows). Deterministic: checks §2's predictions before batch 4 builds on them | ~20 min |
-| **AB-R**, reads | after batch 4 | base, +M5-02 (incl. 01), +M5-03, +M5-04 | 8 `read` rows × 5 rounds; `complex` read @1 at 9 forks per side; 21 read micros (`NestedRecord.read` ×3, `Collection.readLongs/readRecords/readTwoCollections` ×9, `Polymorphic.read*` ×4, `FieldOrder.read` ×3, `StringField.read*` ×2) × 3 rounds × 1 fork; EA-off once per side; `readFromSource` not needed (same code above the codec) | ~2.8 h (+~40 min with M5-00's js/native rows) |
+| **AB-R**, reads | after batch 4 | base, +M5-02 (incl. 01), +M5-03, +M5-04 (+M5-13 if scheduled, ~+40 min) | 8 `read` rows × 5 rounds; `complex` read @1 at 9 forks per side; 21 read micros (`NestedRecord.read` ×3, `Collection.readLongs/readRecords/readTwoCollections` ×9, `Polymorphic.read*` ×4, `FieldOrder.read` ×3, `StringField.read*` ×2) × 3 rounds × 1 fork; EA-off once per side; `readFromSource` not needed (same code above the codec) | ~2.8 h (+~40 min with M5-00's js/native rows) |
 | **AB-W**, writes | after batch 5 | base, +M5-07, +M5-05, +M5-06; plus +M5-10 on the `FieldOrder.write` rows only | 8 `write` rows × 5 rounds; `simple` write @1/@25 at 9 forks per side; 18 write micros × 3 rounds; EA-off once per side | ~3 h (+~40 min) |
 | AB-S | if Q1 = threshold | N = 0 / 16 / 32 | `StringDecode` ×6 + `StringField.read*` ×2, 3 rounds × 2 forks; `simple`/`complex` read × 5 rounds | ~1 h |
 | AB-L | if M5-09 | before/after | the new logical-type micros 3 rounds × 2 forks, EA-off | ~20 min |
