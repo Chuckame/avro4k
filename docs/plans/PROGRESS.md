@@ -7,11 +7,29 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-28, later): M5 batch 2 merged — smoke run and read profile next
+### Resume here (2026-10-28, evening): smoke run and read profile done — batch 3 next
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
+- **`benchmark-common` smoke run** (22:42, AC, load 3.0, `:benchmark-common:smokeBenchmark`, 1 × 1 s, numbers not of
+  record): all 10 rows ran on jvm, macosArm64 and jsNode. One signal to look at in AB-W: **JS `lists` write 190 ops/s
+  against 1,016 for `lists` read** (native 2,523 vs 1,721, JVM 7,256 vs 5,630) — `Long` writes on JS, where `Long` is
+  emulated.
+- **M5-12 done** ([`notes/m5-read-profile.md`](notes/m5-read-profile.md), async-profiler 4.6 CPU mode, `complex` @15 and
+  @1, avro4k vs Apache `SpecificData`, on head `0fbb6cd8`): **the read gap is entirely in the structure layer** —
+  avro4k's data work (strings, byte copies, varints) is a third cheaper than Apache's (6.9 s vs 10.4 s), its structure
+  walk ≈17 s vs ≈8 s. M5-03 is worth ≈4–6% (kept, re-aimed); **M5-13 scheduled, re-scoped**: the abstract
+  `currentAvroSchema` read through a virtual call on every value costs ≈7.7%, the nullable wrapper alone ≈1.8% — make it
+  a base-class field, then the `["null", T]` short path. Decoder-side megamorphic dispatch ≈4–5%: recorded as evidence
+  for Q5 (frame stack), nothing decided. Backlog items 13 (maps without kotlinx's `containsKey`, 4.1%) and 14 (parameter
+  null checks, 1.3–1.9%) added. `ManualProfiling.kt` gains an Apache loop and a client-count argument.
+
+**Next:** batch 3 (M5-05 ∥ M5-03) → AC-1 (allocation only, ~20 min) → batch 4 (M5-06 ∥ M5-04 → M5-13) → AB-R.
+
+### Earlier (2026-10-28, later): M5 batch 2 merged — smoke run and read profile next
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
 - **M5-07 merged** (`688c0020`, merge `db262da4`): `ByteArrayEncoder.writeString` encodes straight into the chunk. Up
@@ -597,6 +615,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5-01 · one merge per single-block collection | done | `v3/collection-single-merge`, merged | `0215bc80` (merge `8cb845ed`) | closing empty block no longer merged; codec calls unchanged; +12 tests (jvm 1078, jsNode 237, macosArm64 240); measured in AB-R. [`notes/m5-01.md`](notes/m5-01.md) |
 | M5-07 · strings written in place | done | `v3/string-write-in-place`, merged | `688c0020` (merge `db262da4`) | one-pass short strings, counted long strings, no intermediate array; +9 tests; JVM threshold candidate `afcabeef` unmerged, a side of AB-W. [`notes/m5-07.md`](notes/m5-07.md) |
 | M5-02 · decoders reused per nesting level | done | `v3/decoder-reuse`, merged | `f3ca8e9d` (merge `b120c228`) | record and block slots, busy guard, workflow memo; +16 tests; measured in AB-R. [`notes/m5-02.md`](notes/m5-02.md) |
+| M5-12 · read CPU profile, avro4k vs Apache | done | `v3/m2-foundation` | this commit | gap in the structure layer (≈17 s vs ≈8 s @15), data work a third cheaper than Apache; M5-03 ≈4–6%; M5-13 re-scoped (schema getter + union ≈7.7%). [`notes/m5-read-profile.md`](notes/m5-read-profile.md) |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |

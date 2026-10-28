@@ -395,6 +395,10 @@ Predicted: −48 B per `simple` record exactly; −240 B per `complex` client; �
 
 ### M5-03 · Records that match the writer schema exactly, decoded in order (new)
 
+> **Re-aimed by M5-12 (2026-10-28, `m5-read-profile.md`):** its frames are ≈4–6% of a `complex` @15 read
+> (`decodeElementIndex` 2.9%, step checks 0.8%, part of `decodeSerializableElement`), not the read gap: keep it, aimed at
+> those frames.
+
 **Design.**
 - `computeDecodingSteps` (`C/internal/RecordResolver.kt:180-233`) also computes `exactFieldSchemas: Array<AvroSchema>?`. It is non-null only when there are as many steps as elements and as writer fields, and step i is `DeserializeWriterField(elementIndex = i, writerFieldIndex = i)`. It is stored as an `internal` field of `SerializationWorkflow` (`:357-376`), invisible to `apache-interop` and to the dump.
 - A new `ExactRecordDirectDecoder` in `D/RecordDirectDecoder.kt`:
@@ -652,6 +656,13 @@ No numbers go into `benchmark/README.md` (a profile is not a measurement of reco
 **Time:** ~30 min of machine time.
 
 ### M5-13 · Nullable fields decoded on a short path (added 2026-10-28, conditional on M5-12)
+
+> **Scheduled and re-scoped by M5-12 (2026-10-28, `m5-read-profile.md`):** the nullable wrapper alone is ≈1.8% of a
+> `complex` @15 read; the per-value schema access around it ≈7.7% (`currentAvroSchema`, an abstract property read through a
+> virtual call by `decodeAndResolveUnion` on every value: getters 3.3%, their stubs 1.0%, `decodeAndResolveUnion` 3.4%).
+> The unit first makes the current schema a plain field of `AbstractAvroDirectDecoder` (subclasses assign it; the record
+> decoder's "no field begun" check moves to the rare path), then adds the `["null", T]` short path below. Same files,
+> still after M5-04.
 
 **Scheduled only if** M5-12 shows nullable fields as a distinct share of `complex` read time, beyond the per-field
 costs M5-03 already removes.
