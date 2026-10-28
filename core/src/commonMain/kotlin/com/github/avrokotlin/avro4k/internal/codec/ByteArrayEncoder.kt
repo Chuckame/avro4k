@@ -1,7 +1,5 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
-import com.github.avrokotlin.avro4k.internal.encodeToUtf8
-
 /**
  * Writes Avro binary into an array it owns, byte for byte as Apache Avro's `BinaryEncoder` does, and hands the bytes
  * written with [toByteArray]. The mirror of [ByteArrayDecoder]: an array and a position.
@@ -119,13 +117,61 @@ internal class ByteArrayEncoder(
         bytes[p + 7] = (bits ushr 56).toByte()
     }
 
+    /**
+     * Encodes [value] straight into the chunk, with no array of its UTF-8 bytes in between.
+     *
+     * A string of at most [MAX_ONE_BYTE_LENGTH_CHARS] chars, most of them, is written in one pass: its length always
+     * takes one byte, so that byte is reserved, the chars encoded after it, and the length written back into it. This
+     * function writes that case itself and stays small enough to be inlined; a longer string, or one that may not fit
+     * in the room left in the chunk, is counted first, out of line by [writeCountedString].
+     */
     override fun writeString(value: String) {
-        if (value.isEmpty()) {
-            writeZero()
-            return
+        val length = value.length
+        val p = position
+        val bytes = bytes
+        // the one-byte length, then at most 3 bytes per char
+        if (length <= MAX_ONE_BYTE_LENGTH_CHARS && bytes.size - p > 3 * length) {
+            val end = value.encodeUtf8Into(bytes, p + 1, 0, length)
+            // the zig-zag encoding of a length below 64, in a single byte
+            bytes[p] = ((end - p - 1) shl 1).toByte()
+            position = end
+        } else {
+            writeCountedString(value)
         }
-        // TODO: encode straight into the array instead of allocating the intermediate one
-        writeBytes(value.encodeToUtf8())
+    }
+
+    /**
+     * Writes the length of [value], counted beforehand, then its UTF-8 bytes: into the room left in the current chunk,
+     * and the rest at the start of the next one, as [writeAcrossChunks] does.
+     *
+     * When they do not all fit, the chars are encoded by runs that surely fit in the room left, 3 bytes per char, so
+     * that no char is split between two chunks; the last few bytes of the chunk may stay unused, as before a varint.
+     */
+    private fun writeCountedString(value: String) {
+        val length = value.length
+        var remaining = value.utf8Length()
+        writeInt(remaining)
+        var i = 0
+        while (true) {
+            val p = position
+            val room = bytes.size - p
+            if (remaining <= room) {
+                position = value.encodeUtf8Into(bytes, p, i, length)
+                return
+            }
+            // fewer chars than are left, since the rest takes more than the room and at most 3 bytes per char
+            var end = i + room / 3
+            // a surrogate pair stays whole in the next run
+            if (end > i && value[end - 1].isHighSurrogate()) end--
+            if (end == i) {
+                nextChunk(remaining)
+            } else {
+                val q = value.encodeUtf8Into(bytes, p, i, end)
+                remaining -= q - p
+                position = q
+                i = end
+            }
+        }
     }
 
     override fun writeString(utf8: ByteArray) {
@@ -259,6 +305,14 @@ internal class ByteArrayEncoder(
         position = 0
     }
 }
+
+/**
+ * The longest string whose length is surely written in one byte: a UTF-16 char takes at most 3 bytes in UTF-8 (2 below
+ * U+0800, 3 for the rest of the basic plane, 4 for a surrogate pair of 2 chars, 1 for an unpaired surrogate written as
+ * `?`), so 21 chars take at most 63 bytes, whose zig-zag varint, 126, is below 128. 22 chars can take 66 bytes, 2 for
+ * their length.
+ */
+private const val MAX_ONE_BYTE_LENGTH_CHARS = 21
 
 /** Enough for a typical record, small enough not to matter when a value is a single field. */
 private const val FIRST_CHUNK_SIZE = 256
