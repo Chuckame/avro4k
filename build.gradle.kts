@@ -28,6 +28,9 @@ tasks.register("actionsBeforeCommit") {
         "spotlessApply"
     )
     subprojects {
+        // The multiplatform benchmarks are a measuring instrument, built when they are run: compiling them for every
+        // target on each commit would only slow this task down
+        if (name == "benchmark-common") return@subprojects
         tasksToBeRun.forEach { task ->
             tasks.findByName(task)?.let { dependsOn(it) }
         }
