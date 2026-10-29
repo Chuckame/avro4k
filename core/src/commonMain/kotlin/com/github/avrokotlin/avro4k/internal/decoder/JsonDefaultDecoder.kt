@@ -459,7 +459,7 @@ private class PolymorphicJsonDefaultDecoder(
     override fun tryFindSerialNameForUnion(
         namesAndAliasesToSerialName: Map<String, String>,
         schema: AvroSchema,
-    ): Pair<String, AvroSchema>? {
+    ): String? {
         return schema.types.firstNotNullOfOrNull { tryFindSerialName(namesAndAliasesToSerialName, it) }
     }
 

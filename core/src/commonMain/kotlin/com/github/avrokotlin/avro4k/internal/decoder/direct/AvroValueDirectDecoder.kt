@@ -16,4 +16,15 @@ internal class AvroValueDirectDecoder(
     }
 
     override var currentAvroSchema: AvroSchema = writerSchema
+
+    /**
+     * Makes this decoder decode a new value written with [writerSchema], as a new decoder would. The polymorphic decoder
+     * keeps its value decoder and hands it each next value this way, so that the decoders this one keeps (the subclass's
+     * record decoder, mostly) are reused too.
+     */
+    fun reset(writerSchema: AvroSchema): AvroValueDirectDecoder {
+        currentAvroSchema = writerSchema
+        beginReuse()
+        return this
+    }
 }

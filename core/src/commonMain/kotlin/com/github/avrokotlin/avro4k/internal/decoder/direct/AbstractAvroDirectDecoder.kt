@@ -12,7 +12,6 @@ import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
 import com.github.avrokotlin.avro4k.internal.codec.decodeUtf8
 import com.github.avrokotlin.avro4k.internal.collectionCountError
 import com.github.avrokotlin.avro4k.internal.convertDecoded
-import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
 import com.github.avrokotlin.avro4k.internal.enumIndexOutOfRangeError
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.internal.schema.enumSymbols
@@ -32,7 +31,6 @@ import kotlinx.serialization.descriptors.PolymorphicKind
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.CompositeDecoder
-import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.internal.AbstractCollectionSerializer
 import kotlinx.serialization.modules.SerializersModule
 
@@ -67,24 +65,27 @@ internal abstract class AbstractAvroDirectDecoder(
     private var decodedCollectionTotal = 0
 
     /**
-     * The decoders of the records, array blocks and map blocks this decoder begins, each created on first use and then
-     * handed every next structure of its kind, by [beginStructure]: a list of records, or a record's successive fields
-     * of one kind, reuse one decoder instead of allocating one per value. Kotlinx decodes depth-first, so a decoder only
-     * ever has one structure begun at a time; one it begins inside another is begun by that other's own decoder. They
-     * belong to the decode call that created the root decoder, as this one does: nothing is shared between calls.
+     * The decoders of the records, array blocks, map blocks and polymorphic values this decoder begins, each created on
+     * first use and then handed every next structure of its kind, by [beginStructure]: a list of records, or a record's
+     * successive fields of one kind, reuse one decoder instead of allocating one per value. Kotlinx decodes depth-first,
+     * so a decoder only ever has one structure begun at a time; one it begins inside another is begun by that other's
+     * own decoder. They belong to the decode call that created the root decoder, as this one does: nothing is shared
+     * between calls.
      *
      * A record matching its writer schema exactly is decoded by [exactRecordDecoder], any other by [recordDecoder].
      *
-     * Each of them is in use from its reset to its `endStructure`, which it tells by a position index of its own:
-     * [NOT_IN_USE] once ended, as when created. Its parent then begins the next structure of that kind on a new decoder,
-     * kept out of the slot: so a serializer that begins a second structure before ending the first, never ends one, or
-     * catches an error inside one and goes on, still decodes correctly, only allocating as it did before decoders were
-     * reused. The index rather than a flag of its own: a flag here would make every decoder 8 bytes larger on the JVM.
+     * Each of them is in use from its reset to its `endStructure`. Its parent then begins the next structure of that
+     * kind on a new decoder, kept out of the slot: so a serializer that begins a second structure before ending the
+     * first, never ends one, or catches an error inside one and goes on, still decodes correctly, only allocating as it
+     * did before decoders were reused. A record or block decoder tells it by a position index of its own, [NOT_IN_USE]
+     * once ended, as when created, rather than by a flag in this class, which would make every decoder 8 bytes larger
+     * on the JVM. The polymorphic decoder has no such index and a flag of its own, which costs it nothing.
      */
     private var exactRecordDecoder: ExactRecordDirectDecoder? = null
     private var recordDecoder: RecordDirectDecoder? = null
     private var arrayBlockDecoder: ArrayBlockDirectDecoder? = null
     private var mapBlockDecoder: MapBlockDirectDecoder? = null
+    private var polymorphicDecoder: PolymorphicDecoder? = null
 
     override val serializersModule: SerializersModule
         get() = avro.serializersModule
@@ -178,7 +179,7 @@ internal abstract class AbstractAvroDirectDecoder(
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.RECORD)
                 }
 
-            is PolymorphicKind -> PolymorphicDecoder(avro, descriptor, currentAvroSchema, binaryDecoder)
+            is PolymorphicKind -> polymorphicDecoder(descriptor, currentAvroSchema)
 
             else -> throw AvroSerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
@@ -246,6 +247,24 @@ internal abstract class AbstractAvroDirectDecoder(
         if (kept != null && !kept.inUse) return kept
         val decoder = MapBlockDirectDecoder(avro, binaryDecoder)
         if (kept == null) mapBlockDecoder = decoder
+        return decoder
+    }
+
+    /**
+     * The polymorphic decoder to begin a value of [descriptor] written with [schema] on: the one this decoder keeps,
+     * unless it is still in use.
+     */
+    private fun polymorphicDecoder(
+        descriptor: SerialDescriptor,
+        schema: AvroSchema,
+    ): PolymorphicDecoder {
+        val kept = polymorphicDecoder
+        if (kept != null && !kept.inUse) {
+            kept.reset(descriptor, schema)
+            return kept
+        }
+        val decoder = PolymorphicDecoder(avro, descriptor, schema, binaryDecoder)
+        if (kept == null) polymorphicDecoder = decoder
         return decoder
     }
 
@@ -466,24 +485,3 @@ internal fun noElementBegunError(): IllegalStateException =
  * a structure being decoded is 0 or more, so the index also tells whether the decoder is in use.
  */
 internal const val NOT_IN_USE = -1
-
-private class PolymorphicDecoder(
-    avro: Avro,
-    descriptor: SerialDescriptor,
-    schema: AvroSchema,
-    private val binaryDecoder: AvroBinaryDecoder,
-) : AbstractPolymorphicDecoder(avro, descriptor, schema) {
-    override fun tryFindSerialNameForUnion(
-        namesAndAliasesToSerialName: Map<String, String>,
-        schema: AvroSchema,
-    ): Pair<String, AvroSchema>? {
-        val branches = schema.types
-        val index = binaryDecoder.readIndex()
-        if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, schema)
-        return tryFindSerialName(namesAndAliasesToSerialName, branches[index])
-    }
-
-    override fun newDecoder(chosenSchema: AvroSchema): Decoder {
-        return AvroValueDirectDecoder(chosenSchema, avro, binaryDecoder)
-    }
-}
