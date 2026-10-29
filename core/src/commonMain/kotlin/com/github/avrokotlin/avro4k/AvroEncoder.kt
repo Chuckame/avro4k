@@ -131,7 +131,7 @@ internal fun AvroEncoder.logicalTypeMismatchError(
 
 /**
  * Selects the union branch of type [expectedType], if any. Only called when the current writer schema is a union.
- * A type compare per branch ([getIndexTyped]), no allocation.
+ * One array read ([getIndexTyped]), no allocation.
  */
 internal fun AvroEncoder.trySelectTypeNameFromUnion(expectedType: AvroSchema.Type): Boolean {
     val index = currentWriterSchema.getIndexTyped(expectedType)

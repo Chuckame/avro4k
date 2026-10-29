@@ -219,6 +219,23 @@ public sealed class AvroSchema(
 
         public fun getIndexOrNull(fullName: String): Int? = typesIndexByFullName[fullName]
 
+        /**
+         * The index of the first branch of each type, by [Type.ordinal], or -1 when the union has no branch of that type.
+         * Built once at construction, so that selecting the branch of a value's type while encoding is one array read
+         * instead of a scan of the branches. Only a named type (record, enum, fixed) can have several branches; the first
+         * one is kept, as the scan found it.
+         *
+         * Kept out of the primary constructor, so it takes no part in the data class `equals`, `hashCode`, `toString` or
+         * `copy`: it is derived from [types], so two equal unions always have equal tables anyway.
+         */
+        internal val firstIndexByType: IntArray =
+            IntArray(Type.entries.size) { -1 }.also { table ->
+                for (index in types.indices) {
+                    val ordinal = types[index].type.ordinal
+                    if (table[ordinal] == -1) table[ordinal] = index
+                }
+            }
+
         public constructor(vararg types: ResolvedSchema) : this(types.toList())
 
         init {
