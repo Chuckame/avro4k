@@ -323,5 +323,10 @@ while the template after it starts with `. Actual schema`.
 and drop the `.` at the end of `fallbacksStr`. Messages only; update the tests that pin them
 (`UnionBranchSelectionTest` among others).
 
+**Decoding too** (found 2026-10-29 by the nullable field tests, which pin it): the decoder's `unsupportedWriterTypeError`
+has the same template on both branches (`main`: `core/src/main/kotlin/com/github/avrokotlin/avro4k/AvroDecoder.kt:311-313`,
+read from source; v3: `core/src/commonMain/.../AvroDecoder.kt`, by test): a reader `Int` property from `["null","int"]`
+→ `… (one of LONG, STRING).. Actual schema: ["null","int"]`. Same fix in both functions.
+
 **Issue:** *Encoding error messages print fallback types in upper case with a double period* — cosmetic: e.g.
 `(one of LONG, STRING).. Actual schema:` where the main type is printed `int`.

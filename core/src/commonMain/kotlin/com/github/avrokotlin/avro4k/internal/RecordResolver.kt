@@ -17,6 +17,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlin.concurrent.Volatile
+import kotlin.jvm.JvmField
 
 /**
  * Capacity of the per-[RecordResolver] inline cache. Sized to comfortably hold the record types of a deeply
@@ -152,10 +153,12 @@ internal class RecordResolver(
     ): SerializationWorkflow {
         val writerRecordSchema = writerSchema as? RecordSchema ?: throw AvroSchemaMismatchException("Expected a record writer schema, but had $writerSchema")
         val decodingSteps = computeDecodingSteps(classDescriptor, writerRecordSchema)
+        val exactFieldSchemas = exactFieldSchemas(decodingSteps, classDescriptor.elementsCount, writerRecordSchema.fields.size)
         return SerializationWorkflow(
             decodingSteps,
             computeEncodingWorkflow(classDescriptor, writerRecordSchema),
-            exactFieldSchemas(decodingSteps, classDescriptor.elementsCount, writerRecordSchema.fields.size)
+            exactFieldSchemas,
+            if (exactFieldSchemas != null) nullableUnionFields(exactFieldSchemas) else NO_NULLABLE_UNION_FIELDS
         )
     }
 
@@ -375,6 +378,57 @@ internal fun exactFieldSchemas(
 }
 
 /**
+ * For each of [fieldSchemas], by element index, its [NullableUnionField] when it is a union of `null` and one other type,
+ * in either order; null for any other schema. The shared empty array when none is: a record without such a field, read
+ * with a writer schema parsed anew for each call, allocates nothing more to resolve.
+ *
+ * Runs once per (writer schema, descriptor) pair whose record decodes exactly as written, when its workflow is resolved.
+ */
+private fun nullableUnionFields(fieldSchemas: Array<AvroSchema>): Array<NullableUnionField?> {
+    var fields: Array<NullableUnionField?>? = null
+    for (index in fieldSchemas.indices) {
+        val field = nullableUnionField(fieldSchemas[index]) ?: continue
+        if (fields == null) fields = arrayOfNulls(fieldSchemas.size)
+        fields[index] = field
+    }
+    return fields ?: NO_NULLABLE_UNION_FIELDS
+}
+
+private fun nullableUnionField(schema: AvroSchema): NullableUnionField? {
+    if (schema !is AvroSchema.UnionSchema) return null
+    val branches = schema.types
+    if (branches.size != 2) return null
+    val nullIndex =
+        when {
+            branches[0].type === AvroSchema.Type.NULL -> 0
+            branches[1].type === AvroSchema.Type.NULL -> 1
+            else -> return null
+        }
+    return NullableUnionField(schema, nullIndex, branches[nullIndex], branches[1 - nullIndex])
+}
+
+internal val NO_NULLABLE_UNION_FIELDS: Array<NullableUnionField?> = emptyArray()
+
+/**
+ * A writer field whose schema is a union of `null` and one other type, `["null", T]` or `[T, "null"]`: the most common
+ * union by far, written for every nullable property. A nullable element read from it takes its branch from the index
+ * read, compared with [nullIndex] and [valueIndex], without looking the union's branches up.
+ */
+internal class NullableUnionField(
+    /** The field's writer schema, the union itself. */
+    @JvmField val union: AvroSchema,
+    /** The index of the `null` branch: 0 or 1. */
+    @JvmField val nullIndex: Int,
+    @JvmField val nullBranch: AvroSchema,
+    /** `T`'s schema. */
+    @JvmField val valueBranch: AvroSchema,
+) {
+    /** The index of [valueBranch]: the other one. */
+    @JvmField
+    val valueIndex: Int = 1 - nullIndex
+}
+
+/**
  * How the elements of a class descriptor map to the fields of a writer record schema, resolved once per pair by
  * [RecordResolver.resolveFields].
  *
@@ -397,6 +451,11 @@ public class SerializationWorkflow internal constructor(
      * in order, without its per-field decoding steps.
      */
     internal val exactFieldSchemas: Array<AvroSchema>?,
+    /**
+     * With [exactFieldSchemas], each field's [NullableUnionField], by element index, or null when its schema is not
+     * such a union; empty when the record does not decode exactly as written.
+     */
+    internal val exactNullableFields: Array<NullableUnionField?>,
 ) {
     /**
      * The step of each element, by element index, when its value is missing: a [DecodingStep.GetDefaultValue],

@@ -30,15 +30,8 @@ internal class ArrayBlockDirectDecoder(
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
     /** The writer schema of the items, read once per block rather than per item. */
-    private var elementType: AvroSchema? = null
+    private var elementType: AvroSchema = NO_ELEMENT_SCHEMA
     private var blockSize = 0
-
-    private var itemSchema: AvroSchema? = null
-    override var currentAvroSchema: AvroSchema
-        get() = itemSchema ?: throw noElementBegunError()
-        set(value) {
-            itemSchema = value
-        }
 
     /**
      * The next item index [decodeElementIndex] returns, relative to the block: kotlinx adds the items of the previous
@@ -57,7 +50,7 @@ internal class ArrayBlockDirectDecoder(
     ): ArrayBlockDirectDecoder {
         elementType = arraySchema.elementType
         this.blockSize = blockSize
-        itemSchema = null
+        currentAvroSchema = NO_ELEMENT_SCHEMA
         beginReuse()
         nextItemIndex = 0
         return this
@@ -74,7 +67,7 @@ internal class ArrayBlockDirectDecoder(
         index: Int,
     ) {
         // reset the current writer schema in of the element is a union (as a union is resolved)
-        itemSchema = elementType
+        currentAvroSchema = elementType
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -94,15 +87,8 @@ internal class MapBlockDirectDecoder(
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
     /** The writer schema of the values, read once per block rather than per entry. */
-    private var valueType: AvroSchema? = null
+    private var valueType: AvroSchema = NO_ELEMENT_SCHEMA
     private var blockSize = 0
-
-    private var entrySchema: AvroSchema? = null
-    override var currentAvroSchema: AvroSchema
-        get() = entrySchema ?: throw noElementBegunError()
-        set(value) {
-            entrySchema = value
-        }
 
     /** The entries of the block whose key is decoded so far. [NOT_IN_USE] when no block is begun or once it is ended. */
     private var decodedEntries = NOT_IN_USE
@@ -121,7 +107,7 @@ internal class MapBlockDirectDecoder(
     ): MapBlockDirectDecoder {
         valueType = mapSchema.valueType
         this.blockSize = blockSize
-        entrySchema = null
+        currentAvroSchema = NO_ELEMENT_SCHEMA
         pendingValueIndex = -1
         beginReuse()
         decodedEntries = 0
@@ -144,10 +130,10 @@ internal class MapBlockDirectDecoder(
     ) {
         // reset the current writer schema in of the element is a union (as a union is resolved)
         if (index % 2 == 0) {
-            entrySchema = KEY_SCHEMA
+            currentAvroSchema = KEY_SCHEMA
             pendingValueIndex = index + 1
         } else {
-            entrySchema = valueType
+            currentAvroSchema = valueType
         }
     }
 
