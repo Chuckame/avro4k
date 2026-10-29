@@ -1709,6 +1709,74 @@ which is the figure to keep. Every other row's invocations sit within 2% of each
 **In plain words:** the read-side work pays off the JVM too, by about as much as on the JVM for `complex` (+19% JS, +25%
 to +28% native) and for `simple` (+18% to +27% JS, +31% to +52% native). `lists` gains least on JS (+3%).
 
+## Results — reordered and nested record reads, and long values written on JS (4b7ea253 vs two candidates each)
+
+**Do the fixes pay, and which long-write candidate stays?** Reordered records win back their loss and more
+(`FieldOrder.read` reversed +25.6%, swapped +15.4%), nested records gain +8% to +14%, and nothing read end to end moves
+down (`simple` @1 +7.8%). Long values written on JS from their 32-bit halves: `lists` write ×9, `complex` +21% to +34%,
+`simple` +33% to +61%. The version common to every platform costs the JVM's long-list write micro 11% to 19%, so the
+JS-only version is kept.
+
+| | |
+|---|---|
+| Date | 2026-10-29 22:52 → 2026-10-30 00:17 |
+| Machine, power, sleep | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11, JMH 1.37, Node.js and release native binaries from kotlinx-benchmark 0.5.0; AC power and Low Power Mode checked before every invocation and polled every 10 s, no event; one `caffeinate -dimsu`; nothing discarded |
+| Load | every invocation started with the 1-min load average below 3 (1.41–2.91) |
+| Sides | **base** `4b7ea253`. Reads: **fix 1** `783242c5` (the general record decoder tracks a default-valued field with an int instead of a reference), **fix 2** `e302e4d4` (on fix 1: record decoders created with their first record begun). Long writes: **split** `17e6711f` (JS writes a long from its two 32-bit halves, the JVM and native keep their code), **common** `a731c81d` (the halves code on every platform). `benchmark/src` and `benchmark-common` identical on every side; selections added identically and uncommitted |
+
+**Method:** 3 invocations per side, the side order rotated and reversed each round. JVM: the read micros and the
+`simple`/`complex`/`lists` `read` rows at their own JMH settings; the write micros `CollectionMicroBenchmark.writeLongs`
+and `NestedRecordMicroBenchmark.write`. JS and native: `:benchmark-common:jsWriteBenchmark` and
+`macosArm64WriteBenchmark` (5 × 1 s + 5 × 1 s). Allocation once per side, escape analysis off. "Y" = every invocation of
+one side above (or below) every one of the other. **Not measured:** the JVM end-to-end write rows (their methods are
+`writeToByteArray`/`writeToStream`, which the write selection missed); the next write comparison covers them.
+
+### Reads (JVM), ops/s
+
+| row | base | fix 1 | fix 2 | base → fix 2 |
+|---|---:|---:|---:|---:|
+| `FieldOrder.read` reversed | 10.63M | 12.92M (+21.6% Y) | 13.35M (+3.3% Y) | **+25.6% Y** |
+| `FieldOrder.read` swapped | 10.54M | 11.91M (+13.0% Y) | 12.15M (+2.1% Y) | **+15.4% Y** |
+| `FieldOrder.read` matching | 15.87M | 15.87M (0.0%) | 16.68M (+5.1% Y) | **+5.1% Y** |
+| `NestedRecord.read` depth 1 / 3 / 8 | 50.2M / 18.6M / 7.11M | +1.8% / −3.1% / +0.8% (n) | +6.1% / +13.0% / +13.4% Y | **+8.0% / +9.5% / +14.4% Y** |
+| `StringField.readNullable` / `readNonNull` | 2.91M / 6.01M | +0.1% / −0.8% | +6.8% Y / +0.7% | +6.8% Y / −0.2% |
+| `simple` @1 / @25 / @500 | 9.15M / 529,248 / 22,802 | +0.3% / −0.1% / −0.1% | +7.5% Y / +0.1% / 0.0% | **+7.8% Y** / 0.0% / −0.1% |
+| `complex` @1 / @15 / @200 | 501,576 / 41,483 / 2,984 | within ±0.3% | within ±0.3% | +0.1% / −0.2% / +0.2% |
+| `lists` @100 / @10000 | 9,033 / 92 | +0.1% / −2.4% n | +0.2% / +0.2% | +0.3% / −2.2% n |
+| `Collection.read*`, `Polymorphic.read*` (12 rows) | | | | −6.0% to +13.6%, none separated below the base |
+
+Against the base before the read-side work (`54e0ad19`, previous section): `FieldOrder.read` reversed 12.01M → 13.35M,
+swapped 11.51M → 12.15M; `NestedRecord.read` 53.3M / 21.6M / 8.25M → 54.2M / 20.3M / 8.13M (+1.7% / −5.8% / −1.4%,
+across runs). Allocation: identical on every read row (fix 2 against the base, to the byte).
+
+### Long writes, ops/s
+
+| row | base | split | common | base → split | common vs split |
+|---|---:|---:|---:|---:|---:|
+| JS `lists` @100 | 238 | 2,146 | 2,172 | **+800% Y** | +1.2% n |
+| JS `complex` @1 / @15 | 132,517 / 7,858 | 161,123 / 10,539 | 160,483 / 10,550 | **+21.6% / +34.1% Y** | −0.4% / +0.1% n |
+| JS `simple` @1 / @25 | 602,903 / 36,669 | 798,971 / 58,939 | 815,578 / 58,951 | **+32.5% / +60.7% Y** | +2.1% / 0.0% n |
+| native `complex` @1 / @15 | 278,867 / 17,857 | +0.2% / +1.3% n | −3.1% Y / −0.8% | ≈ 0 | **−3.3% / −2.1% Y** |
+| native `lists` @100 | 2,765 | +2.3% n | −3.1% n | ≈ 0 | **−5.3% Y** |
+| native `simple` @1 / @25 | 1.41M / 89,381 | +1.7% n / +1.6% Y | −1.7% / −1.2% n | ≈ 0 | **−3.4% / −2.8% Y** |
+| JVM `writeLongs` @10 / @100000 | 10.67M / 777 | +0.2% / +2.6% n | 8.66M / 695 | ≈ 0 | **−19.0% / −12.9% Y** |
+| JVM `writeLongs` @1000 | 79,604 | 102,385 | 101,432 | (bimodal per fork) | −0.9% n |
+| JVM `NestedRecord.write` depth 1 / 3 / 8 | 29.6M / 13.6M / 5.89M | +0.1% / −0.2% / 0.0% | −0.7% / −1.3% Y / −0.1% | ≈ 0 | −0.9% / −1.1% Y / −0.1% |
+
+`writeLongs` @1000 lands in one of several JIT modes per fork on every side (base 88k / 88k / 61k, split 109k / 88k /
+109k, common 97k / 98k / 109k): no conclusion from that row. Allocation: identical on every write micro (common against
+the base, to the byte).
+
+### What it says, in plain words
+
+- **The two read regressions are fixed.** Reordered records are now faster than before the read-side work; nested
+  records are within −6% to +2% of it, and +8% to +14% against the head before this fix. Writing an int instead of a
+  reference per field, and creating a record decoder with its first record already begun, removed per-record work that
+  every record paid. `simple` @1 and nullable string fields gain on the way.
+- **Long values on JS:** the JS-only version and the common one give the same JS gains, so the JVM decides: the common
+  version is clearly slower on long-heavy JVM writes and slightly slower on native. Kept: the JS-only version
+  (`19a335ef`). The JS `lists` write goes from 238 to ≈2,150 ops/s, now above its read (≈1,150).
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 *Superseded as the current state by "v2 against v3 on the JVM" above (2026-10-27).*

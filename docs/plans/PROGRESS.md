@@ -7,11 +7,38 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03; batch 4: M5-06, M5-04, M5-13 merged; AB-R done). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03; batch 4: M5-06, M5-04, M5-13 merged; AB-R done; read regressions fixed; JS long writes merged). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-29, late night): JS/native read rows measured; two units running
+### Resume here (2026-10-30, night): read regressions fixed, JS long writes ×9 — AB-W next
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. **jvm 1184, jsNode 341,
+macosArm64 344**; ACC and ACC+KMP green on the merged tree, API dumps unchanged.
+- **Merged `v3/nested-record-read`** (`783242c5` the general record decoder tracks a default-valued field with an int,
+  `e302e4d4` record decoders created with their first record begun; merge `64c6e376`; +5 tests,
+  `RecordFieldStateDecodingTest`; note `notes/nested-record-read.md`). Base `4b7ea253` → fix 2: `FieldOrder.read`
+  reversed **+25.6%**, swapped **+15.4%**, matching +5.1%; `NestedRecord.read` **+8.0% / +9.5% / +14.4%**; `simple` @1
+  +7.8%, `StringField.readNullable` +6.8%; nothing end to end down; B/op identical. Against `54e0ad19` (before the read
+  work): reordered rows now above it, `NestedRecord.read` +1.7% / −5.8% / −1.4% (depth 1/3/8).
+- **Merged `v3/js-long-write` up to the platform split** (`17e6711f`, merge `19a335ef`; +4 tests, `ZigZagLongWriteTest`;
+  note `notes/js-long-write.md`): JS writes a long from its two 32-bit halves, one allocation per long instead of up to
+  ~70 calls/allocations; JVM and native keep their code. JS `lists` write **238 → 2,146 (×9)**, `complex` **+21.6% /
+  +34.1%**, `simple` **+32.5% / +60.7%**. The common candidate (`a731c81d`, unmerged) gave the same JS gains but cost
+  the JVM `writeLongs` −19.0% @10 / −12.9% @100000 and native writes 2–5% against the split: rejected, per the user's
+  rule (common only if the JVM does not move).
+- **Measured** 2026-10-29 22:52 → 00:17, AC, load 1.41–2.91, no power event. `benchmark/README.md` → "Results —
+  reordered and nested record reads, and long values written on JS". **Gap:** the JVM end-to-end write rows were not run
+  (their methods are `writeToByteArray`/`writeToStream`, the selection used `write$`); AB-W covers the split.
+- **Open, from the units:** kotlinx's generated deserializer constructor (the `SerializationConstructorMarker` one) is
+  never inlined (`unloaded signature classes`), one call per record on every side, outside avro4k; not tried. The
+  JS split still allocates one `Long` per value (`ushr 32`); the stdlib exposes no allocation-free high half.
+
+**Next:** batch 5 / AB-W (sides base, +M5-07, +M5-05, +M5-06, `v3/string-write-jvm-threshold` after a long-string row
+committed alone, the encoder candidates; end-to-end write rows on the JVM with `writeToByteArray`/`writeToStream`, and
+the JS/native write rows); then M5-11.
+
+### Earlier (2026-10-29, late night): JS/native read rows measured; two units running
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
 - **`benchmark-common` selections fixed** (`4b7ea253`): on JS and native the name kotlinx-benchmark matches is
@@ -772,8 +799,8 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5-13 · schema a base-class field, nullable short path | done | `v3/schema-field-nullable-path`, merged | `5e174c72`, `4f05b518` (merge `c9848a49`) | two sides of AB-R; layouts unchanged; +10 tests. [`notes/m5-13.md`](notes/m5-13.md) |
 | M5 · AB-R read A/B | done | `v3/m2-foundation` | this commit | 6 sides; `complex` +23–29%, `simple` +66–99%, `lists` +7–9%; allocation exact; regressions `NestedRecord.read` −6 to −14%, `FieldOrder.read` swapped/reversed −8/−11%; JS/native rows not run (selection bug). `benchmark/README.md` |
 | M5 · `benchmark-common` read/write selections | done | `v3/m2-foundation` | `4b7ea253` | not anchored at the start: JS/native names begin with the suite's simple name. JS/native read rows then measured base → nullable: JS `complex` +19%, `simple` +18–27%, `lists` +3%; native `complex` +25–28%, `simple` +31–52%, `lists` +21%; all Y. `benchmark/README.md` |
-| M5 · nested-record and reordered-record read regressions | in progress | `v3/nested-record-read` | — | see AB-R; nullable step's per-record cost suspected for `NestedRecord.read`, the field step for `FieldOrder.read` reversed |
-| M5 · JS `long` writes from `Int` halves | in progress | `v3/js-long-write` | — | JS-only `actual` first, common version second, kept only if the JVM write rows do not move |
+| M5 · nested-record and reordered-record read regressions | done | `v3/nested-record-read`, merged | `783242c5`, `e302e4d4`, merge `64c6e376` | `FieldOrder.read` reversed/swapped +25.6%/+15.4%, `NestedRecord.read` +8.0/+9.5/+14.4% vs `4b7ea253`; `simple` @1 +7.8%; B/op identical; +5 tests. `notes/nested-record-read.md`, `benchmark/README.md` |
+| M5 · JS `long` writes from `Int` halves | done | `v3/js-long-write`, merged up to the split | `17e6711f`, merge `19a335ef` | JS `lists` write ×9, `complex` +22/+34%, `simple` +33/+61%; JVM/native code unchanged. Common candidate `a731c81d` rejected (JVM `writeLongs` −19%/−13%, native −2 to −5%); +4 tests. `notes/js-long-write.md`, `benchmark/README.md` |
 | M5 · Kotlin/JS BigInt `Long` | left to users | — | — | user, 2026-10-29: the consumer's compiler option (`-Xes-long-as-bigint`, experimental, ES2020); `notes/js-long-bigint.md`, paragraph for the user documentation |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
