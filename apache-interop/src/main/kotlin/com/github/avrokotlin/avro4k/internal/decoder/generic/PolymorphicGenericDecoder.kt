@@ -16,7 +16,7 @@ internal class PolymorphicGenericDecoder(
     override fun tryFindSerialNameForUnion(
         namesAndAliasesToSerialName: Map<String, String>,
         schema: AvroSchema,
-    ): Pair<String, AvroSchema>? {
+    ): String? {
         return schema.types.firstNotNullOfOrNull { tryFindSerialName(namesAndAliasesToSerialName, it) }
     }
 
