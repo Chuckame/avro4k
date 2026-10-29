@@ -151,7 +151,7 @@ class PolymorphicDecoderReuseTest {
             )
         val bytes = bytes { (1..8).forEach { writeInt(it) } }
         for (avro in AVROS) {
-            avro.decodeFromByteArray(writer, Bases.serializer(), bytes) shouldBe Bases(A1(1), A2(2), A3(3), A4(4), B4(5), B3(6), B2(7), B1(8))
+            avro.decodeFromByteArray(writer, Bases.serializer(), bytes) shouldBe Bases(SubA1(1), SubA2(2), SubA3(3), SubA4(4), SubB4(5), SubB3(6), SubB2(7), SubB1(8))
         }
     }
 
@@ -166,7 +166,7 @@ class PolymorphicDecoderReuseTest {
                 writeInt(1)
                 writeInt(2)
             }
-        ) shouldBe TwoBases(A1(1), B1(2))
+        ) shouldBe TwoBases(SubA1(1), SubB1(2))
         // as a record field between polymorphic values of the same type, then as list items
         val holder = record("TwoBasesHolder", "before" to shared, "twins" to shared, "after" to shared, "list" to AvroSchema.ArraySchema(shared))
         val holderBytes =
@@ -177,7 +177,7 @@ class PolymorphicDecoderReuseTest {
                 writeLong(0)
             }
         Avro.decodeFromByteArray(holder, TwoBasesHolder.serializer(), holderBytes) shouldBe
-            TwoBasesHolder(A1(1), TwoBases(A1(2), B1(3)), A1(4), listOf(TwoBases(A1(5), B1(6)), TwoBases(A1(7), B1(8))))
+            TwoBasesHolder(SubA1(1), TwoBases(SubA1(2), SubB1(3)), SubA1(4), listOf(TwoBases(SubA1(5), SubB1(6)), TwoBases(SubA1(7), SubB1(8))))
     }
 
     @Test
@@ -340,42 +340,42 @@ private sealed interface BaseA
 
 @Serializable
 @SerialName("Shared1")
-private data class A1(val x: Int) : BaseA
+private data class SubA1(val x: Int) : BaseA
 
 @Serializable
 @SerialName("Shared2")
-private data class A2(val x: Int) : BaseA
+private data class SubA2(val x: Int) : BaseA
 
 @Serializable
 @SerialName("Shared3")
-private data class A3(val x: Int) : BaseA
+private data class SubA3(val x: Int) : BaseA
 
 @Serializable
 @SerialName("Shared4")
-private data class A4(val x: Int) : BaseA
+private data class SubA4(val x: Int) : BaseA
 
 @Serializable
 private sealed interface BaseB
 
 @Serializable
-@SerialName("B1")
+@SerialName("SubB1")
 @AvroAlias("Shared1")
-private data class B1(val x: Int) : BaseB
+private data class SubB1(val x: Int) : BaseB
 
 @Serializable
-@SerialName("B2")
+@SerialName("SubB2")
 @AvroAlias("Shared2")
-private data class B2(val x: Int) : BaseB
+private data class SubB2(val x: Int) : BaseB
 
 @Serializable
-@SerialName("B3")
+@SerialName("SubB3")
 @AvroAlias("Shared3")
-private data class B3(val x: Int) : BaseB
+private data class SubB3(val x: Int) : BaseB
 
 @Serializable
-@SerialName("B4")
+@SerialName("SubB4")
 @AvroAlias("Shared4")
-private data class B4(val x: Int) : BaseB
+private data class SubB4(val x: Int) : BaseB
 
 @Serializable
 private data class Bases(
@@ -410,9 +410,9 @@ private object TwoBasesAtOnceSerializer : KSerializer<TwoBases> {
         val first = decoder.beginStructure(BASE_A)
         val second = decoder.beginStructure(BASE_B)
         first.decodeStringElement(BASE_A, 0) shouldBe "Shared1"
-        second.decodeStringElement(BASE_B, 0) shouldBe "B1"
-        val a = first.decodeSerializableElement(BASE_A, 1, A1.serializer())
-        val b = second.decodeSerializableElement(BASE_B, 1, B1.serializer())
+        second.decodeStringElement(BASE_B, 0) shouldBe "SubB1"
+        val a = first.decodeSerializableElement(BASE_A, 1, SubA1.serializer())
+        val b = second.decodeSerializableElement(BASE_B, 1, SubB1.serializer())
         second.endStructure(BASE_B)
         first.endStructure(BASE_A)
         return TwoBases(a, b)
