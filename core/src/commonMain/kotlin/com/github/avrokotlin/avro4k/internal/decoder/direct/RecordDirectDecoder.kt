@@ -5,7 +5,6 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.internal.DecodingStep
-import com.github.avrokotlin.avro4k.internal.NO_NULLABLE_UNION_FIELDS
 import com.github.avrokotlin.avro4k.internal.NullableUnionField
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
@@ -19,13 +18,14 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonNull
 
-private val NO_DECODING_STEPS = emptyArray<DecodingStep>()
-
-private val NO_FIELD_SCHEMAS = emptyArray<AvroSchema>()
-
 /**
  * Decodes one record after another: its parent decoder keeps it and hands it each next record it begins, through
  * [reset], instead of creating a decoder per record. Nothing of the previous record survives a [reset].
+ *
+ * Created with its first record begun, written with [writerRecordSchema] into [descriptor] with its resolved
+ * [decodingSteps], in the state a [reset] for that record leaves it in: each field is written once, where a decoder
+ * created empty and then reset wrote most of them twice. A record's decoders are created per call, one per nesting level,
+ * so every record of a value nested in another, and the first record of each call, begins on a new decoder.
  *
  * Decodes the records whose fields do not match the writer schema's exactly: reordered, skipped, or taking a default
  * value. The others are decoded by [ExactRecordDirectDecoder].
@@ -33,21 +33,37 @@ private val NO_FIELD_SCHEMAS = emptyArray<AvroSchema>()
 internal class RecordDirectDecoder(
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
+    writerRecordSchema: AvroSchema,
+    descriptor: SerialDescriptor,
+    decodingSteps: Array<DecodingStep>,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
     /** The writer schema of the record being decoded, and with [resolvedDescriptor], what [decodingSteps] were resolved for. */
-    private var writerRecordSchema: AvroSchema? = null
-    private var resolvedDescriptor: SerialDescriptor? = null
+    private var writerRecordSchema: AvroSchema = writerRecordSchema
+    private var resolvedDescriptor: SerialDescriptor = descriptor
 
     // in the writer schema's field order. The missing fields are at the end to decode the default values
-    private var decodingSteps: Array<DecodingStep> = NO_DECODING_STEPS
+    private var decodingSteps: Array<DecodingStep> = decodingSteps
 
-    /** The next step [decodeElementIndex] takes; [NOT_IN_USE] when no record is begun or once it is ended. */
-    private var nextDecodingStepIndex = NOT_IN_USE
+    /**
+     * The next step [decodeElementIndex] takes; [NOT_IN_USE] once the record is ended. 0, the first step, on a new
+     * decoder, which is created with its record begun.
+     */
+    private var nextDecodingStepIndex = 0
 
-    /** The step of the field being decoded: none until [decodeElementIndex] returns a field, as on a new decoder. */
-    private var decodingStep: DecodingStep.ValidatedDecodingStep? = null
-    private val currentDecodingStep: DecodingStep.ValidatedDecodingStep
-        get() = decodingStep ?: throw noElementBegunError()
+    /**
+     * When the field being decoded takes its default value, the index in [decodingSteps] of the step that follows its
+     * [DecodingStep.GetDefaultValue], so never 0; [READ_FROM_INPUT], 0, when it is read from the input, and until
+     * [decodeElementIndex] returns a field. 0 rather than -1 so that a new decoder starts with it without writing it.
+     *
+     * An index rather than the step itself: [decodeElementIndex] writes it for every field, and an int is a plain write,
+     * where a reference is a write with the garbage collector's barriers, on top of the field's schema written to
+     * [currentAvroSchema]. A field read from the input, the most common by far, then costs that one reference write, and
+     * each value decoded tells it from a default value by comparing an int.
+     *
+     * Before any field is begun, each value is decoded as read from the input: [currentAvroSchema] is then the marker of
+     * no field begun, on which every read fails with [noElementBegunError] without reading the input.
+     */
+    private var stepAfterDefaultValue = READ_FROM_INPUT
 
     /** Whether a record is begun on this decoder and not ended yet. */
     val inUse: Boolean
@@ -73,7 +89,7 @@ internal class RecordDirectDecoder(
 
     /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
     fun reset(): RecordDirectDecoder {
-        decodingStep = null
+        stepAfterDefaultValue = READ_FROM_INPUT
         currentAvroSchema = NO_ELEMENT_SCHEMA
         beginReuse()
         nextDecodingStepIndex = 0
@@ -102,18 +118,18 @@ internal class RecordDirectDecoder(
                     throw AvroSchemaMismatchException(
                         "Reader field '${descriptor.nonNullSerialName}.${descriptor.getElementName(
                             field.elementIndex
-                        )}' has no corresponding field in writer schema ${writerRecordSchema?.toSchemaJsonString()}"
+                        )}' has no corresponding field in writer schema ${writerRecordSchema.toSchemaJsonString()}"
                     )
                 }
 
                 is DecodingStep.DeserializeWriterField -> {
-                    decodingStep = field
+                    stepAfterDefaultValue = READ_FROM_INPUT
                     currentAvroSchema = field.schema
                     return field.elementIndex
                 }
 
                 is DecodingStep.GetDefaultValue -> {
-                    decodingStep = field
+                    stepAfterDefaultValue = nextDecodingStepIndex
                     currentAvroSchema = field.schema
                     return field.elementIndex
                 }
@@ -121,106 +137,87 @@ internal class RecordDirectDecoder(
         }
     }
 
-    private fun defaultDecoder(element: DecodingStep.GetDefaultValue) = JsonDefaultDecoder(avro, element.defaultValue, element.schema)
+    /** The step of the field being decoded, which takes its default value: the one before [stepAfter]. */
+    private fun defaultValueStep(stepAfter: Int): DecodingStep.GetDefaultValue = decodingSteps[stepAfter - 1] as DecodingStep.GetDefaultValue
+
+    private fun defaultDecoder(stepAfter: Int): JsonDefaultDecoder {
+        val element = defaultValueStep(stepAfter)
+        return JsonDefaultDecoder(avro, element.defaultValue, element.schema)
+    }
 
     override fun decodeNotNullMark(): Boolean {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeNotNullMark()
-            is DecodingStep.GetDefaultValue -> element.defaultValue !is JsonNull
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeNotNullMark() else defaultValueStep(step).defaultValue !is JsonNull
     }
 
     override fun decodeNull(): Nothing? {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeNull()
-
-            is DecodingStep.GetDefaultValue -> {
-                if (element.defaultValue !is JsonNull) {
-                    // Should not occur as decodeNotNullMark() should be called first
-                    throw AvroSerializationException("Trying to decode a null value for a missing field while the default value is not null")
-                }
-                null
-            }
+        val step = stepAfterDefaultValue
+        if (step == READ_FROM_INPUT) return super.decodeNull()
+        if (defaultValueStep(step).defaultValue !is JsonNull) {
+            // Should not occur as decodeNotNullMark() should be called first
+            throw AvroSerializationException("Trying to decode a null value for a missing field while the default value is not null")
         }
+        return null
     }
 
     override fun decodeFixed(): ByteArray {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeFixed()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeFixed()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeFixed() else defaultDecoder(step).decodeFixed()
     }
 
     override fun decodeInt(): Int {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeInt()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeInt()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeInt() else defaultDecoder(step).decodeInt()
     }
 
     override fun decodeLong(): Long {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeLong()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeLong()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeLong() else defaultDecoder(step).decodeLong()
     }
 
     override fun decodeBoolean(): Boolean {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeBoolean()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeBoolean()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeBoolean() else defaultDecoder(step).decodeBoolean()
     }
 
     override fun decodeChar(): Char {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeChar()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeChar()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeChar() else defaultDecoder(step).decodeChar()
     }
 
     override fun decodeString(): String {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeString()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeString()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeString() else defaultDecoder(step).decodeString()
     }
 
     override fun decodeDouble(): Double {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeDouble()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeDouble()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeDouble() else defaultDecoder(step).decodeDouble()
     }
 
     override fun decodeFloat(): Float {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeFloat()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeFloat()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeFloat() else defaultDecoder(step).decodeFloat()
     }
 
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeSerializableValue(deserializer)
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeSerializableValue(deserializer)
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeSerializableValue(deserializer) else defaultDecoder(step).decodeSerializableValue(deserializer)
     }
 
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeEnum(enumDescriptor)
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeEnum(enumDescriptor)
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeEnum(enumDescriptor) else defaultDecoder(step).decodeEnum(enumDescriptor)
     }
 
     override fun decodeBytes(): ByteArray {
-        return when (val element = currentDecodingStep) {
-            is DecodingStep.DeserializeWriterField -> super.decodeBytes()
-            is DecodingStep.GetDefaultValue -> defaultDecoder(element).decodeBytes()
-        }
+        val step = stepAfterDefaultValue
+        return if (step == READ_FROM_INPUT) super.decodeBytes() else defaultDecoder(step).decodeBytes()
     }
 }
+
+/** [RecordDirectDecoder]'s field being decoded is read from the input, not taken from a default value. */
+private const val READ_FROM_INPUT = 0
 
 /**
  * Decodes the records whose elements are exactly the writer schema's fields, in its order: field i is element i, no
@@ -235,24 +232,33 @@ internal class RecordDirectDecoder(
  * `null` and one other type takes its branch on a shorter path ([decodeNullableSerializableElement]).
  *
  * Like [RecordDirectDecoder], its parent decoder keeps it and hands it each next exact record it begins, through
- * [reset]. Nothing of the previous record survives a [reset].
+ * [reset]. Nothing of the previous record survives a [reset]. Like it too, it is created with its first record begun,
+ * written with [writerRecordSchema] into [descriptor], whose fields have [fieldSchemas], and [nullableFields] for those
+ * written as a union of `null` and one other type: each field is written once.
  */
 internal class ExactRecordDirectDecoder(
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
+    writerRecordSchema: AvroSchema,
+    descriptor: SerialDescriptor,
+    fieldSchemas: Array<AvroSchema>,
+    nullableFields: Array<NullableUnionField?>,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
     /** The writer schema of the record being decoded, and with [resolvedDescriptor], what [fieldSchemas] were resolved for. */
-    private var writerRecordSchema: AvroSchema? = null
-    private var resolvedDescriptor: SerialDescriptor? = null
+    private var writerRecordSchema: AvroSchema = writerRecordSchema
+    private var resolvedDescriptor: SerialDescriptor = descriptor
 
     /** The writer schema of each field, by element index. */
-    private var fieldSchemas: Array<AvroSchema> = NO_FIELD_SCHEMAS
+    private var fieldSchemas: Array<AvroSchema> = fieldSchemas
 
     /** Each field's [NullableUnionField], by element index, or null when its schema is not such a union. */
-    private var nullableFields: Array<NullableUnionField?> = NO_NULLABLE_UNION_FIELDS
+    private var nullableFields: Array<NullableUnionField?> = nullableFields
 
-    /** The next element [decodeElementIndex] returns; [NOT_IN_USE] when no record is begun or once it is ended. */
-    private var nextElementIndex = NOT_IN_USE
+    /**
+     * The next element [decodeElementIndex] returns; [NOT_IN_USE] once the record is ended. 0, the first element, on a
+     * new decoder, which is created with its record begun.
+     */
+    private var nextElementIndex = 0
 
     /** Whether a record is begun on this decoder and not ended yet. */
     val inUse: Boolean
