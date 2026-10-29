@@ -101,6 +101,29 @@ class RecordFieldStateDecodingTest {
         }
     }
 
+    @Test
+    fun `records begun on new decoders at every depth decode as on reused ones`() {
+        // general, exact, general, exact records nested in each other: a value alone begins each on a new decoder, the
+        // items of a list after the first on the decoders the first one left
+        val writers =
+            listOf(
+                LevelAWriter("a", 1, LevelB(2L, LevelCWriter("skipped", 3, LevelD(4, null)))),
+                LevelAWriter("b", 5, LevelB(6L, LevelCWriter("skipped", 7, LevelD(null, "e")))),
+                LevelAWriter("c", 8, LevelB(9L, LevelCWriter("skipped", 10, LevelD(11, "f"))))
+            )
+        val expected = writers.map { LevelA(it.i, it.s, LevelBRead(it.b.x, LevelC(it.b.c.y, it.b.c.d)), 7) }
+        val writerSchema = Avro.schema(LevelAWriter.serializer().descriptor)
+        for (avro in AVROS) {
+            for ((writer, value) in writers.zip(expected)) {
+                val bytes = Avro.encodeToByteArray(writerSchema, LevelAWriter.serializer(), writer)
+                avro.decodeFromByteArray(writerSchema, LevelA.serializer(), bytes) shouldBe value
+            }
+            val listSchema = AvroSchema.ArraySchema(writerSchema)
+            val bytes = Avro.encodeToByteArray(listSchema, ListSerializer(LevelAWriter.serializer()), writers)
+            avro.decodeFromByteArray(listSchema, ListSerializer(LevelA.serializer()), bytes) shouldBe expected
+        }
+    }
+
     companion object {
         val AVROS = listOf(Avro, Avro { validateSerialization = true })
     }
@@ -272,3 +295,38 @@ private data class AlternatingExact(
     val fourth: WithoutNullable,
     val nested: NestedWithNullable,
 )
+
+@Serializable
+@SerialName("LevelD")
+private data class LevelD(val n: Int?, val m: String?)
+
+@Serializable
+@SerialName("LevelC")
+private data class LevelCWriter(val skipped: String, val y: Int, val d: LevelD)
+
+/** Decoded by its steps: its writer has a field more. */
+@Serializable
+@SerialName("LevelC")
+private data class LevelC(val y: Int, val d: LevelD)
+
+@Serializable
+@SerialName("LevelB")
+private data class LevelB(val x: Long, val c: LevelCWriter)
+
+@Serializable
+@SerialName("LevelA")
+private data class LevelAWriter(val s: String, val i: Int, val b: LevelB)
+
+/** Its own fields reordered and one taking its default value; its `b` read exactly, its fields read into [LevelC]. */
+@Serializable
+@SerialName("LevelA")
+private data class LevelA(
+    val i: Int,
+    val s: String,
+    val b: LevelBRead,
+    @AvroDefault("7") val z: Int,
+)
+
+@Serializable
+@SerialName("LevelB")
+private data class LevelBRead(val x: Long, val c: LevelC)

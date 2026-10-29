@@ -5,7 +5,7 @@ records, fix 2 for the nested ones. Not measured: the orchestrator measures each
 the base, fix 2 against fix 1). Internal code only: no API change (`core/api`, klib included, and `apache-interop/api`
 are clean).
 
-**Branch** `v3/nested-record-read`, base `4b7ea253`.
+**Branch** `v3/nested-record-read`, base `4b7ea253`: fix 1 `783242c5`, fix 2 the commit after it.
 
 ## What was measured, and the question
 
@@ -161,3 +161,113 @@ Both `ACC` invocations: BUILD SUCCESSFUL; the API dumps of `core` and `apache-in
   `StringField.*`, `Collection.*`, `Polymorphic.*` (records decoded exactly as written; the general decoder runs only
   where fields are reordered, skipped or defaulted).
 - Every write row: unchanged.
+
+## Fix 2: record decoders created with their first record begun
+
+`AbstractAvroDirectDecoder.kt`, `RecordDirectDecoder.kt`, `RecordResolver.kt` (a comment).
+
+A new record decoder used to be created empty, every field set to a default (the shared empty arrays, -1 for "not in
+use", the base class's marker and collection state), and then reset at once for its first record, which wrote most of
+those fields again. Both record decoders now take their first record in their constructor (writer schema, descriptor,
+and the field schemas and nullable fields, or the decoding steps), and start in the state their reset leaves: first
+field next (0, so Kotlin writes nothing for it), marker of no field begun, no collection. `beginRecord` begins a record
+of a type just resolved on the kept decoder when it is free (`reset`, as before), or else on a new one created with it
+(`beginExactRecord` / `beginGeneralRecord`, which replace `exactRecordDecoder()` / `recordDecoder()`; a new decoder made
+because the kept one is busy stays out of the slot, as before). A new decoder is in use from its creation; the shared
+empty arrays `NO_FIELD_SCHEMAS` and `NO_DECODING_STEPS` are gone.
+
+Writes per record begun on a new exact decoder (every level of the nested micro), from the bytecode:
+
+| | Base and fix 1 | Fix 2 |
+|---|---:|---:|
+| field writes | 15 (7 in the constructor, 8 in `reset(4)` + `reset()`) | 8, all in the constructor |
+| static reads (`NO_ELEMENT_SCHEMA`, `NO_FIELD_SCHEMAS`, `NO_NULLABLE_UNION_FIELDS`) | 4 | 1 (`NO_ELEMENT_SCHEMA`) |
+| reference writes after the decoder is stored in its parent's slot (G1 barriers) | 4 (`fieldSchemas`, `nullableFields`, `writerRecordSchema`, `resolvedDescriptor`) and the marker | 0 |
+
+For a new general decoder (each call of the reordered micros): 14 writes (6 in the constructor, 8 in `reset(3)` +
+`reset()`) and 3 static reads become 7 writes and 1 static read. The nullable fields of a record without any are now one initializing write of the shared empty array, read
+from the workflow, as part of the decoder's allocation: nothing else.
+
+`NO_NULLABLE_UNION_FIELDS` stays, with a comment saying why: besides being the value for records without nullable
+fields, it is what loads `NullableUnionField` (see "Tried and dropped" above); the constructor, `reset(4)` and
+`beginExactRecord` all name that class.
+
+### Bytecode (`javap -c -p`, code length)
+
+| Method | Base | Fix 1 | Fix 2 |
+|---|---:|---:|---:|
+| `AbstractAvroDirectDecoder.beginRecord` | 137 | 137 | 131 |
+| `AbstractAvroDirectDecoder.exactRecordDecoder` / `recordDecoder` | 45 / 45 | 45 / 45 | — (removed) |
+| `AbstractAvroDirectDecoder.beginExactRecord` / `beginGeneralRecord` (new) | — | — | 66 / 62 |
+| `ExactRecordDirectDecoder.<init>` | 38 | 38 | 69 |
+| `RecordDirectDecoder.<init>` | 31 | 31 | 56 |
+| `ExactRecordDirectDecoder.reset(4)` / `reset()` | 51 / 18 | 51 / 18 | 51 / 18 |
+| `RecordDirectDecoder.reset(3)` / `reset()` | 38 / 23 | 38 / 23 | 38 / 23 |
+
+The constructors grow by their parameters' null checks (6 bytes each) and writes, above `MaxInlineSize`: where new
+decoders are rare (a call site the profile finds cold), they are now called rather than inlined, once per new decoder.
+Where they are frequent, they are inlined: in the nested workload's log, `beginRecord`'s C2 compilation inlines
+`beginExactRecord` and the constructor (`inline (hot)`); in the reversed one, the `FieldOrderRecord` deserializer inlines
+`beginGeneralRecord` and the constructor. No `unloaded signature classes` on any of them.
+
+### Mutation checks
+
+The record decoders' busy guards moved from `exactRecordDecoder()` / `recordDecoder()` into `beginExactRecord` /
+`beginGeneralRecord`, and a new decoder is now in use from its creation. Each mutation applied alone, then
+`RecordFieldStateDecodingTest`, `DecoderReuseTest`, `ExactRecordDecodingTest`, `CurrentWriterSchemaTest`,
+`NullableFieldDecodingTest`, `PolymorphicDecoderReuseTest` on the JVM, then the file restored.
+
+| Mutation | Caught by |
+|---|---|
+| kept exact decoder reused while in use (`!kept.inUse` dropped) | `DecoderReuseTest`: the busy cases, a second structure before ending the first, successive structures |
+| kept general decoder reused while in use | `DecoderReuseTest`: the busy cases |
+| new exact decoder created not in use (`nextElementIndex = NOT_IN_USE`) | 7 tests (`NullableFieldDecodingTest`, `ExactRecordDecodingTest`, `DecoderReuseTest`) |
+| new general decoder created not in use | 20 tests, the 4 general ones of `RecordFieldStateDecodingTest` among them |
+| a decoder made because the kept one is busy replaces it in the slot (`if (kept == null)` dropped), either kind | none: which of two free decoders the slot keeps changes allocation only, never a value; unchanged logic, moved as is |
+
+## Test added with fix 2 (1, `commonTest`, run on JVM, JS, native)
+
+In `RecordFieldStateDecodingTest.kt`: 5. `records begun on new decoders at every depth decode as on reused ones`:
+general, exact, general, exact records nested in each other (fields reordered with a default value, then in order,
+then a writer field more, then nullable fields), each value decoded alone (every record on a new decoder) and the three
+in a list (the next items on the decoders the first left), with and without validation.
+
+### Test counts
+
+| Task | Before (`4b7ea253`) | After fix 1 | After fix 2 |
+|---|---:|---:|---:|
+| `:core:jvmTest` | 1175 | 1179 | 1180 |
+| `:core:jsNodeTest` | 332 | 336 | 337 |
+| `:core:macosArm64Test` | 335 | 339 | 340 |
+
+### Acceptance of fix 2
+
+Both `ACC` invocations: BUILD SUCCESSFUL; the API dumps of `core` and `apache-interop` unchanged.
+
+## Predictions of fix 2, against fix 1
+
+**Allocation, escape analysis off: no change on any row** (same objects, same layouts).
+
+**Throughput:**
+- `NestedRecord.read` depth 1 / 3 / 8: up, more at depth 3 and 8 (every level begins its record on a new decoder):
+  7 field writes and 3 static reads fewer per level, and no barriered reference write left in the decoder's own
+  initialization. This removes more than the nullable step added; if the nested rows do not get back what that step
+  cost them, what remains is outside what the inlining logs show (code layout).
+- `FieldOrder.read` matching, swapped, reversed: slightly up (one new record decoder per call).
+- `simple` @1, `complex` @1: unchanged or slightly up (each call begins its records on new decoders, a small share of a
+  call); `simple` @25 / @500, `complex` @15 / @200, `lists`, `StringField.*`, `Collection.*`, `Polymorphic.*`: must not
+  move (a record decoder is created once per call and nesting level there, its records then begun on it by `reset`, as
+  before).
+- Every write row: unchanged.
+
+## Observations, not fixed
+
+- **kotlinx's generated deserializers construct the value out of line.** In every workload's log, the last call of a
+  generated `deserialize`, the class's synthetic constructor taking a `SerializationConstructorMarker`, is not inlined:
+  `unloaded signature classes` (`Nested1::<init>` … `Nested8::<init>`, `FieldOrderRecord::<init>`). Nothing ever creates a
+  marker, so its class is never loaded. A call per record decoded, on every side; outside avro4k's code. Loading the
+  class once (`SerializationConstructorMarker::class.java` at first use, on the JVM) would let C2 inline those
+  constructors; not tried, as it changes no avro4k code path and would need its own measurement.
+- **The depth-1 nested row is bimodal across runs.** With escape analysis on, a run either removes both decoders of a
+  depth-1 call (48 B allocated per call) or neither (176 B), and some runs switch between the two while measuring; on
+  every side, base included. Depth 3 and 8 never remove them.

@@ -6,6 +6,8 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ResolvedSchema
+import com.github.avrokotlin.avro4k.internal.DecodingStep
+import com.github.avrokotlin.avro4k.internal.NullableUnionField
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
 import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
@@ -89,12 +91,13 @@ internal abstract class AbstractAvroDirectDecoder(
      *
      * A record matching its writer schema exactly is decoded by [exactRecordDecoder], any other by [recordDecoder].
      *
-     * Each of them is in use from its reset to its `endStructure`. Its parent then begins the next structure of that
-     * kind on a new decoder, kept out of the slot: so a serializer that begins a second structure before ending the
-     * first, never ends one, or catches an error inside one and goes on, still decodes correctly, only allocating as it
-     * did before decoders were reused. A record or block decoder tells it by a position index of its own, [NOT_IN_USE]
-     * once ended, as when created, rather than by a flag in this class, which would make every decoder 8 bytes larger
-     * on the JVM. The polymorphic decoder has no such index and a flag of its own, which costs it nothing.
+     * Each of them is in use from its reset to its `endStructure`, a record decoder from its creation, with its first
+     * record begun. Its parent then begins the next structure of that kind on a new decoder, kept out of the slot: so a
+     * serializer that begins a second structure before ending the first, never ends one, or catches an error inside one
+     * and goes on, still decodes correctly, only allocating as it did before decoders were reused. A record or block
+     * decoder tells it by a position index of its own, [NOT_IN_USE] once ended (and, for a block decoder, as when
+     * created), rather than by a flag in this class, which would make every decoder 8 bytes larger on the JVM. The
+     * polymorphic decoder has no such index and a flag of its own, which costs it nothing.
      */
     private var exactRecordDecoder: ExactRecordDirectDecoder? = null
     private var recordDecoder: RecordDirectDecoder? = null
@@ -228,26 +231,41 @@ internal abstract class AbstractAvroDirectDecoder(
         val workflow = avro.recordResolver.resolveFields(writerRecordSchema, descriptor)
         val fieldSchemas = workflow.exactFieldSchemas
         return if (fieldSchemas != null) {
-            exactRecordDecoder().reset(writerRecordSchema, descriptor, fieldSchemas, workflow.exactNullableFields)
+            beginExactRecord(writerRecordSchema, descriptor, fieldSchemas, workflow.exactNullableFields)
         } else {
-            recordDecoder().reset(writerRecordSchema, descriptor, workflow.decoding)
+            beginGeneralRecord(writerRecordSchema, descriptor, workflow.decoding)
         }
     }
 
-    /** The exact record decoder to begin a record on: the one this decoder keeps, unless it is still in use. */
-    private fun exactRecordDecoder(): ExactRecordDirectDecoder {
+    /**
+     * Begins a record of a type just resolved, decoded exactly as written, on the exact record decoder this decoder keeps,
+     * unless it is still in use; or else on a new one, created with the record begun.
+     */
+    private fun beginExactRecord(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+        fieldSchemas: Array<AvroSchema>,
+        nullableFields: Array<NullableUnionField?>,
+    ): ExactRecordDirectDecoder {
         val kept = exactRecordDecoder
-        if (kept != null && !kept.inUse) return kept
-        val decoder = ExactRecordDirectDecoder(avro, binaryDecoder)
+        if (kept != null && !kept.inUse) return kept.reset(writerRecordSchema, descriptor, fieldSchemas, nullableFields)
+        val decoder = ExactRecordDirectDecoder(avro, binaryDecoder, writerRecordSchema, descriptor, fieldSchemas, nullableFields)
         if (kept == null) exactRecordDecoder = decoder
         return decoder
     }
 
-    /** The record decoder to begin a record on: the one this decoder keeps, unless it is still in use. */
-    private fun recordDecoder(): RecordDirectDecoder {
+    /**
+     * Begins a record of a type just resolved, decoded by its [decodingSteps], on the record decoder this decoder keeps,
+     * unless it is still in use; or else on a new one, created with the record begun.
+     */
+    private fun beginGeneralRecord(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+        decodingSteps: Array<DecodingStep>,
+    ): RecordDirectDecoder {
         val kept = recordDecoder
-        if (kept != null && !kept.inUse) return kept
-        val decoder = RecordDirectDecoder(avro, binaryDecoder)
+        if (kept != null && !kept.inUse) return kept.reset(writerRecordSchema, descriptor, decodingSteps)
+        val decoder = RecordDirectDecoder(avro, binaryDecoder, writerRecordSchema, descriptor, decodingSteps)
         if (kept == null) recordDecoder = decoder
         return decoder
     }

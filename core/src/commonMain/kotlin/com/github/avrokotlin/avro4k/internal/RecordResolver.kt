@@ -407,6 +407,16 @@ private fun nullableUnionField(schema: AvroSchema): NullableUnionField? {
     return NullableUnionField(schema, nullIndex, branches[nullIndex], branches[1 - nullIndex])
 }
 
+/**
+ * The [SerializationWorkflow.exactNullableFields] of a record without a field written as a union of `null` and one other
+ * type, shared.
+ *
+ * Also what loads [NullableUnionField]'s class on the JVM, as soon as a record type is resolved, whatever its fields: the
+ * exact record decoder's constructor and `reset`, and `beginRecord`'s calls to them, name it in their signatures, and the
+ * JIT compiler does not inline a method whose signature names a class not loaded yet. Without it, a program that never
+ * reads such a field would never load the class, and every record it begins on a new or resolved decoder would make
+ * those calls out of line. Keep it, or keep the class out of those signatures.
+ */
 internal val NO_NULLABLE_UNION_FIELDS: Array<NullableUnionField?> = emptyArray()
 
 /**
