@@ -11,7 +11,29 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-29, night): AB-R done — read side pays; two regressions and the common rows to follow up
+### Resume here (2026-10-29, late night): JS/native read rows measured; two units running
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
+- **`benchmark-common` selections fixed** (`4b7ea253`): on JS and native the name kotlinx-benchmark matches is
+  `<suite simple name>.<qualified method name>`, so the patterns anchored with `^` selected nothing.
+- **JS/native read rows, base `54e0ad19` → nullable `4f05b518`** (22:09 → 22:16, 3 invocations per side, ABBA, AC, no
+  power event): JS `complex` +18.6% / +19.4% (@1/@15), `simple` +17.7% / +26.7%, `lists` +2.9% (one base outlier
+  dropped; +12.5% with it); native `complex` +25.1% / +27.6%, `simple` +30.7% / +52.1%, `lists` +20.6%; all Y.
+  `benchmark/README.md` → AB-R section, "JS and native, base → nullable".
+- **User decisions (2026-10-29):** go for regression 1 and 2; go for the JS long write path **if the JVM does not move**
+  (short comment saying why it is written that way), platform-specific code otherwise; the Kotlin/JS BigInt `Long` is
+  the consumer's choice: written down (`notes/js-long-bigint.md`, with a paragraph for the user documentation), not done.
+  The `Int`-only fast path proposed earlier was dropped: `lists` writes full-range random `Long`s and real values
+  (timestamps, ids) are mostly above 32 bits, so the unit encodes every `Long` from its two 32-bit halves, as reads do.
+- **Running** (agents, own worktrees, from `4b7ea253`):
+  - `v3/nested-record-read`: regressions 1 and 2; conservative fix first, alternatives as separate commits.
+  - `v3/js-long-write`: first commit JS-only `actual` (JVM/native bytecode identical), second commit the same code
+    common; the JVM write rows decide which is kept.
+
+**Next:** merge both units; one A/B measuring the nested/reordered micros (JVM), the JVM write rows for the common
+long-write candidate, and the JS/native write rows; then batch 5 / AB-W; then M5-11.
+
+### Earlier (2026-10-29, night): AB-R done — read side pays; two regressions and the common rows to follow up
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
 - **AB-R done** (17:04 → 20:47, AC, load 1.32–2.98, no power event, no sleep; 6 sides: base `54e0ad19`, +M5-02
@@ -749,8 +771,10 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5 · JS `Float` from text and float widening | todo | — | — | **user decision**: round on JS and update the stringable-float golden fixture's JS round trip, or keep; see the Resume section of 2026-10-29 and [`notes/float-narrowing-js.md`](notes/float-narrowing-js.md) |
 | M5-13 · schema a base-class field, nullable short path | done | `v3/schema-field-nullable-path`, merged | `5e174c72`, `4f05b518` (merge `c9848a49`) | two sides of AB-R; layouts unchanged; +10 tests. [`notes/m5-13.md`](notes/m5-13.md) |
 | M5 · AB-R read A/B | done | `v3/m2-foundation` | this commit | 6 sides; `complex` +23–29%, `simple` +66–99%, `lists` +7–9%; allocation exact; regressions `NestedRecord.read` −6 to −14%, `FieldOrder.read` swapped/reversed −8/−11%; JS/native rows not run (selection bug). `benchmark/README.md` |
-| M5 · `benchmark-common` read/write selections | todo | — | — | `read`/`write` configurations match no row on JS and native; fix, then run the common read rows base vs head |
-| M5 · nested-record and reordered-record read regressions | todo | — | — | see AB-R; nullable step's per-record cost suspected for `NestedRecord.read` |
+| M5 · `benchmark-common` read/write selections | done | `v3/m2-foundation` | `4b7ea253` | not anchored at the start: JS/native names begin with the suite's simple name. JS/native read rows then measured base → nullable: JS `complex` +19%, `simple` +18–27%, `lists` +3%; native `complex` +25–28%, `simple` +31–52%, `lists` +21%; all Y. `benchmark/README.md` |
+| M5 · nested-record and reordered-record read regressions | in progress | `v3/nested-record-read` | — | see AB-R; nullable step's per-record cost suspected for `NestedRecord.read`, the field step for `FieldOrder.read` reversed |
+| M5 · JS `long` writes from `Int` halves | in progress | `v3/js-long-write` | — | JS-only `actual` first, common version second, kept only if the JVM write rows do not move |
+| M5 · Kotlin/JS BigInt `Long` | left to users | — | — | user, 2026-10-29: the consumer's compiler option (`-Xes-long-as-bigint`, experimental, ES2020); `notes/js-long-bigint.md`, paragraph for the user documentation |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |

@@ -1683,8 +1683,31 @@ Every row matches the units' predictions to the byte: polymorphic `readPolymorph
     (`beginRecord` 131 → 136 B, `reset` 37 → 50 B of bytecode) is the suspect.
   - `FieldOrder.read` swapped and reversed (records whose fields arrive in another order than the class declares, which
     take the general record decoder): −8% / −11%, the reversed row at the field step.
-- **Not measured here:** the JS and native read rows. The `benchmark-common` `read` selection matched no row on either
-  target (the run printed empty summaries), to fix and run separately.
+- **JS and native, measured after:** see the next subsection. The run above printed empty summaries for them: the
+  `benchmark-common` `read` selection was anchored at the start, and on JS and native the name matched begins with the
+  suite's simple name (fixed in `4b7ea253`).
+
+### JS and native, base → nullable (2026-10-29 22:09 → 22:16)
+
+Same machine, AC power and Low Power Mode checked before every invocation and polled every 10 s (no event), one
+`caffeinate -dimsu`, load 2.14–2.83 at each start. Sides base `54e0ad19` and nullable `4f05b518`, the fixed selection
+added identically to both. `:benchmark-common:jsReadBenchmark` and `:benchmark-common:macosArm64ReadBenchmark` (Node.js
+and a release native binary; 5 × 1 s warmup, 5 × 1 s measurement), 3 invocations per side in the order base, head,
+head, base, base, head. Means of the invocations; "Y" = every invocation of one side above every one of the other.
+
+| row | JS base | JS nullable | JS change | native base | native nullable | native change |
+|---|---:|---:|---:|---:|---:|---:|
+| `complex` @1 | 71,131 | 84,333 | **+18.6% Y** | 158,393 | 198,134 | **+25.1% Y** |
+| `complex` @15 | 4,172 | 4,980 | **+19.4% Y** | 9,506 | 12,135 | **+27.6% Y** |
+| `simple` @1 | 733,714 | 863,426 | **+17.7% Y** | 1.19M | 1.55M | **+30.7% Y** |
+| `simple` @25 | 43,397 | 54,998 | **+26.7% Y** | 66,975 | 101,849 | **+52.1% Y** |
+| `lists` @100 | 1,023 | 1,151 | +12.5% Y | 1,641 | 1,980 | **+20.6% Y** |
+
+JS `lists`: one base invocation measured 832 against 1,116 and 1,121 for the other two; without it the gain is +2.9%,
+which is the figure to keep. Every other row's invocations sit within 2% of each other.
+
+**In plain words:** the read-side work pays off the JVM too, by about as much as on the JVM for `complex` (+19% JS, +25%
+to +28% native) and for `simple` (+18% to +27% JS, +31% to +52% native). `lists` gains least on JS (+3%).
 
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
