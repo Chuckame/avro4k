@@ -179,17 +179,14 @@ internal inline fun AvroSchema.isFullNameOrAliasMatch(
  * The index of the first union branch of type [expectedType], or **-1** if there is none (not `null`: no boxing).
  * Throws `Not a union` when this schema is not a union, like Apache's `getIndexNamed`.
  *
- * A loop comparing the stored [AvroSchema.type]. For an unnamed type (primitives, `null`, `array`, `map`) a union has
- * at most one such branch, so this is exactly Apache's `getIndexNamed(expectedType.getName())`. For a named type it
- * returns the first record/enum/fixed branch, where Apache's name lookup would only have matched a named schema
- * literally called `record`, `enum` or `fixed`: no call site asks for a named type.
+ * One read of the union's table of first branches by type ([UnionSchema.firstIndexByType]), built at construction.
+ * For an unnamed type (primitives, `null`, `array`, `map`) a union has at most one such branch, so this is exactly
+ * Apache's `getIndexNamed(expectedType.getName())`. For a named type it returns the first record/enum/fixed branch,
+ * where Apache's name lookup would only have matched a named schema literally called `record`, `enum` or `fixed`: no
+ * call site asks for a named type.
  */
 internal fun AvroSchema.getIndexTyped(expectedType: Type): Int {
-    val branches = types
-    for (i in branches.indices) {
-        if (branches[i].type === expectedType) return i
-    }
-    return -1
+    return (this as? UnionSchema ?: throw wrongKind("Not a union")).firstIndexByType[expectedType.ordinal]
 }
 
 /**

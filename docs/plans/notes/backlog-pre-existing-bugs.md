@@ -299,3 +299,29 @@ is full) and never wrap a segment's array. v3 is not affected: kotlinx-io is gon
 value across refills, and v3's `readFromStream` rows decode these three workloads.
 
 **Issue:** *decodeFromSource/decodeFromStream corrupts a bytes field that crosses an 8 KiB boundary*.
+
+## 16. Encoding errors list the fallback types in upper case and end their sentence with two periods
+
+**GitHub:** not filed yet.
+
+**Found by** the union branch selection tests of the encoder (2026-10-28), which pin the current messages verbatim.
+
+**Repro (main `6ad6c1c6`, 2026-10-29, throwaway test; v3, by test):**
+`Avro.encodeToByteArray(["null","boolean"], Int.serializer(), 42)` → on both: `Unsupported schema 'union[null, boolean]'
+for encoded type of int, and also not matching to any compatible type (one of LONG, STRING).. Actual schema:
+["null","boolean"]`; a `Long` written with a `"boolean"` schema → `Unsupported schema 'boolean' for encoded type of int,
+and also not matching to any compatible type (one of LONG, STRING).. Actual schema: "boolean"`. The main type is lower
+case (`getName()`), the fallbacks upper case, and `..` before `Actual schema`. An enum written to a union without its
+name or a string branch says `(one of STRING).` (same template). On `main`, `unsupportedWriterTypeError` and
+`namedSchemaNotFoundInUnionError` (`core/src/main/kotlin/com/github/avrokotlin/avro4k/AvroEncoder.kt:62-80`) join Apache's
+`Schema.Type` (whose `toString()` is the constant's upper-case name); v3 kept both on its own `AvroSchema.Type`.
+
+**Cause:** `fallbackTypes.joinToString()` uses `toString()` instead of `getName()`, and `fallbacksStr` ends with `.`
+while the template after it starts with `. Actual schema`.
+
+**Fix sketch:** `fallbackTypes.joinToString { it.getName() }` (and `fallbackType.getName()` in the one-type overload),
+and drop the `.` at the end of `fallbacksStr`. Messages only; update the tests that pin them
+(`UnionBranchSelectionTest` among others).
+
+**Issue:** *Encoding error messages print fallback types in upper case with a double period* — cosmetic: e.g.
+`(one of LONG, STRING).. Actual schema:` where the main type is printed `int`.
