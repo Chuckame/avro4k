@@ -57,7 +57,8 @@ benchmark {
             outputTimeUnit = "s"
             reportFormat = "text"
         }
-        // Reads and writes on their own: a change usually touches one side only
+        // Reads and writes on their own: a change usually touches one side only. Not anchored at the start: on JS and
+        // native the name matched is the suite's simple name followed by the qualified method name.
         register("read") {
             warmups = 5
             iterations = 5
@@ -66,7 +67,7 @@ benchmark {
             mode = "thrpt"
             outputTimeUnit = "s"
             reportFormat = "text"
-            include("""^com\.github\.avrokotlin\.benchmark\.common\.\w+\.\w+\.read$""")
+            include("""com\.github\.avrokotlin\.benchmark\.common\.\w+\.\w+\.read$""")
         }
         register("write") {
             warmups = 5
@@ -76,7 +77,7 @@ benchmark {
             mode = "thrpt"
             outputTimeUnit = "s"
             reportFormat = "text"
-            include("""^com\.github\.avrokotlin\.benchmark\.common\.\w+\.\w+\.write$""")
+            include("""com\.github\.avrokotlin\.benchmark\.common\.\w+\.\w+\.write$""")
         }
     }
     targets {
