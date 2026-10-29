@@ -7,11 +7,30 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03; batch 4: M5-06, M5-04 merged; M5-13 next). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03; batch 4: M5-06, M5-04, M5-13 merged; AB-R next). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-29, morning): M5-06, M5-04 and the JS float fix merged — M5-13 running
+### Resume here (2026-10-29, evening): batch 4 complete (M5-06, M5-04, M5-13, JS float fix) — AB-R next
+
+- **M5-13 merged** (`5e174c72` field, `4f05b518` nullable path; merge `c9848a49`): **jvm 1175, jsNode 332, macosArm64
+  335**, both `ACC` green on the merged tree (each commit also green alone), API dumps unchanged.
+  - Step 1: `currentAvroSchema` a `@JvmField var` of `AbstractAvroDirectDecoder`, six overrides gone;
+    `decodeAndResolveUnion` 66 → 20 B with an out-of-line `resolveUnion`; "no field begun" is a private union marker
+    compared by identity on the rare paths, exceptions and messages unchanged (tests written against the old code).
+    Layouts unchanged (one field moved to the base, so M5-04's 8 B are **not** won back).
+  - Step 2: exact records mark `["null", T]`/`[T, "null"]` fields (`exactNullableFields`); `ExactRecordDirectDecoder`
+    overrides `decodeNullableSerializableElement` (deviation: not `decodeNotNullMark`, which does not know its field).
+    No layout change.
+  - Predicted: no B/op change on any row for either commit; step 1 `complex` read up to ≈4–7%; step 2
+    `StringField.readNullable` up (control `readNonNull`), `complex` slightly. +10 tests. Bug #16 extended (same `..` in
+    the decoder's message, confirmed by reading `main`'s source). Observation, not checked on `main`: with validation on,
+    a collection begun by a non-collection serializer right after another collection on the same decoder is rejected.
+    Note: [`notes/m5-13.md`](notes/m5-13.md).
+- **AB-R sides:** base `54e0ad19`, +M5-02 `b120c228`, +M5-03 `cc1a234a`, +M5-04 `cbb390b2`, +M5-13 field `5e174c72`,
+  +M5-13 nullable `4f05b518`. Driver in this session's scratchpad `abr/driver.sh`.
+
+### Earlier (2026-10-29, morning): M5-06, M5-04 and the JS float fix merged
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. Both batch 4 agents were stopped by
 the session limit at 1am and resumed from their saved worktrees at 10:30. After the merge: jvm 1147, jsNode 304,
@@ -700,6 +719,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5-06 · union branch table, small encode methods | done | `v3/union-tables-small-encode`, merged | `c4817c21` (merge `f1ec63f2`) | `firstIndexByType` table; `encodeX` bodies 40–169 B (`encodeString` 775 → 48); error texts unchanged; backlog #16 found; +13 tests; measured in AB-W. [`notes/m5-06.md`](notes/m5-06.md) |
 | M5 · float narrowing on JS | done | `v3/float-narrowing-js`, merged | `8eef280e` (merge `8d229fd9`) | `toFloatExact` an `expect`, `Math.fround` on JS, JVM/native bytecode identical; +7 tests (+1 restored). [`notes/float-narrowing-js.md`](notes/float-narrowing-js.md) |
 | M5 · JS `Float` from text and float widening | todo | — | — | **user decision**: round on JS and update the stringable-float golden fixture's JS round trip, or keep; see the Resume section of 2026-10-29 and [`notes/float-narrowing-js.md`](notes/float-narrowing-js.md) |
+| M5-13 · schema a base-class field, nullable short path | done | `v3/schema-field-nullable-path`, merged | `5e174c72`, `4f05b518` (merge `c9848a49`) | two sides of AB-R; layouts unchanged; +10 tests. [`notes/m5-13.md`](notes/m5-13.md) |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
