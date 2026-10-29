@@ -550,11 +550,12 @@ class AnySerializerTest : StringSpec() {
 
 /**
  * Stubs the writer schema of a mocked core decoder, both its internal field, which [AnySerializer] reads, and the public
- * [AbstractAvroDirectDecoder.currentWriterSchema] over it: one instance for both, as in a real decoder.
+ * [AbstractAvroDirectDecoder.currentWriterSchema] over it: one instance for both, as in a real decoder. The field is a
+ * plain JVM field, with no getter to stub, so it is assigned on the mock.
  */
 private fun AbstractAvroDirectDecoder.stubWriterSchemas(writerSchema: Schema) {
     val converted = writerSchema.toAvro4k()
-    every { currentAvroSchema } returns converted
+    currentAvroSchema = converted
     every { currentWriterSchema } returns converted as ResolvedSchema
 }
 

@@ -33,14 +33,29 @@ import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.internal.AbstractCollectionSerializer
 import kotlinx.serialization.modules.SerializersModule
+import kotlin.jvm.JvmField
 
 @OptIn(ExperimentalSerializationApi::class)
 internal abstract class AbstractAvroDirectDecoder(
     final override val avro: Avro,
     protected val binaryDecoder: AvroBinaryDecoder,
 ) : AbstractInterceptingDecoder(), AvroDecoder {
-    /** The writer schema of the value being decoded; a union until [decodeAndResolveUnion] selects its branch. */
-    abstract var currentAvroSchema: AvroSchema
+    /**
+     * The writer schema of the value being decoded; a union until [decodeAndResolveUnion] selects its branch.
+     *
+     * A plain field that each decoder assigns when it begins a field or an item, rather than a property each decoder
+     * overrides: every value decoded reads it, often several times, and a final property compiles to a field read where
+     * an overridden one is a virtual call, made through a dispatch stub once the decoder kinds mix in one decode call.
+     * A JVM field without accessors, so that assigning it does not check its argument for null either.
+     *
+     * [NO_ELEMENT_SCHEMA] while no field or item is begun, on a record or block decoder just begun: that marker is a
+     * union, so the reads that resolve a union first ([currentWriterSchema], [decodeNotNullMark],
+     * [decodeSerializableValue]) meet it on their union path and fail there with [noWriterSchemaError], and the other
+     * reads match none of the types they decode and fail on their error path, which checks for it too. The check for a
+     * field not begun thus costs nothing to a value of a field that is.
+     */
+    @JvmField
+    var currentAvroSchema: AvroSchema = NO_ELEMENT_SCHEMA
 
     /**
      * Never a union: one still unresolved (e.g. on the decoder [decodeInlineElement] hands out, before anything is
@@ -179,7 +194,12 @@ internal abstract class AbstractAvroDirectDecoder(
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.RECORD)
                 }
 
-            is PolymorphicKind -> polymorphicDecoder(descriptor, currentAvroSchema)
+            is PolymorphicKind -> {
+                // a union is read by the polymorphic decoder: the marker of no field begun must not reach it
+                val schema = currentAvroSchema
+                if (schema === NO_ELEMENT_SCHEMA) throw noWriterSchemaError()
+                polymorphicDecoder(descriptor, schema)
+            }
 
             else -> throw AvroSerializationException("Unsupported descriptor for structure decoding: $descriptor")
         }
@@ -298,13 +318,25 @@ internal abstract class AbstractAvroDirectDecoder(
     }
 
     private fun decodeAndResolveUnion() {
-        if (currentAvroSchema.type == AvroSchema.Type.UNION) {
-            val branches = currentAvroSchema.types
-            val index = binaryDecoder.readIndex()
-            if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, currentAvroSchema)
-            currentAvroSchema = branches[index]
-        }
+        val schema = currentAvroSchema
+        if (schema.type === AvroSchema.Type.UNION) resolveUnion(schema)
     }
+
+    /** Reads the branch of [union] the value is written with, and makes it the [currentAvroSchema]. */
+    private fun resolveUnion(union: AvroSchema) {
+        if (union === NO_ELEMENT_SCHEMA) throw noWriterSchemaError()
+        val branches = union.types
+        val index = binaryDecoder.readIndex()
+        if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, union)
+        currentAvroSchema = branches[index]
+    }
+
+    /**
+     * What this decoder throws when its writer schema is asked for while no field or item is begun
+     * ([NO_ELEMENT_SCHEMA]): a reused decoder fails there as a new one does, instead of answering with what its previous
+     * structure left behind.
+     */
+    internal open fun noWriterSchemaError(): Throwable = noElementBegunError()
 
     /** The symbol of the enum index read from the input, checked against the writer schema's symbols. */
     private fun readEnumSymbol(): String {
@@ -471,6 +503,13 @@ internal abstract class AbstractAvroDirectDecoder(
         }
     }
 }
+
+/**
+ * The [AbstractAvroDirectDecoder.currentAvroSchema] of a record or block decoder while no field or item is begun. Only
+ * ever compared by identity; never a writer schema, as it is no schema the decoders build. A union, so that the reads
+ * that resolve a union first meet it on their union path.
+ */
+internal val NO_ELEMENT_SCHEMA: AvroSchema = AvroSchema.UnionSchema(AvroSchema.NullSchema())
 
 /**
  * What a decoder throws when asked for the writer schema of the field or item it decodes, or for the field's decoding

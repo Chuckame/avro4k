@@ -13,8 +13,18 @@ internal class RecordAsMapDirectDecoder(
     avro: Avro,
     binaryDecoder: AvroBinaryDecoder,
 ) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
-    override lateinit var currentAvroSchema: AvroSchema
     private var fieldNameToRead: String? = null
+
+    /**
+     * Kotlin's error for a `lateinit` property read before it is assigned, with its message: the one a read of the writer
+     * schema before the first field threw when this decoder kept its schema in a `lateinit` property of its own. Raised
+     * by reading such a property, as the error's class is not public on every platform.
+     */
+    override fun noWriterSchemaError(): Throwable = runCatching { NeverAssigned().currentAvroSchema }.exceptionOrNull() ?: noElementBegunError()
+
+    private class NeverAssigned {
+        lateinit var currentAvroSchema: AvroSchema
+    }
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {
         return writerRecordSchema.fields.size

@@ -15,7 +15,9 @@ internal class AvroValueDirectDecoder(
         throw IllegalIndexedAccessError()
     }
 
-    override var currentAvroSchema: AvroSchema = writerSchema
+    init {
+        currentAvroSchema = writerSchema
+    }
 
     /**
      * Makes this decoder decode a new value written with [writerSchema], as a new decoder would. The polymorphic decoder

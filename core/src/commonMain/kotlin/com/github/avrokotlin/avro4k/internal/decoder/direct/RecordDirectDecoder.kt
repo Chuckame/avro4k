@@ -46,13 +46,6 @@ internal class RecordDirectDecoder(
     private val currentDecodingStep: DecodingStep.ValidatedDecodingStep
         get() = decodingStep ?: throw noElementBegunError()
 
-    private var fieldSchema: AvroSchema? = null
-    override var currentAvroSchema: AvroSchema
-        get() = fieldSchema ?: throw noElementBegunError()
-        set(value) {
-            fieldSchema = value
-        }
-
     /** Whether a record is begun on this decoder and not ended yet. */
     val inUse: Boolean
         get() = nextDecodingStepIndex >= 0
@@ -78,7 +71,7 @@ internal class RecordDirectDecoder(
     /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
     fun reset(): RecordDirectDecoder {
         decodingStep = null
-        fieldSchema = null
+        currentAvroSchema = NO_ELEMENT_SCHEMA
         beginReuse()
         nextDecodingStepIndex = 0
         return this
@@ -112,13 +105,13 @@ internal class RecordDirectDecoder(
 
                 is DecodingStep.DeserializeWriterField -> {
                     decodingStep = field
-                    fieldSchema = field.schema
+                    currentAvroSchema = field.schema
                     return field.elementIndex
                 }
 
                 is DecodingStep.GetDefaultValue -> {
                     decodingStep = field
-                    fieldSchema = field.schema
+                    currentAvroSchema = field.schema
                     return field.elementIndex
                 }
             }
@@ -254,13 +247,6 @@ internal class ExactRecordDirectDecoder(
     /** The next element [decodeElementIndex] returns; [NOT_IN_USE] when no record is begun or once it is ended. */
     private var nextElementIndex = NOT_IN_USE
 
-    private var fieldSchema: AvroSchema? = null
-    override var currentAvroSchema: AvroSchema
-        get() = fieldSchema ?: throw noElementBegunError()
-        set(value) {
-            fieldSchema = value
-        }
-
     /** Whether a record is begun on this decoder and not ended yet. */
     val inUse: Boolean
         get() = nextElementIndex >= 0
@@ -285,7 +271,7 @@ internal class ExactRecordDirectDecoder(
 
     /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
     fun reset(): ExactRecordDirectDecoder {
-        fieldSchema = null
+        currentAvroSchema = NO_ELEMENT_SCHEMA
         beginReuse()
         nextElementIndex = 0
         return this
@@ -305,14 +291,14 @@ internal class ExactRecordDirectDecoder(
         // The element decodeElementIndex just returned keeps the schema it was given there, as on the general record
         // decoder: a union branch already read (asking for currentWriterSchema reads it) must not be read again. Read in
         // order, decodeElementIndex is never called, and every element is given its field's schema here.
-        if (index != nextElementIndex - 1) fieldSchema = fieldSchemas[index]
+        if (index != nextElementIndex - 1) currentAvroSchema = fieldSchemas[index]
     }
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         val index = nextElementIndex
         if (index >= fieldSchemas.size) return CompositeDecoder.DECODE_DONE
         nextElementIndex = index + 1
-        fieldSchema = fieldSchemas[index]
+        currentAvroSchema = fieldSchemas[index]
         return index
     }
 }
