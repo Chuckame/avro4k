@@ -7,15 +7,27 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03; batch 4: M5-06 merged, M5-04 in progress). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03; batch 4: M5-06, M5-04 merged; M5-13 next). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-29, morning): M5-06 merged — M5-04 still running
+### Resume here (2026-10-29, morning): M5-06 and M5-04 merged — M5-13 and the JS float fix next
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. Both batch 4 agents were stopped by
 the session limit at 1am and resumed from their saved worktrees at 10:30. After the merge: jvm 1147, jsNode 304,
-macosArm64 307 tests; both `ACC` invocations green, API dumps unchanged.
+macosArm64 307 tests after M5-06, **jvm 1158, jsNode 315, macosArm64 318 after M5-04**; both `ACC` invocations green
+after each merge, API dumps unchanged.
+- **M5-04 merged** (`941d3e2c` + orchestrator rename `a0545576`, merge `cbb390b2`): the direct `PolymorphicDecoder`
+  (now `internal`, own file) is a fifth slot of `AbstractAvroDirectDecoder` with the same busy pattern, keeps one
+  `AvroValueDirectDecoder` reset per value, and remembers 4 (descriptor `===`, branch `===`) → serial name entries;
+  `AbstractPolymorphicDecoder` returns `String?` with the branch in `chosenSchema` (no `Pair`). **Trade-off accepted:**
+  the fifth slot's 4 B makes the exact-record, map-block, value and record-as-map decoders 8 B larger (no padding left),
+  so every avro4k read row is predicted +8…+32 B/call; alternatives (sharing a slot, one per call, shrinking the exact
+  decoder) all bring per-value allocation back (note). Predicted EA-off: `readPolymorphic` @n 232 − 168·n (@1000
+  212,256 → 44,488), `complex` @15 −1,680, @200 −22,800, @1 +72; `readConcrete`/`simple` +24, `lists` +32,
+  `NestedRecord.read` +16/+32/+72. Residual 16 B/value is kotlinx's `Ref$ObjectRef`. Misuse before the serial name now
+  throws `IllegalStateException`. Memo and busy guards mutation-checked. +11 tests (test subclasses renamed by the
+  orchestrator so no name reads as a plan code). Note: [`notes/m5-04.md`](notes/m5-04.md).
 - **M5-06 merged** (`c4817c21`, merge `f1ec63f2`): `UnionSchema.firstIndexByType` (an `IntArray` by `Type.ordinal`,
   −1 = no branch, kept out of the data class's constructor) makes `getIndexTyped` one array read; every `encodeX` keeps
   only the value written to its own type (`type === X`), and the union selection and the conversions and errors are
@@ -31,7 +43,8 @@ macosArm64 307 tests; both `ACC` invocations green, API dumps unchanged.
   Found by M5-06's tests, not caused by it (code only moved). Row "float narrowing on JS" below; fix sketch in the note.
 - **Mutation checks:** batch 4 briefs limited to the guards §1 names; the user's answer is still pending.
 
-**Next:** merge M5-04 → M5-13 (re-scoped) → AB-R. The JS float fix is small and independent; brief it alongside M5-13.
+**Next:** M5-13 (re-scoped; its brief asks whether the base-class schema field wins back M5-04's 8 B) ∥ JS float fix →
+AB-R (sides: base `54e0ad19`, +M5-02 `b120c228`, +M5-03 `cc1a234a`, +M5-04 `cbb390b2`, +M5-13).
 
 ### Earlier (2026-10-28, night): M5 batch 3 merged, AC-1 done — batch 4 next
 
@@ -671,6 +684,7 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5-05 · encoders reused per nesting level | done | `v3/encoder-reuse`, merged | `4aeb264c` (merge `fc94d228`) | five slots, busy guard, workflow memo; reordering still allocates; +16 tests; measured in AB-W. [`notes/m5-05.md`](notes/m5-05.md) |
 | M5-03 · exact-match records decoded in order | done | `v3/exact-record-sequential`, merged | `06431214` (merge `cc1a234a`) | `decodeSequentially() = true` on exact records; busy flag packed into the index; +15 tests; measured in AB-R. [`notes/m5-03.md`](notes/m5-03.md) |
 | M5 · AC-1 allocation checkpoint | done | `v3/m2-foundation` | this commit | `54e0ad19` vs `90ca45cf`, EA-off, 49 rows: predictions exact on every deterministic row; regressions as predicted. `benchmark/README.md` |
+| M5-04 · polymorphic values decoded without per-value allocation | done | `v3/polymorphic-decode-reuse`, merged | `941d3e2c`, `a0545576` (merge `cbb390b2`) | fifth decoder slot, value decoder reset per value, 4-entry identity memo; no `Pair`; 4 decoders +8 B (accepted); +11 tests; measured in AB-R. [`notes/m5-04.md`](notes/m5-04.md) |
 | M5-06 · union branch table, small encode methods | done | `v3/union-tables-small-encode`, merged | `c4817c21` (merge `f1ec63f2`) | `firstIndexByType` table; `encodeX` bodies 40–169 B (`encodeString` 775 → 48); error texts unchanged; backlog #16 found; +13 tests; measured in AB-W. [`notes/m5-06.md`](notes/m5-06.md) |
 | M5 · float narrowing on JS | todo | — | — | `toFloatExact` never fails on Kotlin/JS (`Double.toFloat()` does not round there); fix with a rounding JS honours (`Math.fround` via `expect`/`actual`, or the raw bits) and a common test on the 3 targets. Found by M5-06, see [`notes/m5-06.md`](notes/m5-06.md) |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
