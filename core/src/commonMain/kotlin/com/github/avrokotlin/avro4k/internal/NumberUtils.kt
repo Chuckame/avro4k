@@ -37,12 +37,14 @@ internal fun Long.toIntExact(): Int {
     return this.toInt()
 }
 
-internal fun Double.toFloatExact(): Float {
-    if (this.toFloat().toDouble() != this) {
-        return invalidTypeError()
-    }
-    return this.toFloat()
-}
+/**
+ * This double as a float, or an [AvroSchemaMismatchException] when no float holds exactly the same number. NaN is
+ * rejected too, as it is never equal to itself.
+ *
+ * Declared per platform because Kotlin/JS stores a `Float` as a JS number and its `Double.toFloat()` does not round to
+ * 32 bits, so the check "the double survives a round trip through a float" needs a rounding that JS honours.
+ */
+internal expect fun Double.toFloatExact(): Float
 
 internal inline fun <reified T> Any.invalidTypeError(): T {
     throw AvroSchemaMismatchException("Value $this is not a valid ${T::class.simpleName}")

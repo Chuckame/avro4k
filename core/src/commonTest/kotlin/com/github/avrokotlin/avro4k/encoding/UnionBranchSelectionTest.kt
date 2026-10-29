@@ -103,6 +103,8 @@ class UnionBranchSelectionTest {
         Double.serializer().encodes(2.5, FLOAT) { writeFloat(2.5f) }
         Double.serializer().encodes(2.5, STRING) { writeString("2.5") }
         Double.serializer().failsWith(2.5, union(NULL, LONG))
+        Double.serializer().failsWith(0.1, union(NULL, FLOAT))
+        Double.serializer().failsWith(0.1, FLOAT)
     }
 
     @Test
