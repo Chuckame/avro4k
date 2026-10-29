@@ -1603,6 +1603,89 @@ a fresh decoder each (the next decoder change), and a call that decodes or encod
 reusable objects it uses once (+16 to +64 B on `simple` @1, +32 to +280 B on single nested records), the price of reuse
 on everything larger. Whether any of it shows in throughput is for the read and write comparisons.
 
+## Results — reads with decoders reused, records in order, polymorphic values and nullable fields (54e0ad19 → 4f05b518)
+
+**Does each step of the read-side work pay for itself?** Yes overall: `complex` reads +20% to +29%, `simple` +66% to
++99%, `lists` +6% to +9%, with Apache's rows (same code on every side) within ±1.3%. Two regressions, both on micro rows:
+nested records with no nullable field −6% to −14% against the base, and reordered records −8% to −11%.
+
+| | |
+|---|---|
+| Date | 2026-10-29 17:04 → 20:47 |
+| Machine, power, sleep | Apple M2 Pro, macOS 26.6.2, OpenJDK 21.0.11, JMH 1.37; AC power and Low Power Mode checked before every invocation and polled every 10 s, no event; one `caffeinate -dimsu` over the whole script, no sleep or dark wake (`pmset -g log`); nothing discarded |
+| Load | every invocation started with the 1-min load average below 3 (1.32–2.98) |
+| Sides, each adding one step | **base** `54e0ad19`; **reuse** `b120c228` (one merge per single-block collection, decoders reused per nesting level); **in order** `cc1a234a` (records matching their writer schema exactly decoded in order); **polymorphic** `cbb390b2` (polymorphic values without per-value allocation); **field** `5e174c72` (the current writer schema a plain field of the decoders' base class); **nullable** `4f05b518` (`["null", T]` fields of in-order records on a short path). The sides also hold write-side changes, which no read row runs. `benchmark/src` identical on every side except `ManualProfiling.kt` (not a JMH benchmark); the selections below added identically and uncommitted to each side |
+
+**Method:** end to end, the avro4k `read` rows and Apache reflect's `complex` `read` (the noise reference), their own JMH
+settings (1 fork, 5 × 1 s warmup, 5 × 3 s measurement), 5 invocations per side with the side order rotated and reversed
+each round; `complex` read @1, which is JIT-sensitive, at 9 forks per side; the 21 read micros (5 × 1 s + 5 × 1 s,
+1 fork), 3 invocations per side; allocation once per side, escape analysis off (1 fork, 2 × 1 s + 3 × 1 s). "Y" = every
+invocation (or, for @1, every fork) of one side is above (or below) every one of the other. Means of the invocations.
+
+### End to end, ops/s
+
+| row | base | reuse | in order | polymorphic | field | nullable | base → nullable |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `complex` @1 (9 forks) | 402,340 | 473,844 (+17.8% Y) | 484,750 (+2.3%) | 480,088 (−1.0%) | 494,423 (+3.0% Y) | 494,343 (0.0%) | **+22.9% Y** |
+| `complex` @15 | 32,307 | 35,213 (+9.0% Y) | 38,302 (+8.8% Y) | 38,590 (+0.8%) | 41,048 (+6.4% Y) | 41,257 (+0.5%) | **+27.7% Y** |
+| `complex` @200 | 2,322 | 2,534 (+9.1% Y) | 2,750 (+8.5% Y) | 2,801 (+1.8% Y) | 2,979 (+6.4% Y) | 3,003 (+0.8% Y) | **+29.4% Y** |
+| `simple` @1 | 4.94M | 6.04M (+22.2% Y) | 8.36M (+38.5% Y) | 8.79M (+5.2% Y) | 8.57M (−2.5%) | 9.24M (+7.8% Y) | **+87.2% Y** |
+| `simple` @25 | 265,468 | 273,522 (+3.0%) | 401,199 (+46.7% Y) | 417,846 (+4.1% Y) | 415,900 (−0.5%) | 528,418 (+27.1% Y) | **+99.1% Y** |
+| `simple` @500 | 13,676 | 15,492 (+13.3%) | 19,933 (+28.7% Y) | 19,638 (−1.5%) | 19,541 (−0.5%) | 22,765 (+16.5% Y) | **+66.5% Y** |
+| `lists` @100 | 8,256 | 8,853 (+7.2% Y) | 8,884 (+0.4%) | 8,884 (0.0%) | 8,999 (+1.3%) | 9,010 (+0.1%) | **+9.1% Y** |
+| `lists` @10000 | 86 | 84 (−2.1%) | 89 (+6.8%) | 88 (−1.2%) | 90 (+1.9% Y) | 91 (+1.2%) | **+6.5% Y** |
+| Apache reflect `complex` @1 / @15 / @200 | 323,727 / 20,384 / 1,373 | | | | | 322,912 / 20,357 / 1,369 | −0.3% / −0.1% / −0.3% |
+
+The 5-invocation `complex` @1 rows agree (417,811 → 499,851, +19.6% Y). Each column's percentage is against the column
+to its left. At @1 the base's forks spread 397k–420k; every later side's forks are tight (464k–498k).
+
+### Micros, ops/s, base → nullable (and the step that moved most)
+
+| row | base | nullable | change | notable step |
+|---|---:|---:|---:|---|
+| `Collection.readRecords` @10 / @1000 / @100000 | 2.50M / 23,086 / 276 | 3.22M / 56,651 / 492 | **+28.9% / +145% / +78% Y** | reuse +75% @1000, in order +46% @1000 |
+| `Collection.readLongs` @10 / @1000 / @100000 | 5.06M / 104,998 / 490 | 5.85M / 108,409 / 549 | +15.5% n / +3.2% n / +12.0% Y | @10 noisy: field +11.0% Y, nullable −23.1% Y |
+| `Collection.readTwoCollections` @10 / @1000 / @100000 | 708,355 / 7,255 / 67 | 685,438 / 7,477 / 73 | −3.2% n / +3.1% n / +9.5% n | — |
+| `Polymorphic.readPolymorphic` @10 / @1000 | 1.70M / 16,885 | 2.04M / 27,045 | **+20.0% / +60.2% Y** | polymorphic +27.0% / +50.0% Y |
+| `Polymorphic.readConcrete` @10 / @1000 | 3.78M / 42,485 | 4.93M / 82,425 | **+30.2% / +94.0% Y** | reuse +59.4% @1000, polymorphic +33.9% @10 |
+| `StringField.readNonNull` | 2.83M | 5.95M | **+110% Y** | in order +127% Y |
+| `StringField.readNullable` | 2.55M | 2.95M | +15.9% Y | in order +23.6% Y; field −5.7% Y, nullable +4.4% Y |
+| `FieldOrder.read` matching | 11.56M | 15.87M | **+37.3% Y** | in order +51.5% Y |
+| `FieldOrder.read` swapped / reversed | 11.51M / 12.01M | 10.59M / 10.67M | **−8.0% / −11.1% Y** | reversed: field −10.8% Y |
+| `NestedRecord.read` depth 1 / 3 / 8 | 53.3M / 21.6M / 8.25M | 50.2M / 18.5M / 7.10M | **−5.8% / −14.1% / −13.9% Y** | reuse −8 to −16% Y, in order +10 to +18%, nullable −7.6% / −10.3% / −12.1% Y |
+
+### Allocation, escape analysis off, B/op
+
+Every row matches the units' predictions to the byte: polymorphic `readPolymorphic` @1000 212,256 → 44,488 and `complex`
+@15 93,016 → 91,336 (−1,680), @200 −22,800, @1 +72; the field and nullable steps change no row.
+
+| row | base | reuse | in order | polymorphic | field = nullable |
+|---|---:|---:|---:|---:|---:|
+| `complex` @1 / @15 / @200 | 4,408 / 105,960 / 1,415,395 | 3,736 / 93,104 / 1,241,507 | 3,720 / 93,016 / 1,240,651 | 3,792 / 91,336 / 1,217,851 | same |
+| `simple` @1 / @25 / @500 | 552 / 6,760 / 130,256 | 584 / 5,640 / 106,336 | 568 / 5,624 / 106,320 | 592 / 5,648 / 106,344 | same |
+| `lists` @100 / @10000 | 301,705 / 30,249,529 | 287,441 / 28,809,658 | 287,417 / 28,809,623 | 287,449 / 28,809,653 | same |
+| `Polymorphic.readPolymorphic` @10 / @1000 | 2,056 / 180,256 | 2,464 / 220,264 | 2,376 / 212,256 | 928 / 44,488 | same |
+| `Collection.readRecords` @1000 | 76,256 | 28,336 | 28,320 | 28,344 | same |
+| `Collection.readTwoCollections` @1000 | 476,257 | 236,401 | 236,385 | 236,409 | same |
+| `NestedRecord.read` depth 1 / 3 / 8 | 128 / 256 / 576 | 168 / 344 / 784 | 160 / 320 / 720 | 176 / 352 / 792 | same |
+| `FieldOrder.read`, `StringField.read*`, `readLongs` | 184, 840, 536 | 224, 880, 544 | 216–224, 872, 536 | 232, 888, 552 | same |
+
+### What it says, in plain words
+
+- **Reusing decoders per nesting level and reading exact records in order are the big wins** — together +16% to +20% on
+  `complex` @1, +19% on @15, +46% to +69% on `simple`. The current schema as a plain field adds +3% to +6% on `complex`.
+- **The nullable short path pays where records have many nullable fields** (`simple` +8% to +27%) and costs nothing
+  measurable on `complex`.
+- **Two regressions to work on.**
+  - `NestedRecord.read` (records whose only field is another record or a long): the reused decoders made it 8–16% slower
+    and +40 to +208 B (a decoder per level kept for the call instead of escape-analysed away); in-order reading won most
+    of it back; the nullable step lost 8–12% again although these records have no nullable field — its per-record cost
+    (`beginRecord` 131 → 136 B, `reset` 37 → 50 B of bytecode) is the suspect.
+  - `FieldOrder.read` swapped and reversed (records whose fields arrive in another order than the class declares, which
+    take the general record decoder): −8% / −11%, the reversed row at the field step.
+- **Not measured here:** the JS and native read rows. The `benchmark-common` `read` selection matched no row on either
+  target (the run printed empty summaries), to fix and run separately.
+
 ## Results — M3 complete: M0 baseline vs the end of M3 (4508a13 vs bc38bbc2)
 
 *Superseded as the current state by "v2 against v3 on the JVM" above (2026-10-27).*

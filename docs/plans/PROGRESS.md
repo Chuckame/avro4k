@@ -7,11 +7,39 @@ Maintained by the **orchestrator** (the main Claude Code session), never by the 
 the work — so the ledger stays consistent even if an agent fails midway. A unit is not done until
 its row here is updated **and committed**.
 
-**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03; batch 4: M5-06, M5-04, M5-13 merged; AB-R next). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
+**M0, M1, M2 and M3 are complete** (M3 closed 2026-10-14 by M3-17); **M4 is done in its stream work; M5 is in progress** (batches 1 and 2 merged: M5-00, M5-01, M5-07, M5-02; M5-12 profile done; batch 3: M5-05, M5-03; batch 4: M5-06, M5-04, M5-13 merged; AB-R done). Work is on `v3/m2-foundation` (branched from `perf/baseline` — `kmp/...`
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-29, evening): batch 4 complete (M5-06, M5-04, M5-13, JS float fix) — AB-R next
+### Resume here (2026-10-29, night): AB-R done — read side pays; two regressions and the common rows to follow up
+
+**Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running.
+- **AB-R done** (17:04 → 20:47, AC, load 1.32–2.98, no power event, no sleep; 6 sides: base `54e0ad19`, +M5-02
+  `b120c228`, +M5-03 `cc1a234a`, +M5-04 `cbb390b2`, +M5-13 field `5e174c72`, +M5-13 nullable `4f05b518`).
+  `benchmark/README.md` → "Results — reads with decoders reused, records in order, polymorphic values and nullable
+  fields". Base → end: **`complex` read +22.9% @1 (9 forks), +27.7% @15, +29.4% @200; `simple` +66% to +99%; `lists`
+  +6.5% to +9.1%**, all Y; Apache reflect within ±1.3%. Allocation matches every unit's prediction to the byte.
+  - Per step: M5-02 the largest on `complex` @1 (+17.8%); M5-03 the largest on `simple` (+29% to +47%) and `complex`
+    @15/@200 (+9%); M5-04 polymorphic micros +27% / +50%, end to end ≈ 0 to +2%; M5-13 field +3% to +6% on `complex`;
+    M5-13 nullable +8% to +27% on `simple`, ≈ 0 on `complex`.
+  - **Regression 1, `NestedRecord.read` −5.8% / −14.1% / −13.9% (depth 1/3/8) against the base:** M5-02 −8 to −16%,
+    M5-03 won most back, **M5-13's nullable step −7.6% / −10.3% / −12.1% Y although these records have no nullable
+    field** (suspect: its per-record cost, `beginRecord` 131 → 136 B and `reset` 37 → 50 B of bytecode).
+  - **Regression 2, `FieldOrder.read` swapped −8.0%, reversed −11.1% Y** (general record decoder); reversed lost −10.8%
+    at the M5-13 field step.
+  - **`benchmark-common` `read` selection matched no row** on JS or native (empty summaries; the smoke run never used
+    it): JS/native read rows not measured. Fix the selection, then run base vs head on those rows alone (~10 min).
+- **User question (2026-10-29): JS emulated `Long`.** Answered: kept. Reads already decode in `Int` and build one `Long`
+  at the end; `ByteArrayEncoder.writeLong` does zigzag and the one-byte check in `Long` arithmetic (several emulated-Long
+  objects per value on JS). Proposed: an `Int` path for values that fit 32 bits (JS write rows; JVM must not move);
+  optionally `benchmark-common` built with Kotlin/JS's experimental BigInt `Long` as an AB-W side. **Awaiting the
+  user's go.**
+
+**Next:** fix the `benchmark-common` selection and run the JS/native read rows; a small unit on regression 1 (keep the
+record-begin cost of the nullable path off records without nullable fields) and a look at regression 2; then batch 5 /
+AB-W (with the long-write `Int` path if approved).
+
+### Earlier (2026-10-29, evening): batch 4 complete (M5-06, M5-04, M5-13, JS float fix) — AB-R next
 
 - **M5-13 merged** (`5e174c72` field, `4f05b518` nullable path; merge `c9848a49`): **jvm 1175, jsNode 332, macosArm64
   335**, both `ACC` green on the merged tree (each commit also green alone), API dumps unchanged.
@@ -720,6 +748,9 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5 · float narrowing on JS | done | `v3/float-narrowing-js`, merged | `8eef280e` (merge `8d229fd9`) | `toFloatExact` an `expect`, `Math.fround` on JS, JVM/native bytecode identical; +7 tests (+1 restored). [`notes/float-narrowing-js.md`](notes/float-narrowing-js.md) |
 | M5 · JS `Float` from text and float widening | todo | — | — | **user decision**: round on JS and update the stringable-float golden fixture's JS round trip, or keep; see the Resume section of 2026-10-29 and [`notes/float-narrowing-js.md`](notes/float-narrowing-js.md) |
 | M5-13 · schema a base-class field, nullable short path | done | `v3/schema-field-nullable-path`, merged | `5e174c72`, `4f05b518` (merge `c9848a49`) | two sides of AB-R; layouts unchanged; +10 tests. [`notes/m5-13.md`](notes/m5-13.md) |
+| M5 · AB-R read A/B | done | `v3/m2-foundation` | this commit | 6 sides; `complex` +23–29%, `simple` +66–99%, `lists` +7–9%; allocation exact; regressions `NestedRecord.read` −6 to −14%, `FieldOrder.read` swapped/reversed −8/−11%; JS/native rows not run (selection bug). `benchmark/README.md` |
+| M5 · `benchmark-common` read/write selections | todo | — | — | `read`/`write` configurations match no row on JS and native; fix, then run the common read rows base vs head |
+| M5 · nested-record and reordered-record read regressions | todo | — | — | see AB-R; nullable step's per-record cost suspected for `NestedRecord.read` |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
