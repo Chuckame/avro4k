@@ -103,6 +103,67 @@ internal fun encodeZigZagLong(
 }
 
 /**
+ * Writes the long whose low and high 32 bits are [low] and [high] as an Avro zig-zag varint into [bytes] at [offset],
+ * and returns the number of bytes written (1 to [MAX_VARINT_LONG_BYTES]). The caller guarantees that many bytes of
+ * room. The same bytes as [encodeZigZagLong] of that long.
+ *
+ * Written on `Int`s because Kotlin/JS has no 64-bit integer: a `Long` there is an object of two 32-bit halves, each
+ * shift, mask or comparison on it a call that allocates a new one. The halves are taken once, and every step after is
+ * a plain 32-bit operation, as the decoders read a varint long.
+ */
+internal fun encodeZigZagLong(
+    low: Int,
+    high: Int,
+    bytes: ByteArray,
+    offset: Int,
+): Int {
+    // the zig-zag, half by half: shifted left by one, the top bit of the low half moving into the high half, and every
+    // bit flipped if the long is negative
+    val sign = high shr 31
+    var lo = (low shl 1) xor sign
+    var hi = ((high shl 1) or (low ushr 31)) xor sign
+    var pos = offset
+    if (hi != 0) {
+        // 33 bits or more, so at least 5 bytes: the low 28 bits in 4 of them, and the next 32 bits moved into lo
+        bytes[pos] = (lo or 0x80).toByte()
+        bytes[pos + 1] = ((lo ushr 7) or 0x80).toByte()
+        bytes[pos + 2] = ((lo ushr 14) or 0x80).toByte()
+        bytes[pos + 3] = ((lo ushr 21) or 0x80).toByte()
+        pos += 4
+        lo = (lo ushr 28) or (hi shl 4)
+        hi = hi ushr 28
+        if (hi != 0) {
+            // 61 bits or more, so at least 9 bytes: 28 more bits in 4 bytes, and the last 8 bits moved into lo
+            bytes[pos] = (lo or 0x80).toByte()
+            bytes[pos + 1] = ((lo ushr 7) or 0x80).toByte()
+            bytes[pos + 2] = ((lo ushr 14) or 0x80).toByte()
+            bytes[pos + 3] = ((lo ushr 21) or 0x80).toByte()
+            pos += 4
+            lo = (lo ushr 28) or (hi shl 4)
+        }
+    }
+    // what is left holds in the 32 bits of lo, unsigned: 1 to 5 bytes
+    if (lo and 0x7F.inv() != 0) {
+        bytes[pos++] = (lo or 0x80).toByte()
+        lo = lo ushr 7
+        if (lo > 0x7F) {
+            bytes[pos++] = (lo or 0x80).toByte()
+            lo = lo ushr 7
+            if (lo > 0x7F) {
+                bytes[pos++] = (lo or 0x80).toByte()
+                lo = lo ushr 7
+                if (lo > 0x7F) {
+                    bytes[pos++] = (lo or 0x80).toByte()
+                    lo = lo ushr 7
+                }
+            }
+        }
+    }
+    bytes[pos++] = lo.toByte()
+    return pos - offset
+}
+
+/**
  * Checks the length prefix of a STRING or BYTES value before anything is allocated or skipped for it.
  *
  * Replaces the system-limit checks of Apache Avro's decoders: Apache Avro's `limits` system properties no
