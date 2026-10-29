@@ -11,7 +11,7 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-29, morning): M5-06 and M5-04 merged — M5-13 and the JS float fix next
+### Resume here (2026-10-29, morning): M5-06, M5-04 and the JS float fix merged — M5-13 running
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. Both batch 4 agents were stopped by
 the session limit at 1am and resumed from their saved worktrees at 10:30. After the merge: jvm 1147, jsNode 304,
@@ -38,12 +38,24 @@ after each merge, API dumps unchanged.
   [`notes/m5-06.md`](notes/m5-06.md).
 - **Backlog #16 (pre-existing, reproduced on `main` `6ad6c1c6`):** encoding error messages print the fallback types in
   upper case and put `..` before "Actual schema". Not fixed; pinned as is.
-- **New cross-platform divergence (migration scope, not fixed yet):** on Kotlin/JS `Double.toFloat()` does not round, so
-  `toFloatExact` never fails: `0.1` written to a float branch is rejected on the JVM and native but accepted on Node.
-  Found by M5-06's tests, not caused by it (code only moved). Row "float narrowing on JS" below; fix sketch in the note.
+- **Float narrowing on JS fixed** (`8eef280e`, merge `8d229fd9`, tree identical to the tested branch): `toFloatExact` is
+  an `expect`; JVM/native keep the same code (bytecode identical, 49 B), JS compares with `Math.fround`. A double no float
+  holds exactly is now rejected on Node as on the JVM/native (encoder, direct decoder, JSON default). Side effect on JS
+  only: a JS `Float` literal widened to `Double` (e.g. `Float.MAX_VALUE.toDouble()`) is rejected too. +7 tests
+  (`FloatNarrowingTest`) and M5-06's removed union case restored: **jvm 1165, jsNode 322, macosArm64 325**; `ACC+KMP`
+  green. Note: [`notes/float-narrowing-js.md`](notes/float-narrowing-js.md).
+- **Open for the user — JS `Float` from text and float widening (same root cause, not fixed):** (a) on JS a `Float` read
+  from text (writer `string`, `float`/`string`/`enum` defaults) keeps a double's precision: `"0.1"` → `0.1` on JS,
+  `0.10000000149011612` on the JVM. Rounding with `Math.fround` works but changes the JS round trip of the golden fixture
+  "floating-point numbers written as strings" (`"3.4028235e+38"` → `"3.4028234663852886e+38"`), which pins the
+  stringable-float behaviour decided 2026-10-13 (`m3-16.md`): round on JS and update that fixture's JS expectation, or
+  keep it? Current values pinned by a test. (b) A Kotlin `0.1f` written to a `double` schema gives different bytes on JS
+  (`9a9999999999b93f`) and the JVM (`000000a09999b93f`); `Math.fround` before widening would align it. (c) Double
+  rounding of long decimal text written to `float` on JS: needs a correctly rounded parser, note only.
 - **Mutation checks:** batch 4 briefs limited to the guards §1 names; the user's answer is still pending.
 
-**Next:** M5-13 (re-scoped; its brief asks whether the base-class schema field wins back M5-04's 8 B) ∥ JS float fix →
+**Next:** M5-13 (re-scoped, running; two commits, the field then the nullable path, each a side of AB-R; its brief asks
+whether the base-class field wins back M5-04's 8 B) →
 AB-R (sides: base `54e0ad19`, +M5-02 `b120c228`, +M5-03 `cc1a234a`, +M5-04 `cbb390b2`, +M5-13).
 
 ### Earlier (2026-10-28, night): M5 batch 3 merged, AC-1 done — batch 4 next
@@ -686,7 +698,8 @@ police decode work. Details in `benchmark/README.md` and [`notes/a8.md`](notes/a
 | M5 · AC-1 allocation checkpoint | done | `v3/m2-foundation` | this commit | `54e0ad19` vs `90ca45cf`, EA-off, 49 rows: predictions exact on every deterministic row; regressions as predicted. `benchmark/README.md` |
 | M5-04 · polymorphic values decoded without per-value allocation | done | `v3/polymorphic-decode-reuse`, merged | `941d3e2c`, `a0545576` (merge `cbb390b2`) | fifth decoder slot, value decoder reset per value, 4-entry identity memo; no `Pair`; 4 decoders +8 B (accepted); +11 tests; measured in AB-R. [`notes/m5-04.md`](notes/m5-04.md) |
 | M5-06 · union branch table, small encode methods | done | `v3/union-tables-small-encode`, merged | `c4817c21` (merge `f1ec63f2`) | `firstIndexByType` table; `encodeX` bodies 40–169 B (`encodeString` 775 → 48); error texts unchanged; backlog #16 found; +13 tests; measured in AB-W. [`notes/m5-06.md`](notes/m5-06.md) |
-| M5 · float narrowing on JS | todo | — | — | `toFloatExact` never fails on Kotlin/JS (`Double.toFloat()` does not round there); fix with a rounding JS honours (`Math.fround` via `expect`/`actual`, or the raw bits) and a common test on the 3 targets. Found by M5-06, see [`notes/m5-06.md`](notes/m5-06.md) |
+| M5 · float narrowing on JS | done | `v3/float-narrowing-js`, merged | `8eef280e` (merge `8d229fd9`) | `toFloatExact` an `expect`, `Math.fround` on JS, JVM/native bytecode identical; +7 tests (+1 restored). [`notes/float-narrowing-js.md`](notes/float-narrowing-js.md) |
+| M5 · JS `Float` from text and float widening | todo | — | — | **user decision**: round on JS and update the stringable-float golden fixture's JS round trip, or keep; see the Resume section of 2026-10-29 and [`notes/float-narrowing-js.md`](notes/float-narrowing-js.md) |
 | M5 · C1 frame-stack encoder/decoder | todo | — | — | riskiest change in the plan |
 | M5 · C4 union branch tables | todo | — | — | — |
 | M5 · C5 string/bytes fast paths | todo | — | — | input added 2026-10-11: [`notes/c5-fixed-and-bytes-without-copy.md`](notes/c5-fixed-and-bytes-without-copy.md) (internal direct reads for uuid/duration/decimal/big-decimal; public scoped `decodeFixed { source, size -> … }` needs the user's approval) |
