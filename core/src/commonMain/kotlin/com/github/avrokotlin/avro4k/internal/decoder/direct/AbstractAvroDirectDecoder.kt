@@ -228,7 +228,7 @@ internal abstract class AbstractAvroDirectDecoder(
         val workflow = avro.recordResolver.resolveFields(writerRecordSchema, descriptor)
         val fieldSchemas = workflow.exactFieldSchemas
         return if (fieldSchemas != null) {
-            exactRecordDecoder().reset(writerRecordSchema, descriptor, fieldSchemas)
+            exactRecordDecoder().reset(writerRecordSchema, descriptor, fieldSchemas, workflow.exactNullableFields)
         } else {
             recordDecoder().reset(writerRecordSchema, descriptor, workflow.decoding)
         }

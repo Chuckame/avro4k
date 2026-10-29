@@ -125,7 +125,7 @@ internal abstract class AbstractInterceptingDecoder : Decoder, CompositeDecoder 
 }
 
 @OptIn(ExperimentalSerializationApi::class)
-private inline fun <T : Any> Decoder.decodeIfNullable(
+internal inline fun <T : Any> Decoder.decodeIfNullable(
     deserializer: DeserializationStrategy<T?>,
     block: () -> T?,
 ): T? {
