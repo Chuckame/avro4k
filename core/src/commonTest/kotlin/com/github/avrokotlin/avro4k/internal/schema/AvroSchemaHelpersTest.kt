@@ -11,6 +11,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.FloatSchema
 import com.github.avrokotlin.avro4k.AvroSchema.IntSchema
 import com.github.avrokotlin.avro4k.AvroSchema.LongSchema
 import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
+import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
 import com.github.avrokotlin.avro4k.AvroSchema.NullSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
@@ -67,21 +68,6 @@ class AvroSchemaHelpersTest {
             StringSchema()
         )
 
-    private fun logical(
-        schema: ResolvedSchema,
-        name: String,
-    ): ResolvedSchema {
-        val props = mapOf("logicalType" to JsonPrimitive(name))
-        return when (schema) {
-            is IntSchema -> IntSchema(props)
-            is LongSchema -> LongSchema(props)
-            is StringSchema -> StringSchema(props)
-            is BytesSchema -> BytesSchema(props)
-            is FixedSchema -> schema.copy(props = props)
-            else -> error("unsupported in this test: $schema")
-        }
-    }
-
     // ---- casts ----
 
     @Test
@@ -94,11 +80,6 @@ class AvroSchemaHelpersTest {
     fun `asType fails on a wrong kind and names the expected class and the actual schema`() {
         shouldThrow<IllegalStateException> { array.asType<MapSchema>() }.message shouldBe
             "Expected a MapSchema, but was {\"type\":\"array\",\"items\":\"long\"}"
-        for (schema in everyKind) {
-            if (schema === union) continue
-            shouldThrow<IllegalStateException> { schema.getIndexTyped(Type.INT) }
-            shouldThrow<IllegalStateException> { schema.getIndexNamedOrAliased("x") }
-        }
     }
 
     @Test
@@ -111,23 +92,18 @@ class AvroSchemaHelpersTest {
         Type.entries.associateWith { it.typeName } shouldBe Type.entries.associateWith { it.name.lowercase() }
         // and the full name of every unnamed schema is its type name
         for (schema in everyKind) {
-            if (!schema.isNamedSchema()) schema.fullName shouldBe schema.type.typeName
+            if (schema !is NamedSchema) schema.fullName shouldBe schema.type.typeName
         }
     }
 
     // ---- names and aliases ----
 
     @Test
-    fun `isNamedSchema is true for records - enums and fixed only`() {
-        everyKind.filter { it.isNamedSchema() } shouldBe listOf(record, enum, fixed)
-    }
-
-    @Test
     fun `nonFailingAliases never throws`() {
         record.nonFailingAliases() shouldBe setOf("com.old.OldRec", "other.Rec2")
         fixed.nonFailingAliases() shouldBe emptySet()
         for (schema in everyKind) {
-            if (!schema.isNamedSchema()) schema.nonFailingAliases() shouldBe emptySet()
+            if (schema !is NamedSchema) schema.nonFailingAliases() shouldBe emptySet()
         }
     }
 
@@ -178,34 +154,6 @@ class AvroSchemaHelpersTest {
         val otherRecord = RecordSchema(Name("com.example.Other"), emptyList())
         UnionSchema(NullSchema(), recordModel, otherRecord).getIndexTyped(Type.RECORD) shouldBe 1
         UnionSchema(fixedModel, enumModel).getIndexTyped(Type.ENUM) shouldBe 1
-    }
-
-    @Test
-    fun `getIndexLogicallyTyped matches the type and the logical type name`() {
-        val date = logical(IntSchema(), "date")
-        val uuid = logical(StringSchema(), "uuid")
-        val durationFixed = logical(FixedSchema(Name("Duration"), 12), "duration")
-        val plainFixed = FixedSchema(Name("Plain"), 12)
-        val u = UnionSchema(NullSchema(), plainFixed, date, uuid, durationFixed)
-
-        u.getIndexLogicallyTyped("date", Type.INT) shouldBe 2
-        u.getIndexLogicallyTyped("uuid", Type.STRING) shouldBe 3
-        u.getIndexLogicallyTyped("duration", Type.FIXED) shouldBe 4
-        u.getIndexLogicallyTyped("date", Type.LONG) shouldBe -1
-        u.getIndexLogicallyTyped("time-millis", Type.INT) shouldBe -1
-        UnionSchema(NullSchema(), IntSchema()).getIndexLogicallyTyped("date", Type.INT) shouldBe -1
-    }
-
-    @Test
-    fun `getIndexLogicallyTyped with two types gives priority to the first type - whatever the branch order`() {
-        val decimalFixed = logical(FixedSchema(Name("Dec"), 8), "decimal")
-        val decimalBytes = logical(BytesSchema(), "decimal")
-        val u = UnionSchema(decimalFixed, decimalBytes)
-
-        u.getIndexLogicallyTyped("decimal", Type.BYTES, Type.FIXED) shouldBe 1
-        u.getIndexLogicallyTyped("decimal", Type.FIXED, Type.BYTES) shouldBe 0
-        UnionSchema(decimalFixed).getIndexLogicallyTyped("decimal", Type.BYTES, Type.FIXED) shouldBe 0
-        UnionSchema(decimalFixed).getIndexLogicallyTyped("decimal", Type.BYTES, Type.STRING) shouldBe -1
     }
 
     @Test

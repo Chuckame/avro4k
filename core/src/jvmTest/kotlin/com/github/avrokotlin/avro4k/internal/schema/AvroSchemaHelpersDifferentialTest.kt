@@ -6,6 +6,7 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
 import com.github.avrokotlin.avro4k.AvroSchema.EnumSchema
 import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
+import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.Type
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
@@ -83,7 +84,7 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
                     model.fullNameForMessages shouldBe apache.fullName
                     // the model names a union `union`, Apache `union[<branches' simple names>]`
                     model.fullName shouldBe if (apache.isUnion) "union" else apache.fullName
-                    model.isNamedSchema() shouldBe apache.isNamedSchemaRef()
+                    (model is NamedSchema) shouldBe apache.isNamedSchemaRef()
                     model.nonFailingAliases() shouldBe apache.nonFailingAliasesRef()
                     model.isNonNullScalarType() shouldBe apache.isNonNullScalarTypeRef()
 
@@ -121,39 +122,26 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
         corpus.forEach { (name, schema) ->
             walk(schema, schema.toAvro4k()) { apache, model ->
                 if (!apache.isUnion) return@walk
+                val union = model as UnionSchema
                 withClue("$name: $apache") {
                     unnamedTypes.forEach { type ->
-                        model.getIndexTyped(type.toModel()) shouldBe (apache.getIndexTypedRef(type) ?: -1)
+                        union.getIndexTyped(type.toModel()) shouldBe (apache.getIndexTypedRef(type) ?: -1)
                         lookups++
                     }
                     // named types: the first branch of that type (Apache's name lookup is not a type lookup, see KDoc)
                     listOf(Schema.Type.RECORD, Schema.Type.ENUM, Schema.Type.FIXED).forEach { type ->
-                        model.getIndexTyped(type.toModel()) shouldBe apache.types.indexOfFirst { it.type == type }
-                    }
-
-                    val logicalNames = apache.types.mapNotNull { it.logicalType?.name } + listOf("nope", "uuid", "date")
-                    val types = Schema.Type.entries.filter { it != Schema.Type.UNION }
-                    logicalNames.forEach { logicalName ->
-                        types.forEach { first ->
-                            model.getIndexLogicallyTyped(logicalName, first.toModel()) shouldBe
-                                (apache.getIndexLogicallyTypedRef(logicalName, first) ?: -1)
-                            types.forEach { second ->
-                                model.getIndexLogicallyTyped(logicalName, first.toModel(), second.toModel()) shouldBe
-                                    (apache.getIndexLogicallyTypedRef(logicalName, first, second) ?: -1)
-                            }
-                            lookups++
-                        }
+                        union.getIndexTyped(type.toModel()) shouldBe apache.types.indexOfFirst { it.type == type }
                     }
 
                     val names = apache.types.flatMap { listOf(it.fullName) + it.nonFailingAliasesRef() } + listOf("nope", "com.nope.Nope")
                     names.forEach { expectedName ->
-                        model.getIndexNamedOrAliased(expectedName) shouldBe apache.getIndexNamedOrAliasedRef(expectedName)
+                        union.getIndexNamedOrAliased(expectedName) shouldBe apache.getIndexNamedOrAliasedRef(expectedName)
                         lookups++
                     }
                 }
             }
         }
-        lookups shouldBeGreaterThan 1000
+        lookups shouldBeGreaterThan 500
     }
 
     "union shaping matches" {
@@ -176,14 +164,6 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
         }
     }
 
-    "documented difference: a logical type Apache ignores (invalid here) is still matched by name" {
-        // Apache's getLogicalType() drops a `date` on a string (validation fails); logicalTypeName is the raw prop
-        val apache = Schema.Parser().parse("""["null",{"type":"string","logicalType":"date"}]""")
-        apache.types[1].logicalType shouldBe null
-        apache.getIndexLogicallyTypedRef("date", Schema.Type.STRING) shouldBe null
-        apache.toAvro4k().getIndexLogicallyTyped("date", Type.STRING) shouldBe 1
-    }
-
     "documented difference: a union's full name, and so isFullNameMatch on a union" {
         val apache = Schema.Parser().parse("""["null",{"type":"record","name":"R","namespace":"com.a","fields":[]},{"type":"array","items":"int"}]""")
         val model = apache.toAvro4k()
@@ -199,7 +179,7 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
     "documented difference: getIndexTyped of a named type is a type lookup, not Apache's name lookup" {
         val apache = Schema.Parser().parse("""[{"type":"record","name":"A","fields":[]},{"type":"record","name":"record","fields":[]}]""")
         apache.getIndexTypedRef(Schema.Type.RECORD) shouldBe 1
-        apache.toAvro4k().getIndexTyped(Type.RECORD) shouldBe 0
+        (apache.toAvro4k() as UnionSchema).getIndexTyped(Type.RECORD) shouldBe 0
     }
 
     "skip consumes exactly what Apache's encoders write, single-block and split into byte-sized blocks" {
@@ -317,19 +297,6 @@ private fun Schema.isFullNameOrAliasMatchRef(
 
 private fun Schema.isFullNameMatchRef(fullNameToMatch: String): Boolean {
     return fullName == fullNameToMatch || (isNamedSchemaRef() && aliases.any { it == fullNameToMatch })
-}
-
-// core/src/jvmMain/.../AvroEncoder.kt
-private fun Schema.getIndexLogicallyTypedRef(
-    logicalTypeName: String,
-    vararg oneOf: Schema.Type,
-): Int? {
-    return oneOf.firstNotNullOfOrNull { expectedType ->
-        when (expectedType) {
-            Schema.Type.FIXED, Schema.Type.RECORD, Schema.Type.ENUM -> types.indexOfFirst { it.type == expectedType && it.logicalType?.name == logicalTypeName }.takeIf { it >= 0 }
-            else -> getIndexNamed(expectedType.getName())?.takeIf { types[it].logicalType?.name == logicalTypeName }
-        }
-    }
 }
 
 private fun Schema.getIndexNamedOrAliasedRef(expectedName: String): Int? {

@@ -2,7 +2,6 @@ package com.github.avrokotlin.avro4k.internal.schema
 
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
-import com.github.avrokotlin.avro4k.AvroSchema.EnumSchema
 import com.github.avrokotlin.avro4k.AvroSchema.FixedSchema
 import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
 import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
@@ -16,6 +15,8 @@ import com.github.avrokotlin.avro4k.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.contract
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.roundToLong
@@ -28,8 +29,13 @@ import kotlin.math.roundToLong
  */
 
 /** This schema as a [T], or an error naming the expected kind and the actual schema. */
-internal inline fun <reified T : AvroSchema> AvroSchema.asType(): T =
-    this as? T ?: throw IllegalStateException("Expected a ${T::class.simpleName}, but was ${toSchemaJsonString()}")
+@OptIn(ExperimentalContracts::class)
+internal inline fun <reified T : AvroSchema> AvroSchema.asType(): T {
+    contract {
+        returns() implies (this@asType is T)
+    }
+    return this as? T ?: throw IllegalStateException("Expected a ${T::class.simpleName}, but was ${toSchemaJsonString()}")
+}
 
 /** Whether this schema is a union: a field read and an identity comparison, cheaper than an `is` check on JS. */
 internal val AvroSchema.isUnion: Boolean
@@ -46,9 +52,6 @@ internal val AvroSchema.fullNameForMessages: String
 internal fun AvroSchema.toSchemaJsonString(): String = toJsonElement().toString()
 
 // ---- names and aliases ----
-
-/** A record, an enum or a fixed. */
-internal fun AvroSchema.isNamedSchema(): Boolean = this is NamedSchema
 
 /** The full names of a named schema's aliases, an empty set for any other one. Allocates. */
 internal fun AvroSchema.nonFailingAliases(): Set<String> = if (this is NamedSchema) aliasFullNames() else emptySet()
@@ -93,38 +96,8 @@ internal inline fun AvroSchema.isFullNameOrAliasMatch(
  * The index of the first union branch of type [expectedType], or -1 (not `null`: no boxing). For a named type, the
  * first record, enum or fixed branch. One read of [UnionSchema.firstIndexByType].
  */
-internal fun AvroSchema.getIndexTyped(expectedType: Type): Int {
-    return asType<UnionSchema>().firstIndexByType[expectedType.ordinal]
-}
-
-/**
- * The index of the first union branch of type [expectedType] whose raw [ResolvedSchema.logicalTypeName] is
- * [logicalTypeName], or -1. One overload per number of types rather than a `vararg`: no array per call.
- */
-internal fun AvroSchema.getIndexLogicallyTyped(
-    logicalTypeName: String,
-    expectedType: Type,
-): Int {
-    val branches = asType<AvroSchema.UnionSchema>().types
-    for (i in branches.indices) {
-        val branch = branches[i]
-        if (branch.type === expectedType && branch.logicalTypeName == logicalTypeName) return i
-    }
-    return -1
-}
-
-/**
- * [getIndexLogicallyTyped] for [firstExpectedType], then for [secondExpectedType]: the order of the types is the
- * priority, whatever the order of the branches.
- */
-internal fun AvroSchema.getIndexLogicallyTyped(
-    logicalTypeName: String,
-    firstExpectedType: Type,
-    secondExpectedType: Type,
-): Int {
-    val index = getIndexLogicallyTyped(logicalTypeName, firstExpectedType)
-    if (index >= 0) return index
-    return getIndexLogicallyTyped(logicalTypeName, secondExpectedType)
+internal fun UnionSchema.getIndexTyped(expectedType: Type): Int {
+    return firstIndexByType[expectedType.ordinal]
 }
 
 /**
@@ -236,7 +209,7 @@ private fun Map<String, JsonElement>.intProp(key: String): Int? {
  * The index of the union branch whose full name, or one of whose aliases' full names, is [expectedName], or null. One
  * hash lookup ([UnionSchema.getIndexOrNull]).
  */
-internal fun AvroSchema.getIndexNamedOrAliased(expectedName: String): Int? {
+internal fun UnionSchema.getIndexNamedOrAliased(expectedName: String): Int? {
     return asType<UnionSchema>().getIndexOrNull(expectedName)
 }
 
@@ -323,16 +296,7 @@ internal fun AvroSchema.isNonNullScalarType(): Boolean =
  * (negative count) in one go and return the item count of the next block to skip item by item.
  */
 internal fun AvroBinaryReader.skip(schema: AvroSchema) {
-    // a `when` over the type, one table jump, rather than over the schema's class, where `is` tests each class in turn
-    val resolved: ResolvedSchema =
-        if (schema is UnionSchema) {
-            val index = readIndex()
-            if (index < 0 || index >= schema.types.size) throw unionIndexOutOfRangeError(index, schema)
-            schema.types[index]
-        } else {
-            schema as ResolvedSchema
-        }
-    when (resolved.type) {
+    when (schema.type) {
         Type.BOOLEAN -> readBoolean()
 
         Type.INT -> readInt()
@@ -347,14 +311,14 @@ internal fun AvroBinaryReader.skip(schema: AvroSchema) {
 
         Type.BYTES -> skipBytes()
 
-        Type.FIXED -> skipFixed((resolved as FixedSchema).size)
+        Type.FIXED -> skipFixed((schema as FixedSchema).size)
 
         Type.ENUM -> readEnum()
 
         Type.NULL -> readNull()
 
         Type.ARRAY -> {
-            val elementSchema = (resolved as ArraySchema).elementSchema
+            val elementSchema = (schema as ArraySchema).elementSchema
             var blockItems = skipArray()
             while (blockItems > 0L) {
                 var i = 0L
@@ -367,7 +331,7 @@ internal fun AvroBinaryReader.skip(schema: AvroSchema) {
         }
 
         Type.MAP -> {
-            val valueSchema = (resolved as MapSchema).valueSchema
+            val valueSchema = (schema as MapSchema).valueSchema
             var blockItems = skipMap()
             while (blockItems > 0L) {
                 var i = 0L
@@ -381,13 +345,16 @@ internal fun AvroBinaryReader.skip(schema: AvroSchema) {
         }
 
         Type.RECORD -> {
-            val fields = (resolved as RecordSchema).fields
+            val fields = (schema as RecordSchema).fields
             for (i in fields.indices) {
                 skip(fields[i].schema)
             }
         }
 
-        // Impossible: a union's branches are resolved schemas, never unions
-        Type.UNION -> throw UnsupportedOperationException("Union type should be already resolved")
+        Type.UNION -> {
+            val index = readIndex()
+            if (index !in (schema as UnionSchema).types.indices) throw unionIndexOutOfRangeError(index, schema)
+            skip(schema.types[index])
+        }
     }
 }

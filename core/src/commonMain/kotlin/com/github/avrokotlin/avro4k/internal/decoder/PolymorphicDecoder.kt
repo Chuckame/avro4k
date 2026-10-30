@@ -124,7 +124,7 @@ internal class PolymorphicDecoder(
     private fun readBranch(union: AvroSchema): AvroSchema {
         val branches = union.asType<AvroSchema.UnionSchema>().types
         val index = binaryReader.readIndex()
-        if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, union)
+        if (index !in branches.indices) throw unionIndexOutOfRangeError(index, union)
         return branches[index]
     }
 

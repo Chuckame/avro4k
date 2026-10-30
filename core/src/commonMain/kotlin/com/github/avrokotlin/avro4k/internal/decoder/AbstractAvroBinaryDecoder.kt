@@ -343,7 +343,7 @@ internal abstract class AbstractAvroBinaryDecoder(
         if (union === NO_ELEMENT_SCHEMA) throw noElementBegunError()
         val branches = union.asType<AvroSchema.UnionSchema>().types
         val index = binaryReader.readIndex()
-        if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, union)
+        if (index !in branches.indices) throw unionIndexOutOfRangeError(index, union)
         currentAvroSchema = branches[index]
     }
 

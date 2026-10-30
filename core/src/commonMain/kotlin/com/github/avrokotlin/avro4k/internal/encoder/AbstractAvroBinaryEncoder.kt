@@ -202,7 +202,7 @@ internal sealed class AbstractAvroBinaryEncoder(
      * unknown writer symbol, never written in place of a value.
      */
     override fun encodeEnumUnchecked(symbol: String) {
-        val enumSchema = currentWriterSchema as AvroSchema.EnumSchema
+        val enumSchema = currentWriterSchema.asType<AvroSchema.EnumSchema>()
         val index =
             enumSchema.getSymbolIndexOrNull(symbol)
                 ?: throw AvroSchemaMismatchException("Enum symbol $symbol not found in schema ${enumSchema.toSchemaJsonString()}")

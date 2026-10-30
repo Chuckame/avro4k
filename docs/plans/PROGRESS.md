@@ -34,8 +34,14 @@ tests); ACC, ACC+KMP and `actionsBeforeCommit` green; API dumps change only for 
 2. **Reordering encoder without closures** (`notes/m5-decomposition.md` M5-10), taken into v3.0 by the user, before
    AB-W so the write A/B includes it.
 3. **AB-W.** 4. **Merge upstream `avro-kotlin/main` `48b4f24f`**: port #559 (int/long → float/double) to the rewritten
-   decoders; keep v3's stream flush against #563. 5. **General comment cleanup pass.** 6. **History rewrite**, plan in
-   `notes/history-rewrite.md`, awaiting the user's approval.
+   decoders; keep v3's stream flush against #563. 5. **General comment cleanup pass.** 6. **No useless methods**
+   (user, 2026-10-30): sweep core and apache-interop for methods that add nothing — one-line wrappers over a language
+   check or a field read, helpers kept alive only by their own tests, receivers re-cast to the type they already have,
+   duplicates of a sibling helper — and inline or delete them. Already done in the review follow-up: `isNamedSchema()`
+   (common), `getIndexLogicallyTyped`, union lookups typed on `UnionSchema`. Left as examples: the `@InternalAvro4kApi`
+   `AvroSchema.isNamedSchema()` in `internal/helpers.kt`, `UnionSchema.getIndexNamedOrAliased`'s `asType<UnionSchema>()`
+   on its own receiver, `getIndexTyped` (one array read). 7. **History rewrite**, plan in `notes/history-rewrite.md`,
+   awaiting the user's approval.
 
 ### Earlier (2026-10-30, night): read regressions fixed, JS long writes ×9 — AB-W next
 

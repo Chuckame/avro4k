@@ -1,5 +1,6 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.internal.aliases
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.schema.asType
@@ -132,14 +133,14 @@ internal fun AvroEncoder.logicalTypeMismatchError(
  * One array read ([getIndexTyped]), no allocation.
  */
 internal fun AvroEncoder.trySelectTypeNameFromUnion(expectedType: AvroSchema.Type): Boolean {
-    val index = currentWriterSchema.getIndexTyped(expectedType)
+    val index = currentWriterSchema.asType<UnionSchema>().getIndexTyped(expectedType)
     if (index < 0) return false
     encodeUnionIndex(index)
     return true
 }
 
 internal fun AvroEncoder.trySelectFixedSchemaForSize(fixedSize: Int): Boolean {
-    val branches = currentWriterSchema.asType<AvroSchema.UnionSchema>().types
+    val branches = currentWriterSchema.asType<UnionSchema>().types
     for (index in branches.indices) {
         val branch = branches[index]
         if (branch is AvroSchema.FixedSchema && branch.size == fixedSize) {
@@ -167,7 +168,7 @@ internal fun AvroEncoder.trySelectEnumSchemaForSymbol(symbol: String): Boolean {
  * full name or aliases. One hash lookup on a name hit; the descriptor's aliases are only read on a miss.
  */
 internal fun AvroEncoder.trySelectNamedSchema(descriptor: SerialDescriptor): Boolean {
-    val schema = currentWriterSchema
+    val schema = currentWriterSchema.asType<UnionSchema>()
     val index =
         schema.getIndexNamedOrAliased(descriptor.nonNullSerialName)
             ?: descriptor.aliases.firstNotNullOfOrNull { schema.getIndexNamedOrAliased(it) }
@@ -186,7 +187,7 @@ public fun AvroEncoder.trySelectNamedSchema(
     name: String,
     aliases: () -> Set<String> = ::emptySet,
 ): Boolean {
-    val schema = currentWriterSchema
+    val schema = currentWriterSchema.asType<UnionSchema>()
     val index =
         schema.getIndexNamedOrAliased(name)
             ?: aliases().firstNotNullOfOrNull { schema.getIndexNamedOrAliased(it) }
@@ -228,7 +229,7 @@ internal fun AvroEncoder.trySelectLogicalTypeFromUnion(
 }
 
 /**
- * The common `getIndexLogicallyTyped`, skipping the branches whose logical type is invalid. -1 when there is none.
+ * The index of the first union branch of type [expectedType] whose valid logical type is [logicalTypeName], or -1.
  * [logicalTypeName] is always one of the specification's logical types here, so [knownLogicalTypeName] (memoized per
  * schema) answers both the name and the validity with a field read.
  */

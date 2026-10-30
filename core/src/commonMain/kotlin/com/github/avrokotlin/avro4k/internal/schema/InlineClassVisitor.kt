@@ -34,7 +34,7 @@ internal class InlineClassVisitor(
             val props = annotations.props.toList()
             val schema =
                 if (props.isNotEmpty()) {
-                    if (generatedSchema.isNamedSchema()) {
+                    if (generatedSchema is NamedSchema) {
                         throw SchemaGenerationFailure(
                             "The value class property '${inlineClassDescriptor.serialName}.${inlineClassDescriptor.getElementName(0)}' has " +
                                 "forbidden additional properties $props for the named schema ${generatedSchema.fullName}. " +
