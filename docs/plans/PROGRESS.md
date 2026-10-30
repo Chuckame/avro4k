@@ -11,7 +11,33 @@ its row here is updated **and committed**.
 names collide with the existing `kmp` branch), following [`notes/m3-decomposition.md`](notes/m3-decomposition.md): its §10
 batches, and its §1 rules in every brief. The current state is in the newest "Resume here" section below.
 
-### Resume here (2026-10-30, night): read regressions fixed, JS long writes ×9 — AB-W next
+### Resume here (2026-10-30, late night): review FIXMEs applied, branch pushed — next steps
+
+**Branch** `v3/m2-foundation` pushed to `origin` (Chuckame/avro4k) at `d6a0b7b0` before this work; the two commits
+below are local, no benchmark run. **jvm 1181, jsNode 339, macosArm64 342** (−3/−2/−2: the removed casting helpers'
+tests); ACC, ACC+KMP and `actionsBeforeCommit` green; API dumps change only for `logicalTypeName`.
+- **The user's review FIXMEs applied:** `logicalTypeName` and its memo on `ResolvedSchema`; internal `Type.typeName`;
+  error factories → `AvroSchemaMismatchException(...)`; encoders' `currentWriterSchema` merged; RecordAsMap's lateinit
+  trick gone; decoder errors out of public `AvroDecoder.kt`; casting helpers → `asType<T>()` and typed schema params;
+  internal `PlainSchemas` (encoder/decoder use only: the Apache identity pairing needs one node per tree position);
+  `reset` at the end of decoders; docs trimmed of Apache references.
+- **Renames:** `internal.{de,en}coder.direct` → `internal.{de,en}coder`, `*Direct*` → `*Binary*`/plain, apache-interop
+  `PolymorphicGenericEncoder`, codec classes `*BinaryReader`/`*BinaryWriter`.
+- **Opt-ins:** 21 useless `@OptIn` removed, 3 trimmed, 5 commonTest classes given the missing one.
+- **Docs:** `notes/backlog-after-v3.0.md` (item 1 taken into v3.0, item 16 added); `notes/history-rewrite.md` (new).
+
+**Next**, in order:
+1. **Byte-saving tricks check** — measure each (EA-off allocation + throughput, on AC); keep with a short doc saying why
+   if it pays, simplify otherwise: the next-block count packed as a bitwise complement in `decodedCollectionSize`, the
+   position index as in-use flag (`NOT_IN_USE`), the `NO_ELEMENT_SCHEMA` marker union, the polymorphic decoder's
+   4-entry serial-name memo.
+2. **Reordering encoder without closures** (`notes/m5-decomposition.md` M5-10), taken into v3.0 by the user, before
+   AB-W so the write A/B includes it.
+3. **AB-W.** 4. **Merge upstream `avro-kotlin/main` `48b4f24f`**: port #559 (int/long → float/double) to the rewritten
+   decoders; keep v3's stream flush against #563. 5. **General comment cleanup pass.** 6. **History rewrite**, plan in
+   `notes/history-rewrite.md`, awaiting the user's approval.
+
+### Earlier (2026-10-30, night): read regressions fixed, JS long writes ×9 — AB-W next
 
 **Branch** `v3/m2-foundation` at this commit, nothing pushed, no benchmark running. **jvm 1184, jsNode 341,
 macosArm64 344**; ACC and ACC+KMP green on the merged tree, API dumps unchanged.
@@ -830,6 +856,7 @@ Records *why* a unit was done the way it was, so a later session does not re-dec
 | 2026-10-25 | M4 · stream contract, codec visibility | **User, after comparing with kotlinx-serialization-json** (its `decodeFromStream` reads ahead, never rewinds, and requires exactly one value per stream; several through `decodeToSequence`): (1) **merge `v3/one-cursor-decoder`**: the stream decoder reads with its base class; (2) **`decodeFromStream` reads the stream as it decodes, one value per stream**, leftover bytes an `AvroMalformedDataException` as in `decodeFromByteArray`, no `mark`/rewind (reading the whole stream first, and rewinding with `mark`, were the two options not taken); (3) **the codec classes stay `@InternalAvro4kApi` in v3.0**; making them public as experimental, so users plug their own inputs without growing the `Avro` API, is decided after M5, before v3.1 (`backlog-after-v3.0.md` item 10). |
 | 2026-10-25 | M4 · stream input and output | **User: JVM `InputStream`/`OutputStream` in core** (option b of `notes/m4-stream-options.md`): "it still needs a way to encode/decode with java streams, it'll be an important need for JVM users". kotlinx-io still leaves core; an `avro4k-kotlinx-io` module (c) is not in v3.0 and stays addable later (`backlog-after-v3.0.md` item 8). The stream functions come before the removal (IO-7 before IO-3) so every commit compiles and the benchmark rows switch without a gap; two pre-decided candidates (decoder array size, encoder output) in one overnight A/B (`notes/m4-jvm-streams.md`). |
 | 2026-10-25 | M4 · end of input off the JVM | **User: an internal avro4k `EOFException`** (`m4-no-stream-library.md` §4.3): `internal expect open class`, `actual typealias` to `java.io.EOFException` on the JVM (contract unchanged, `apache-interop` keeps working), a plain `Exception` subclass on JS and native. Only the cause's class changes there (a migration item). |
+| 2026-10-30 | Review FIXMEs | **User decisions.** Naming: core encodes and decodes **Binary**, apache-interop **Generic** (`AbstractAvroBinary{En,De}coder`, `PolymorphicGenericEncoder`); the codec layer reads and writes bytes, so **`*BinaryReader`/`*BinaryWriter`**. `AvroSchema.Type.typeName` stays **internal**. `PlainSchemas` is **internal**. `logicalTypeName` lives on **`ResolvedSchema`** (a union has none). The **reordering encoder without closures** (M5-10) is **taken into v3.0**, before AB-W. |
 | 2026-10-30 | M5 · C1 frame stack | **After v3.0** (user). Per-level reuse already removed the per-element allocation; the frame stack would add single-class dispatch (≤ 4–5% of a `complex` read, partly paid back by a branch on the frame kind) for the largest refactor in the plan. Backlog item 15. |
 | 2026-10-25 | M4 · `ByteArrayEncoder` storage | **Chunks (B) kept** by the A/B, as pre-decided: one growable array loses to the `Buffer` on mid-size payloads (its doubling copies), the chunks win everywhere but `simple` @1 (−11% vs A). The merged code is the measured code; the small-record tweak (shared empty `IntArray`) is left for a later measured batch. |
 | 2026-10-24 | M4 · stream library | **User: remove the stream library from core entirely** (kotlinx-io; okio would be no faster, being the same segment design). Reasons: the speed comes from reading an array with a position, not from the library; kotlinx-io is 0.x and in the public API, with `@InternalIoApi` in the fast path; removing it is breaking, so v3.0, while adding a stream entry point back later is not. The stream API (`encodeToSink`/`decodeFromSource`, `AvroSingleObject`'s too) is removed with the user's approval. **If the shared array decoder remains, its name is `BufferedDecoder`.** Plan: `notes/m4-no-stream-library.md`. |
