@@ -1,9 +1,9 @@
 package com.github.avrokotlin.avro4k.internal.codec
 
 // The JVM and native have a 64-bit integer: the zig-zag of a long is a few `Long` operations, kept as they were.
-internal actual class ByteArrayEncoder actual constructor(
+internal actual class ByteArrayBinaryWriter actual constructor(
     writeFullChunk: ((chunk: ByteArray, length: Int) -> Unit)?,
-) : ChunkedByteArrayEncoder(writeFullChunk) {
+) : ChunkedByteArrayBinaryWriter(writeFullChunk) {
     actual override fun writeLong(value: Long) {
         val zigZag = (value shl 1) xor (value shr 63)
         val p = position

@@ -1,4 +1,4 @@
-package com.github.avrokotlin.avro4k.internal.decoder.direct
+package com.github.avrokotlin.avro4k.internal.decoder
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
@@ -9,17 +9,15 @@ import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.NullableUnionField
 import com.github.avrokotlin.avro4k.internal.SerializerLocatorMiddleware
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryReader
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
 import com.github.avrokotlin.avro4k.internal.codec.decodeUtf8
 import com.github.avrokotlin.avro4k.internal.collectionCountError
 import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.enumIndexOutOfRangeError
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
-import com.github.avrokotlin.avro4k.internal.schema.enumSymbols
-import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
-import com.github.avrokotlin.avro4k.internal.schema.types
 import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toFloatExact
 import com.github.avrokotlin.avro4k.internal.toIntExact
@@ -37,10 +35,9 @@ import kotlinx.serialization.internal.AbstractCollectionSerializer
 import kotlinx.serialization.modules.SerializersModule
 import kotlin.jvm.JvmField
 
-@OptIn(ExperimentalSerializationApi::class)
-internal abstract class AbstractAvroDirectDecoder(
+internal abstract class AbstractAvroBinaryDecoder(
     final override val avro: Avro,
-    protected val binaryDecoder: AvroBinaryDecoder,
+    protected val binaryReader: AvroBinaryReader,
 ) : AbstractInterceptingDecoder(), AvroDecoder {
     /**
      * The writer schema of the value being decoded; a union until [decodeAndResolveUnion] selects its branch.
@@ -52,7 +49,7 @@ internal abstract class AbstractAvroDirectDecoder(
      *
      * [NO_ELEMENT_SCHEMA] while no field or item is begun, on a record or block decoder just begun: that marker is a
      * union, so the reads that resolve a union first ([currentWriterSchema], [decodeNotNullMark],
-     * [decodeSerializableValue]) meet it on their union path and fail there with [noWriterSchemaError], and the other
+     * [decodeSerializableValue]) meet it on their union path and fail there with [noElementBegunError], and the other
      * reads match none of the types they decode and fail on their error path, which checks for it too. The check for a
      * field not begun thus costs nothing to a value of a field that is.
      */
@@ -99,10 +96,10 @@ internal abstract class AbstractAvroDirectDecoder(
      * created), rather than by a flag in this class, which would make every decoder 8 bytes larger on the JVM. The
      * polymorphic decoder has no such index and a flag of its own, which costs it nothing.
      */
-    private var exactRecordDecoder: ExactRecordDirectDecoder? = null
-    private var recordDecoder: RecordDirectDecoder? = null
-    private var arrayBlockDecoder: ArrayBlockDirectDecoder? = null
-    private var mapBlockDecoder: MapBlockDirectDecoder? = null
+    private var exactRecordDecoder: ExactRecordDecoder? = null
+    private var recordDecoder: RecordDecoder? = null
+    private var arrayBlockDecoder: ArrayBlockDecoder? = null
+    private var mapBlockDecoder: MapBlockDecoder? = null
     private var polymorphicDecoder: PolymorphicDecoder? = null
 
     override val serializersModule: SerializersModule
@@ -152,7 +149,7 @@ internal abstract class AbstractAvroDirectDecoder(
     }
 
     /** The checked item count of the next block of the array or map being decoded, once its first block is read. */
-    private fun readNextBlockSize(isMap: Boolean): Int = checkBlockSize(if (isMap) binaryDecoder.mapNext() else binaryDecoder.arrayNext(), firstBlock = false)
+    private fun readNextBlockSize(isMap: Boolean): Int = checkBlockSize(if (isMap) binaryReader.mapNext() else binaryReader.arrayNext(), firstBlock = false)
 
     /**
      * The item count of the array or map block that [beginStructure] begins: the one [decodeCollectionBlocks] already
@@ -166,26 +163,27 @@ internal abstract class AbstractAvroDirectDecoder(
             return blockSize
         }
         if (state != -1) return readNextBlockSize(isMap)
-        return checkBlockSize(if (isMap) binaryDecoder.readMapStart() else binaryDecoder.readArrayStart(), firstBlock = true)
+        return checkBlockSize(if (isMap) binaryReader.readMapStart() else binaryReader.readArrayStart(), firstBlock = true)
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder {
         return when (descriptor.kind) {
             StructureKind.LIST ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.ARRAY -> arrayBlockDecoder().reset(currentAvroSchema, beginBlock(isMap = false))
+                    AvroSchema.Type.ARRAY -> arrayBlockDecoder().reset(currentAvroSchema.asType<AvroSchema.ArraySchema>(), beginBlock(isMap = false))
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
 
             StructureKind.MAP ->
                 when (currentAvroSchema.type) {
-                    AvroSchema.Type.MAP -> mapBlockDecoder().reset(currentAvroSchema, beginBlock(isMap = true))
+                    AvroSchema.Type.MAP -> mapBlockDecoder().reset(currentAvroSchema.asType<AvroSchema.MapSchema>(), beginBlock(isMap = true))
 
                     AvroSchema.Type.RECORD ->
-                        RecordAsMapDirectDecoder(
-                            currentAvroSchema,
+                        RecordAsMapDecoder(
+                            currentAvroSchema.asType<AvroSchema.RecordSchema>(),
                             avro,
-                            binaryDecoder
+                            binaryReader
                         )
 
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.MAP)
@@ -200,7 +198,7 @@ internal abstract class AbstractAvroDirectDecoder(
             is PolymorphicKind -> {
                 // a union is read by the polymorphic decoder: the marker of no field begun must not reach it
                 val schema = currentAvroSchema
-                if (schema === NO_ELEMENT_SCHEMA) throw noWriterSchemaError()
+                if (schema === NO_ELEMENT_SCHEMA) throw noElementBegunError()
                 polymorphicDecoder(descriptor, schema)
             }
 
@@ -246,10 +244,10 @@ internal abstract class AbstractAvroDirectDecoder(
         descriptor: SerialDescriptor,
         fieldSchemas: Array<AvroSchema>,
         nullableFields: Array<NullableUnionField?>,
-    ): ExactRecordDirectDecoder {
+    ): ExactRecordDecoder {
         val kept = exactRecordDecoder
         if (kept != null && !kept.inUse) return kept.reset(writerRecordSchema, descriptor, fieldSchemas, nullableFields)
-        val decoder = ExactRecordDirectDecoder(avro, binaryDecoder, writerRecordSchema, descriptor, fieldSchemas, nullableFields)
+        val decoder = ExactRecordDecoder(avro, binaryReader, writerRecordSchema, descriptor, fieldSchemas, nullableFields)
         if (kept == null) exactRecordDecoder = decoder
         return decoder
     }
@@ -262,28 +260,28 @@ internal abstract class AbstractAvroDirectDecoder(
         writerRecordSchema: AvroSchema,
         descriptor: SerialDescriptor,
         decodingSteps: Array<DecodingStep>,
-    ): RecordDirectDecoder {
+    ): RecordDecoder {
         val kept = recordDecoder
         if (kept != null && !kept.inUse) return kept.reset(writerRecordSchema, descriptor, decodingSteps)
-        val decoder = RecordDirectDecoder(avro, binaryDecoder, writerRecordSchema, descriptor, decodingSteps)
+        val decoder = RecordDecoder(avro, binaryReader, writerRecordSchema, descriptor, decodingSteps)
         if (kept == null) recordDecoder = decoder
         return decoder
     }
 
     /** The array block decoder to begin a block on: the one this decoder keeps, unless it is still in use. */
-    private fun arrayBlockDecoder(): ArrayBlockDirectDecoder {
+    private fun arrayBlockDecoder(): ArrayBlockDecoder {
         val kept = arrayBlockDecoder
         if (kept != null && !kept.inUse) return kept
-        val decoder = ArrayBlockDirectDecoder(avro, binaryDecoder)
+        val decoder = ArrayBlockDecoder(avro, binaryReader)
         if (kept == null) arrayBlockDecoder = decoder
         return decoder
     }
 
     /** The map block decoder to begin a block on: the one this decoder keeps, unless it is still in use. */
-    private fun mapBlockDecoder(): MapBlockDirectDecoder {
+    private fun mapBlockDecoder(): MapBlockDecoder {
         val kept = mapBlockDecoder
         if (kept != null && !kept.inUse) return kept
-        val decoder = MapBlockDirectDecoder(avro, binaryDecoder)
+        val decoder = MapBlockDecoder(avro, binaryReader)
         if (kept == null) mapBlockDecoder = decoder
         return decoder
     }
@@ -301,7 +299,7 @@ internal abstract class AbstractAvroDirectDecoder(
             kept.reset(descriptor, schema)
             return kept
         }
-        val decoder = PolymorphicDecoder(avro, descriptor, schema, binaryDecoder)
+        val decoder = PolymorphicDecoder(avro, descriptor, schema, binaryReader)
         if (kept == null) polymorphicDecoder = decoder
         return decoder
     }
@@ -342,46 +340,54 @@ internal abstract class AbstractAvroDirectDecoder(
 
     /** Reads the branch of [union] the value is written with, and makes it the [currentAvroSchema]. */
     private fun resolveUnion(union: AvroSchema) {
-        if (union === NO_ELEMENT_SCHEMA) throw noWriterSchemaError()
-        val branches = union.types
-        val index = binaryDecoder.readIndex()
+        if (union === NO_ELEMENT_SCHEMA) throw noElementBegunError()
+        val branches = union.asType<AvroSchema.UnionSchema>().types
+        val index = binaryReader.readIndex()
         if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, union)
         currentAvroSchema = branches[index]
     }
 
     /**
-     * What this decoder throws when its writer schema is asked for while no field or item is begun
-     * ([NO_ELEMENT_SCHEMA]): a reused decoder fails there as a new one does, instead of answering with what its previous
-     * structure left behind.
+     * Reports the raw [currentAvroSchema] rather than [currentWriterSchema], which would read a union's index; and fails as
+     * a misuse when no field or item is begun.
      */
-    internal open fun noWriterSchemaError(): Throwable = noElementBegunError()
+    internal fun unsupportedWriterTypeError(
+        mainType: AvroSchema.Type,
+        vararg fallbackTypes: AvroSchema.Type,
+    ): Throwable {
+        val schema = currentAvroSchema
+        if (schema === NO_ELEMENT_SCHEMA) return noElementBegunError()
+        return unsupportedWriterTypeError(schema, mainType, fallbackTypes)
+    }
 
     /** The symbol of the enum index read from the input, checked against the writer schema's symbols. */
     private fun readEnumSymbol(): String {
-        val symbols = currentAvroSchema.enumSymbols
-        val index = binaryDecoder.readEnum()
+        val symbols = currentAvroSchema.asType<AvroSchema.EnumSchema>().symbols
+        val index = binaryReader.readEnum()
         if (index < 0 || index >= symbols.size) throw enumIndexOutOfRangeError(index, currentAvroSchema)
         return symbols[index]
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     override fun decodeNotNullMark(): Boolean {
         decodeAndResolveUnion()
 
         return currentAvroSchema.type != AvroSchema.Type.NULL
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     override fun decodeNull(): Nothing? {
         if (currentAvroSchema.type != AvroSchema.Type.NULL) {
             throw unsupportedWriterTypeError(AvroSchema.Type.NULL)
         }
-        binaryDecoder.readNull()
+        binaryReader.readNull()
         return null
     }
 
     override fun decodeBoolean(): Boolean {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.BOOLEAN -> binaryDecoder.readBoolean()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Boolean") { it.toBooleanStrict() }
+            AvroSchema.Type.BOOLEAN -> binaryReader.readBoolean()
+            AvroSchema.Type.STRING -> binaryReader.readString().convertDecoded(AvroSchema.Type.STRING, "Boolean") { it.toBooleanStrict() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.BOOLEAN, AvroSchema.Type.STRING)
         }
     }
@@ -396,65 +402,65 @@ internal abstract class AbstractAvroDirectDecoder(
 
     override fun decodeInt(): Int {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.INT -> binaryDecoder.readInt()
-            AvroSchema.Type.LONG -> binaryDecoder.readLong().toIntExact()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Int") { it.toInt() }
+            AvroSchema.Type.INT -> binaryReader.readInt()
+            AvroSchema.Type.LONG -> binaryReader.readLong().toIntExact()
+            AvroSchema.Type.STRING -> binaryReader.readString().convertDecoded(AvroSchema.Type.STRING, "Int") { it.toInt() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeLong(): Long {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.LONG -> binaryDecoder.readLong()
-            AvroSchema.Type.INT -> binaryDecoder.readInt().toLong()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Long") { it.toLong() }
+            AvroSchema.Type.LONG -> binaryReader.readLong()
+            AvroSchema.Type.INT -> binaryReader.readInt().toLong()
+            AvroSchema.Type.STRING -> binaryReader.readString().convertDecoded(AvroSchema.Type.STRING, "Long") { it.toLong() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.LONG, AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeFloat(): Float {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.FLOAT -> binaryDecoder.readFloat()
-            AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble().toFloatExact()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Float") { it.toFloat() }
+            AvroSchema.Type.FLOAT -> binaryReader.readFloat()
+            AvroSchema.Type.DOUBLE -> binaryReader.readDouble().toFloatExact()
+            AvroSchema.Type.STRING -> binaryReader.readString().convertDecoded(AvroSchema.Type.STRING, "Float") { it.toFloat() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.FLOAT, AvroSchema.Type.DOUBLE, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeDouble(): Double {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.FLOAT -> binaryDecoder.readFloat().toDouble()
-            AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble()
-            AvroSchema.Type.STRING -> binaryDecoder.readString().convertDecoded(AvroSchema.Type.STRING, "Double") { it.toDouble() }
+            AvroSchema.Type.FLOAT -> binaryReader.readFloat().toDouble()
+            AvroSchema.Type.DOUBLE -> binaryReader.readDouble()
+            AvroSchema.Type.STRING -> binaryReader.readString().convertDecoded(AvroSchema.Type.STRING, "Double") { it.toDouble() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.DOUBLE, AvroSchema.Type.FLOAT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeChar(): Char {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.INT -> binaryDecoder.readInt().toChar()
-            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes().decodeUtf8().convertDecoded(AvroSchema.Type.STRING, "Char") { it.single() }
+            AvroSchema.Type.INT -> binaryReader.readInt().toChar()
+            AvroSchema.Type.STRING -> binaryReader.readString().convertDecoded(AvroSchema.Type.STRING, "Char") { it.single() }
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeString(): String {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.STRING -> binaryDecoder.readString()
+            AvroSchema.Type.STRING -> binaryReader.readString()
 
-            AvroSchema.Type.BYTES -> binaryDecoder.readBytes().decodeUtf8()
+            AvroSchema.Type.BYTES -> binaryReader.readBytes().decodeUtf8()
 
-            AvroSchema.Type.FIXED -> binaryDecoder.readFixed(currentAvroSchema.fixedSize).decodeUtf8()
+            AvroSchema.Type.FIXED -> binaryReader.readFixed(currentAvroSchema.asType<AvroSchema.FixedSchema>().size).decodeUtf8()
 
-            AvroSchema.Type.BOOLEAN -> binaryDecoder.readBoolean().toString()
+            AvroSchema.Type.BOOLEAN -> binaryReader.readBoolean().toString()
 
-            AvroSchema.Type.INT -> binaryDecoder.readInt().toString()
+            AvroSchema.Type.INT -> binaryReader.readInt().toString()
 
-            AvroSchema.Type.LONG -> binaryDecoder.readLong().toString()
+            AvroSchema.Type.LONG -> binaryReader.readLong().toString()
 
-            AvroSchema.Type.FLOAT -> binaryDecoder.readFloat().toString()
+            AvroSchema.Type.FLOAT -> binaryReader.readFloat().toString()
 
-            AvroSchema.Type.DOUBLE -> binaryDecoder.readDouble().toString()
+            AvroSchema.Type.DOUBLE -> binaryReader.readDouble().toString()
 
             AvroSchema.Type.ENUM -> readEnumSymbol()
 
@@ -483,7 +489,7 @@ internal abstract class AbstractAvroDirectDecoder(
             }
 
             AvroSchema.Type.STRING -> {
-                val enumSymbol = binaryDecoder.readString()
+                val enumSymbol = binaryReader.readString()
                 enumDescriptor.getEnumIndex(enumSymbol)
             }
 
@@ -505,25 +511,25 @@ internal abstract class AbstractAvroDirectDecoder(
 
     override fun decodeBytes(): ByteArray {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.BYTES -> binaryDecoder.readBytes()
-            AvroSchema.Type.FIXED -> binaryDecoder.readFixed(currentAvroSchema.fixedSize)
-            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes()
+            AvroSchema.Type.BYTES -> binaryReader.readBytes()
+            AvroSchema.Type.FIXED -> binaryReader.readFixed(currentAvroSchema.asType<AvroSchema.FixedSchema>().size)
+            AvroSchema.Type.STRING -> binaryReader.readStringBytes()
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.BYTES, AvroSchema.Type.FIXED, AvroSchema.Type.STRING)
         }
     }
 
     override fun decodeFixed(): ByteArray {
         return when (currentAvroSchema.type) {
-            AvroSchema.Type.BYTES -> binaryDecoder.readBytes()
-            AvroSchema.Type.FIXED -> binaryDecoder.readFixed(currentAvroSchema.fixedSize)
-            AvroSchema.Type.STRING -> binaryDecoder.readStringBytes()
+            AvroSchema.Type.BYTES -> binaryReader.readBytes()
+            AvroSchema.Type.FIXED -> binaryReader.readFixed(currentAvroSchema.asType<AvroSchema.FixedSchema>().size)
+            AvroSchema.Type.STRING -> binaryReader.readStringBytes()
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.FIXED, AvroSchema.Type.BYTES, AvroSchema.Type.STRING)
         }
     }
 }
 
 /**
- * The [AbstractAvroDirectDecoder.currentAvroSchema] of a record or block decoder while no field or item is begun. Only
+ * The [AbstractAvroBinaryDecoder.currentAvroSchema] of a record or block decoder while no field or item is begun. Only
  * ever compared by identity; never a writer schema, as it is no schema the decoders build. A union, so that the reads
  * that resolve a union first meet it on their union path.
  */

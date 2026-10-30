@@ -10,8 +10,7 @@ import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.ensureFixedSize
 import com.github.avrokotlin.avro4k.fullNameOrAliasMismatchError
-import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
-import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
@@ -176,10 +175,10 @@ public object AvroDurationSerializer : AvroSerializer<AvroDuration>("com.github.
             val schema = currentWriterSchema
             when (schema.type) {
                 AvroSchema.Type.FIXED -> {
-                    if (schema.knownLogicalTypeName == LOGICAL_TYPE_NAME && schema.fixedSize == DURATION_BYTES) {
+                    if (schema.knownLogicalTypeName == LOGICAL_TYPE_NAME && schema.asType<AvroSchema.FixedSchema>().size == DURATION_BYTES) {
                         decodeDuration(decodeFixed())
                     } else {
-                        throw UnexpectedDecodeSchemaError(descriptor.serialName, AvroSchema.Type.FIXED, AvroSchema.Type.STRING)
+                        throw AvroSchemaMismatchException(descriptor.serialName, AvroSchema.Type.FIXED, AvroSchema.Type.STRING)
                     }
                 }
 

@@ -1,5 +1,3 @@
-@file:OptIn(kotlin.time.ExperimentalTime::class)
-
 package com.github.avrokotlin.avro4k.serializer
 
 import io.kotest.assertions.throwables.shouldThrow

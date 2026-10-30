@@ -187,7 +187,6 @@ private object AvroByteArraySerializer : AvroSerializer<ByteArray>("kotlin.ByteA
         return decoder.decodeBytes()
     }
 
-    @OptIn(ExperimentalEncodingApi::class)
     override fun serializeGeneric(
         encoder: Encoder,
         value: ByteArray,
@@ -195,7 +194,6 @@ private object AvroByteArraySerializer : AvroSerializer<ByteArray>("kotlin.ByteA
         encoder.encodeString(Base64.Mime.encode(value))
     }
 
-    @OptIn(ExperimentalEncodingApi::class)
     override fun deserializeGeneric(decoder: Decoder): ByteArray {
         return Base64.Mime.decode(decoder.decodeString())
     }

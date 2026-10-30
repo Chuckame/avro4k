@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class, ExperimentalTime::class)
-
 package com.github.avrokotlin.avro4k.exceptions
 
 import com.github.avrokotlin.avro4k.Avro
@@ -7,6 +5,7 @@ import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ArraySerializer
@@ -33,6 +32,7 @@ import kotlin.uuid.Uuid
  * exception or an error: random bytes, and valid encodings with a few bytes overwritten, inserted, removed or cut off,
  * decoded with and without validation.
  */
+@OptIn(ExperimentalSerializationApi::class)
 class RandomBytesDecodingTest {
     // 2,000 decodes in four tests of their own seed: on Kotlin/JS, mocha fails a test that takes more than two seconds
     @Test

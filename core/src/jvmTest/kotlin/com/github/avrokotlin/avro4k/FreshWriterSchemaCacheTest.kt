@@ -2,8 +2,8 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.apacheConversionCacheSize
 import com.github.avrokotlin.avro4k.internal.apacheConversionEqualityCacheSize
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
-import com.github.avrokotlin.avro4k.internal.decoder.direct.AvroValueDirectDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryReader
+import com.github.avrokotlin.avro4k.internal.decoder.AvroValueDecoder
 import com.github.avrokotlin.avro4k.serializer.AnySerializer
 import io.kotest.assertions.fail
 import io.kotest.core.spec.style.StringSpec
@@ -157,7 +157,7 @@ internal class FreshWriterSchemaCacheTest : StringSpec({
             deserializer: DeserializationStrategy<T>,
             bytes: ByteArray,
         ): T {
-            return AvroValueDirectDecoder(writerSchema, this, ByteArrayDecoder(bytes)).decodeSerializableValue(deserializer)
+            return AvroValueDecoder(writerSchema, this, ByteArrayBinaryReader(bytes)).decodeSerializableValue(deserializer)
         }
     }
 }

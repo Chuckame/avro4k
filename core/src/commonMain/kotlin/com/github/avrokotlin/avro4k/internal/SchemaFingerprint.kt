@@ -8,7 +8,6 @@ import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
 import com.github.avrokotlin.avro4k.AvroSchema.NamedSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
-import com.github.avrokotlin.avro4k.internal.schema.getName
 
 /*
  * The Parsing Canonical Form of a schema and its CRC-64-AVRO fingerprint, in pure Kotlin over the common
@@ -97,7 +96,7 @@ private fun appendParsingCanonicalForm(
         is NamedSchema -> appendNamed(schema, writtenNames, out)
 
         // boolean, int, long, float, double, bytes, string, null
-        else -> out.append('"').append(schema.type.getName()).append('"')
+        else -> out.append('"').append(schema.type.typeName).append('"')
     }
 }
 
@@ -112,7 +111,7 @@ private fun appendNamed(
         out.append('"').append(fullName).append('"')
         return
     }
-    out.append("{\"name\":\"").append(fullName).append("\",\"type\":\"").append(schema.type.getName()).append('"')
+    out.append("{\"name\":\"").append(fullName).append("\",\"type\":\"").append(schema.type.typeName).append('"')
     when (schema) {
         is RecordSchema -> {
             out.append(",\"fields\":[")

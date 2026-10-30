@@ -5,7 +5,7 @@ import com.github.avrokotlin.avro4k.AvroSchema
 
 internal class AvroValueGenericEncoder(
     override val avro: Avro,
-    override var currentAvroSchema: AvroSchema,
+    override var currentWriterSchema: AvroSchema,
     private val onEncoded: (Any?) -> Unit,
 ) : AbstractAvroGenericEncoder() {
     override fun encodeValue(value: Any) {

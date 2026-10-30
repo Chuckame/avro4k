@@ -1,24 +1,24 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryWriter
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import org.apache.avro.io.EncoderFactory
 import org.apache.avro.util.Utf8
 import java.io.ByteArrayOutputStream
 
-class ByteArrayEncoderApacheTest : StringSpec() {
+class ByteArrayBinaryWriterApacheTest : StringSpec() {
     init {
         "basic string is serialized correctly" {
-            val encoder = ByteArrayEncoder()
+            val encoder = ByteArrayBinaryWriter()
             val string = "test"
             encoder.writeString(string)
             encoder.toByteArray() shouldBe byteArrayOf(4.zigZagByte()) + string.encodeToByteArray()
         }
 
         "special chars in string are serialized correctly" {
-            val encoder = ByteArrayEncoder()
+            val encoder = ByteArrayBinaryWriter()
             val string = "àûTöç"
             encoder.writeString(string)
             encoder.toByteArray() shouldBe byteArrayOf(9.zigZagByte()) + string.encodeToByteArray()
@@ -27,7 +27,7 @@ class ByteArrayEncoderApacheTest : StringSpec() {
         "every method writes the same bytes as Apache's BinaryEncoder" {
             // Each case writes through the ABI on one side, and makes the matching calls on Apache's encoder on the other
             fun case(
-                abiCalls: AvroBinaryEncoder.() -> Unit,
+                abiCalls: AvroBinaryWriter.() -> Unit,
                 apacheCalls: org.apache.avro.io.Encoder.() -> Unit,
             ) = abiCalls to apacheCalls
 
@@ -100,7 +100,7 @@ class ByteArrayEncoderApacheTest : StringSpec() {
                     })
                 )
             cases.forEachIndexed { index, (abiCalls, apacheCalls) ->
-                val byteArrayEncoder = ByteArrayEncoder().apply(abiCalls)
+                val byteArrayEncoder = ByteArrayBinaryWriter().apply(abiCalls)
 
                 val output = ByteArrayOutputStream()
                 val apacheEncoder = EncoderFactory.get().directBinaryEncoder(output, null)

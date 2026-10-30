@@ -16,7 +16,7 @@ import com.github.avrokotlin.avro4k.InternalAvro4kApi
  * costs the same elsewhere. An instance belongs to a single decoding call and is never shared.
  */
 @InternalAvro4kApi
-public abstract class AvroBinaryDecoder {
+public abstract class AvroBinaryReader {
     /** Reads nothing: Avro's null has no binary representation. */
     public abstract fun readNull()
 

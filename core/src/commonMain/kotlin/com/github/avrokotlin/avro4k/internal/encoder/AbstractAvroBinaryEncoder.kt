@@ -1,43 +1,20 @@
-package com.github.avrokotlin.avro4k.internal.encoder.direct
+package com.github.avrokotlin.avro4k.internal.encoder
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.encoder.AbstractAvroEncoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryWriter
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.modules.SerializersModule
 
-/**
- * Encodes one value written with [currentAvroSchema]: the root of an encode call, or the value of a polymorphic
- * structure, whose encoder keeps it and hands it each next value through [reset].
- */
-internal class AvroValueDirectEncoder(
-    override var currentAvroSchema: AvroSchema,
-    avro: Avro,
-    binaryEncoder: AvroBinaryEncoder,
-) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
-    /**
-     * Makes this encoder encode a next value written with [schema], as a new one would: no union branch selected yet. Its
-     * own child encoders are kept, each with its own guard.
-     */
-    fun reset(schema: AvroSchema): AvroValueDirectEncoder {
-        currentAvroSchema = schema
-        clearSelectedUnionIndex()
-        return this
-    }
-}
-
-internal sealed class AbstractAvroDirectEncoder(
+internal sealed class AbstractAvroBinaryEncoder(
     override val avro: Avro,
-    protected val binaryEncoder: AvroBinaryEncoder,
+    protected val binaryWriter: AvroBinaryWriter,
 ) : AbstractAvroEncoder() {
     /**
      * The encoders of the records, arrays, maps and polymorphic values this encoder begins, each created on first use and
@@ -51,9 +28,9 @@ internal sealed class AbstractAvroDirectEncoder(
      */
     private var exactRecordEncoder: RecordContiguousExactEncoder? = null
     private var skippingRecordEncoder: RecordContiguousSkippingEncoder? = null
-    private var arrayEncoder: ArrayDirectEncoder? = null
-    private var mapEncoder: MapDirectEncoder? = null
-    private var polymorphicEncoder: PolymorphicDirectEncoder? = null
+    private var arrayEncoder: ArrayEncoder? = null
+    private var mapEncoder: MapEncoder? = null
+    private var polymorphicEncoder: PolymorphicEncoder? = null
 
     /**
      * Whether this encoder encodes a structure its parent began and that is not ended yet, from [beginReuse] to
@@ -76,7 +53,7 @@ internal sealed class AbstractAvroDirectEncoder(
      */
     override fun getRecordEncoder(descriptor: SerialDescriptor): CompositeEncoder {
         // the caller checked the type: a record
-        val schema = currentAvroSchema as RecordSchema
+        val schema = currentWriterSchema as RecordSchema
         val exact = exactRecordEncoder
         if (exact != null && exact.schema === schema && exact.resolvedDescriptor === descriptor) {
             return exactRecordEncoder(schema, descriptor)
@@ -96,7 +73,7 @@ internal sealed class AbstractAvroDirectEncoder(
         when (val workflow = avro.recordResolver.resolveFields(schema, descriptor).encoding) {
             is EncodingWorkflow.ExactMatch -> exactRecordEncoder(schema, descriptor)
             is EncodingWorkflow.ContiguousWithSkips -> skippingRecordEncoder(schema, descriptor, workflow.fieldsToSkip)
-            is EncodingWorkflow.NonContiguous -> reorderingRecordEncoder(schema, workflow, avro, binaryEncoder)
+            is EncodingWorkflow.NonContiguous -> reorderingRecordEncoder(schema, workflow, avro, binaryWriter)
             is EncodingWorkflow.MissingWriterFields -> throw missingFieldsError(schema, workflow, descriptor)
         }
 
@@ -107,7 +84,7 @@ internal sealed class AbstractAvroDirectEncoder(
     ): RecordContiguousExactEncoder {
         val kept = exactRecordEncoder
         if (kept != null && !kept.inUse) return kept.reset(schema, descriptor)
-        val encoder = RecordContiguousExactEncoder(schema, descriptor, avro, binaryEncoder)
+        val encoder = RecordContiguousExactEncoder(schema, descriptor, avro, binaryWriter)
         if (kept == null) exactRecordEncoder = encoder
         return encoder.reset(schema, descriptor)
     }
@@ -120,16 +97,16 @@ internal sealed class AbstractAvroDirectEncoder(
     ): RecordContiguousSkippingEncoder {
         val kept = skippingRecordEncoder
         if (kept != null && !kept.inUse) return kept.reset(schema, descriptor, skippedElements)
-        val encoder = RecordContiguousSkippingEncoder(schema, descriptor, skippedElements, avro, binaryEncoder)
+        val encoder = RecordContiguousSkippingEncoder(schema, descriptor, skippedElements, avro, binaryWriter)
         if (kept == null) skippingRecordEncoder = encoder
         return encoder.reset(schema, descriptor, skippedElements)
     }
 
     override fun getPolymorphicEncoder(descriptor: SerialDescriptor): CompositeEncoder {
-        val schema = currentAvroSchema
+        val schema = currentWriterSchema
         val kept = polymorphicEncoder
         if (kept != null && !kept.inUse) return kept.reset(schema)
-        val encoder = PolymorphicDirectEncoder(avro, schema, binaryEncoder)
+        val encoder = PolymorphicEncoder(avro, schema, binaryWriter)
         if (kept == null) polymorphicEncoder = encoder
         return encoder.reset(schema)
     }
@@ -138,14 +115,14 @@ internal sealed class AbstractAvroDirectEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
-        return arrayEncoder().reset(currentAvroSchema, collectionSize)
+        return arrayEncoder().reset(currentWriterSchema.asType<AvroSchema.ArraySchema>(), collectionSize)
     }
 
     /** The array encoder to begin an array on: the one this encoder keeps, unless it is still in use. */
-    private fun arrayEncoder(): ArrayDirectEncoder {
+    private fun arrayEncoder(): ArrayEncoder {
         val kept = arrayEncoder
         if (kept != null && !kept.inUse) return kept
-        val encoder = ArrayDirectEncoder(avro, binaryEncoder)
+        val encoder = ArrayEncoder(avro, binaryWriter)
         if (kept == null) arrayEncoder = encoder
         return encoder
     }
@@ -154,14 +131,14 @@ internal sealed class AbstractAvroDirectEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
-        return mapEncoder().reset(currentAvroSchema, collectionSize)
+        return mapEncoder().reset(currentWriterSchema.asType<AvroSchema.MapSchema>(), collectionSize)
     }
 
     /** The map encoder to begin a map on: the one this encoder keeps, unless it is still in use. */
-    private fun mapEncoder(): MapDirectEncoder {
+    private fun mapEncoder(): MapEncoder {
         val kept = mapEncoder
         if (kept != null && !kept.inUse) return kept
-        val encoder = MapDirectEncoder(avro, binaryEncoder)
+        val encoder = MapEncoder(avro, binaryWriter)
         if (kept == null) mapEncoder = encoder
         return encoder
     }
@@ -180,43 +157,43 @@ internal sealed class AbstractAvroDirectEncoder(
     }
 
     override fun encodeUnionIndexUnchecked(index: Int) {
-        binaryEncoder.writeIndex(index)
+        binaryWriter.writeIndex(index)
     }
 
     override fun encodeNullUnchecked() {
-        binaryEncoder.writeNull()
+        binaryWriter.writeNull()
     }
 
     override fun encodeBytesUnchecked(value: ByteArray) {
-        binaryEncoder.writeBytes(value)
+        binaryWriter.writeBytes(value)
     }
 
     override fun encodeBooleanUnchecked(value: Boolean) {
-        binaryEncoder.writeBoolean(value)
+        binaryWriter.writeBoolean(value)
     }
 
     override fun encodeIntUnchecked(value: Int) {
-        binaryEncoder.writeInt(value)
+        binaryWriter.writeInt(value)
     }
 
     override fun encodeLongUnchecked(value: Long) {
-        binaryEncoder.writeLong(value)
+        binaryWriter.writeLong(value)
     }
 
     override fun encodeFloatUnchecked(value: Float) {
-        binaryEncoder.writeFloat(value)
+        binaryWriter.writeFloat(value)
     }
 
     override fun encodeDoubleUnchecked(value: Double) {
-        binaryEncoder.writeDouble(value)
+        binaryWriter.writeDouble(value)
     }
 
     override fun encodeStringUnchecked(utf8: ByteArray) {
-        binaryEncoder.writeString(utf8)
+        binaryWriter.writeString(utf8)
     }
 
     override fun encodeStringUnchecked(value: String) {
-        binaryEncoder.writeString(value)
+        binaryWriter.writeString(value)
     }
 
     /**
@@ -225,15 +202,15 @@ internal sealed class AbstractAvroDirectEncoder(
      * unknown writer symbol, never written in place of a value.
      */
     override fun encodeEnumUnchecked(symbol: String) {
-        val enumSchema = currentAvroSchema as AvroSchema.EnumSchema
+        val enumSchema = currentWriterSchema as AvroSchema.EnumSchema
         val index =
             enumSchema.getSymbolIndexOrNull(symbol)
                 ?: throw AvroSchemaMismatchException("Enum symbol $symbol not found in schema ${enumSchema.toSchemaJsonString()}")
-        binaryEncoder.writeEnum(index)
+        binaryWriter.writeEnum(index)
     }
 
     override fun encodeFixedUnchecked(value: ByteArray) {
-        binaryEncoder.writeFixed(value)
+        binaryWriter.writeFixed(value)
     }
 }
 
@@ -243,67 +220,3 @@ internal sealed class AbstractAvroDirectEncoder(
  */
 internal fun noElementBegunError(): IllegalStateException =
     IllegalStateException("No field or item is being encoded: encodeElement or an encode...Element call begins one")
-
-/**
- * Encodes the value of a polymorphic structure, the discriminator being the union branch its value selects. Its parent
- * keeps it and hands it each next polymorphic structure through [reset]; it keeps the encoder of its values in turn.
- */
-@OptIn(ExperimentalSerializationApi::class)
-internal class PolymorphicDirectEncoder(
-    private val avro: Avro,
-    schema: AvroSchema,
-    private val binaryEncoder: AvroBinaryEncoder,
-) : AbstractEncoder() {
-    private var schema: AvroSchema = schema
-
-    /** The encoder of this structure's values, created on first use. */
-    private var valueEncoder: AvroValueDirectEncoder? = null
-
-    /** From [reset] to [endStructure], as for the other encoders' `inUse`. */
-    var inUse = false
-        private set
-
-    /**
-     * Whether [valueEncoder] encodes a value not done yet: a value serializer that encodes on this encoder again from
-     * inside its value, or a value that failed, leaves it set, and every next value gets a new encoder of its own, as
-     * before values were reused.
-     */
-    private var encodingValue = false
-
-    override val serializersModule: SerializersModule
-        get() = avro.serializersModule
-
-    /** Begins a polymorphic structure written with [schema]. Its value encoder is kept, with its own guard. */
-    fun reset(schema: AvroSchema): PolymorphicDirectEncoder {
-        this.schema = schema
-        inUse = true
-        return this
-    }
-
-    override fun endStructure(descriptor: SerialDescriptor) {
-        inUse = false
-    }
-
-    override fun encodeElement(
-        descriptor: SerialDescriptor,
-        index: Int,
-    ): Boolean {
-        // index 0 is the type discriminator, index 1 is the value itself
-        // we don't need the type discriminator here
-        return index == 1
-    }
-
-    override fun <T> encodeSerializableValue(
-        serializer: SerializationStrategy<T>,
-        value: T,
-    ) {
-        if (encodingValue) {
-            AvroValueDirectEncoder(schema, avro, binaryEncoder).encodeSerializableValue(serializer, value)
-            return
-        }
-        val encoder = valueEncoder?.reset(schema) ?: AvroValueDirectEncoder(schema, avro, binaryEncoder).also { valueEncoder = it }
-        encodingValue = true
-        encoder.encodeSerializableValue(serializer, value)
-        encodingValue = false
-    }
-}

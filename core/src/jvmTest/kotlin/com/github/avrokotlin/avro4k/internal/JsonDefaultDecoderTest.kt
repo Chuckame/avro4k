@@ -197,7 +197,7 @@ internal class JsonDefaultDecoderTest : StringSpec({
     }
 
     "an inline element reading its enum default with decodeEnum gets the symbol's index" {
-        // RecordDirectDecoder.decodeEnum used to decode a default with Int.serializer(), so "B".toInt() failed
+        // RecordDecoder.decodeEnum used to decode a default with Int.serializer(), so "B".toInt() failed
         val writerSchema = SchemaBuilder.record("EnumHolder").fields().requiredString("name").endRecord()
         val bytes = Avro.encodeWith(writerSchema, serializer<NameOnly>(), NameOnly("abc"))
 

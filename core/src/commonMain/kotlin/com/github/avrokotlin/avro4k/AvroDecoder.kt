@@ -1,7 +1,5 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
-import com.github.avrokotlin.avro4k.internal.decoder.direct.NO_ELEMENT_SCHEMA
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.encoding.Decoder
@@ -79,13 +77,14 @@ public interface AvroDecoder : Decoder {
 internal fun AvroDecoder.unsupportedWriterTypeError(
     mainType: AvroSchema.Type,
     vararg fallbackTypes: AvroSchema.Type,
+): Throwable = unsupportedWriterTypeError(currentWriterSchema, mainType, fallbackTypes)
+
+internal fun unsupportedWriterTypeError(
+    schema: AvroSchema,
+    mainType: AvroSchema.Type,
+    fallbackTypes: Array<out AvroSchema.Type>,
 ): Throwable {
     val fallbacksStr = if (fallbackTypes.isNotEmpty()) ", and also not matching to any compatible type (one of ${fallbackTypes.joinToString()})." else ""
-    // the binary decoder's own schema: building the message must not resolve a union by reading its index
-    val directDecoder = this as? AbstractAvroDirectDecoder
-    // a field or item not begun yet has no writer schema to report: the read fails for that reason instead
-    if (directDecoder != null && directDecoder.currentAvroSchema === NO_ELEMENT_SCHEMA) return directDecoder.noWriterSchemaError()
-    val schema = directDecoder?.currentAvroSchema ?: currentWriterSchema
     return AvroSchemaMismatchException(
         "Unsupported schema named '${schema.fullNameForMessages}' for decoded type of $mainType$fallbacksStr. Actual schema: ${schema.toSchemaJsonString()}"
     )

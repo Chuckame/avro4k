@@ -44,7 +44,6 @@ internal val namedTypeFixtures: List<GoldenFixture<*>> =
 @SerialName("custom.Level")
 @AvroDoc("How much")
 @AvroAlias("Amount")
-@OptIn(ExperimentalAvro4kApi::class)
 private enum class Level {
     LOW,
 

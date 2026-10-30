@@ -14,7 +14,7 @@ import com.github.avrokotlin.avro4k.InternalAvro4kApi
  * costs the same elsewhere. An instance belongs to a single encoding call and is never shared.
  */
 @InternalAvro4kApi
-public abstract class AvroBinaryEncoder {
+public abstract class AvroBinaryWriter {
     /** Writes nothing: Avro's null has no binary representation. */
     public abstract fun writeNull()
 

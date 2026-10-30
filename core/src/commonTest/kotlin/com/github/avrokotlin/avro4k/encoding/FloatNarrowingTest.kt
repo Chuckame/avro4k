@@ -7,7 +7,7 @@ import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.fixtures.jvmAndNativeOrJs
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
@@ -43,7 +43,7 @@ class FloatNarrowingTest {
         for ((value, floatBits) in EXACT_DOUBLES) {
             for ((schema, branch) in FLOAT_SCHEMAS) {
                 val expected =
-                    ByteArrayEncoder().apply {
+                    ByteArrayBinaryWriter().apply {
                         if (branch != null) writeIndex(branch)
                         writeFloat(Float.fromBits(floatBits))
                     }.toByteArray()
@@ -131,7 +131,7 @@ class FloatNarrowingTest {
         for ((text, floatBits) in ROUNDED_TEXTS) {
             val expected = jvmAndNativeOrJs(Float.fromBits(floatBits).toDouble(), js = text.toDouble()).toRawBits()
             withClue("binary string $text") {
-                val bytes = ByteArrayEncoder().apply { writeString(text) }.toByteArray()
+                val bytes = ByteArrayBinaryWriter().apply { writeString(text) }.toByteArray()
                 for (avro in AVROS) {
                     avro.decodeFromByteArray(STRING, Float.serializer(), bytes).toDouble().toRawBits() shouldBe expected
                 }
@@ -152,7 +152,7 @@ class FloatNarrowingTest {
     fun `a double field reads a float writer as the value of the float`() {
         for ((text, floatBits) in ROUNDED_TEXTS) {
             val float = Float.fromBits(floatBits)
-            val bytes = ByteArrayEncoder().apply { writeFloat(float) }.toByteArray()
+            val bytes = ByteArrayBinaryWriter().apply { writeFloat(float) }.toByteArray()
             for (avro in AVROS) {
                 withClue("binary float $text") {
                     avro.decodeFromByteArray(FLOAT, Double.serializer(), bytes).toRawBits() shouldBe float.toDouble().toRawBits()
@@ -164,7 +164,7 @@ class FloatNarrowingTest {
     @Test
     fun `a string written to a float schema gives the bytes of the rounded float`() {
         for ((text, floatBits) in ROUNDED_TEXTS) {
-            val expected = ByteArrayEncoder().apply { writeFloat(Float.fromBits(floatBits)) }.toByteArray()
+            val expected = ByteArrayBinaryWriter().apply { writeFloat(Float.fromBits(floatBits)) }.toByteArray()
             for (avro in AVROS) {
                 withClue(text) {
                     avro.encodeToByteArray(FLOAT, String.serializer(), text) shouldBe expected
@@ -270,7 +270,7 @@ class FloatNarrowingTest {
         fun doubleBytes(
             value: Double,
             branch: Int?,
-        ) = ByteArrayEncoder().apply {
+        ) = ByteArrayBinaryWriter().apply {
             if (branch != null) writeIndex(branch)
             writeDouble(value)
         }.toByteArray()

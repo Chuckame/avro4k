@@ -12,8 +12,8 @@ import com.github.avrokotlin.avro4k.AvroSchema.Type
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.internal.apacheToAvro4kUncached
 import com.github.avrokotlin.avro4k.internal.avro4kToApacheUncached
-import com.github.avrokotlin.avro4k.internal.decodeWithBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.encodeWithBinaryEncoder
+import com.github.avrokotlin.avro4k.internal.decodeWithBinaryReader
+import com.github.avrokotlin.avro4k.internal.encodeWithBinaryWriter
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
@@ -38,7 +38,7 @@ import kotlin.random.Random
 
 /**
  * Feeds the same codec call sequences to Apache Avro's `ValidatingEncoder`/`ValidatingDecoder` and to avro4k's
- * [ValidatingAvroBinaryEncoder]/[ValidatingAvroBinaryDecoder], and checks that they accept and reject them alike.
+ * [ValidatingAvroBinaryWriter]/[ValidatingAvroBinaryReader], and checks that they accept and reject them alike.
  *
  * The corpus: every schema of the test resources and the models below. The valid sequences are recorded from encoding
  * and decoding real values with avro4k, or generated from the schema with random choices (union branches, collection
@@ -108,7 +108,7 @@ internal class ValidatingCodecDifferentialTest : StringSpec({
         report.bothRejected shouldBeGreaterThan 1000
     }
 
-    "the direct decoder reads each collection block count once and in order" {
+    "the binary decoder reads each collection block count once and in order" {
         // The decoder reads the count of the next block itself before merging another block into the collection: the
         // codec must still see one count per block, the first one as a collection start, and the closing empty block.
         val serializer = ValidatingCodecDifferentialTest.Blocks.serializer()
@@ -123,7 +123,7 @@ internal class ValidatingCodecDifferentialTest : StringSpec({
                 ValidatingCodecDifferentialTest.Blocks(listOf(1, 2), mapOf("k" to 5L), listOf(listOf(3)), arrayOf("s"), longArrayOf(4), mapOf("m" to 1))
             )
         val severalBlocks =
-            ByteArrayEncoder().apply {
+            ByteArrayBinaryWriter().apply {
                 // list = [1, 2, 3]: a block of one item, a block of two written with its byte size
                 writeBlocks(1, -2) { writeInt(it + 1) }
                 // map = {a: 1, b: 2, c: 3}
@@ -147,7 +147,7 @@ internal class ValidatingCodecDifferentialTest : StringSpec({
                 }
             }.toByteArray()
         val empty =
-            ByteArrayEncoder().apply {
+            ByteArrayBinaryWriter().apply {
                 repeat(5) { writeLong(0) }
                 writeIndex(nullBranch)
             }.toByteArray()
@@ -186,8 +186,8 @@ internal class ValidatingCodecDifferentialTest : StringSpec({
             )
         for ((name, bytes, expected) in cases) {
             withClue(name) {
-                val decoder = RecordingAbiDecoder(ByteArrayDecoder(bytes))
-                Avro.decodeWithBinaryDecoder(schema, serializer, decoder)
+                val decoder = RecordingAbiDecoder(ByteArrayBinaryReader(bytes))
+                Avro.decodeWithBinaryReader(schema, serializer, decoder)
                 decoder.calls shouldBe expected
                 runApacheDecoder(avro4kToApacheUncached(schema), decoder.calls) shouldBe null
                 runAvro4kDecoder(schema, decoder.calls) shouldBe Avro4kResult.Accepted
@@ -204,8 +204,8 @@ internal class ValidatingCodecDifferentialTest : StringSpec({
         val schema = Avro.schema(serializer)
         val bytes = Avro.encodeToByteArray(schema, serializer, ValidatingCodecDifferentialTest.Delegating(listOf(1, 2), listOf(3)))
 
-        val decoder = RecordingAbiDecoder(ByteArrayDecoder(bytes))
-        Avro.decodeWithBinaryDecoder(schema, serializer, decoder)
+        val decoder = RecordingAbiDecoder(ByteArrayBinaryReader(bytes))
+        Avro.decodeWithBinaryReader(schema, serializer, decoder)
 
         decoder.calls shouldBe calls("ARRAY_START(2) INT INT ARRAY_NEXT(0)", "ARRAY_NEXT(1) INT")
     }
@@ -332,7 +332,7 @@ private fun runAvro4kEncoder(
     schema: AvroSchema,
     calls: List<Call>,
 ): Avro4kResult {
-    val encoder = ValidatingAvroBinaryEncoder(NoopAbiEncoder, schema)
+    val encoder = ValidatingAvroBinaryWriter(NoopAbiEncoder, schema)
     return runAvro4k(calls, { encoder.apply(it) }, { encoder.checkDatumComplete() })
 }
 
@@ -341,7 +341,7 @@ private fun runAvro4kDecoder(
     calls: List<Call>,
 ): Avro4kResult {
     val scripted = ScriptedAbiDecoder()
-    val decoder = ValidatingAvroBinaryDecoder(scripted, schema)
+    val decoder = ValidatingAvroBinaryReader(scripted, schema)
     return runAvro4k(calls, {
         scripted.next = it.arg
         decoder.apply(it)
@@ -369,7 +369,7 @@ private inline fun runAvro4k(
     return Avro4kResult.Accepted
 }
 
-private fun AvroBinaryEncoder.apply(call: Call) {
+private fun AvroBinaryWriter.apply(call: Call) {
     when (call.kind) {
         Kind.NULL -> writeNull()
         Kind.BOOLEAN -> writeBoolean(true)
@@ -391,7 +391,7 @@ private fun AvroBinaryEncoder.apply(call: Call) {
     }
 }
 
-private fun AvroBinaryDecoder.apply(call: Call) {
+private fun AvroBinaryReader.apply(call: Call) {
     when (call.kind) {
         Kind.NULL -> readNull()
         Kind.BOOLEAN -> readBoolean()
@@ -623,10 +623,10 @@ private fun <T> modelEntry(
     val entry = CorpusEntry(name, schema, avro4kToApacheUncached(schema))
     for (value in values) {
         val encoder = RecordingAbiEncoder()
-        Avro.encodeWithBinaryEncoder(schema, serializer, value, encoder)
+        Avro.encodeWithBinaryWriter(schema, serializer, value, encoder)
         entry.encoderSequences += encoder.calls
-        val decoder = RecordingAbiDecoder(ByteArrayDecoder(encoder.bytes()))
-        Avro.decodeWithBinaryDecoder(schema, serializer, decoder)
+        val decoder = RecordingAbiDecoder(ByteArrayBinaryReader(encoder.bytes()))
+        Avro.decodeWithBinaryReader(schema, serializer, decoder)
         entry.decoderSequences += decoder.calls
     }
     repeat(RANDOM_SEQUENCES_PER_SCHEMA) { entry.addGenerated(random) }
@@ -758,14 +758,14 @@ private fun calls(vararg groups: String): List<Call> =
  * Writes one collection as one block per count of [blocks], then the closing empty block. A negative count writes a
  * block of as many items with its byte size, as the spec allows. Item `i` counts across the blocks.
  */
-private fun ByteArrayEncoder.writeBlocks(
+private fun ByteArrayBinaryWriter.writeBlocks(
     vararg blocks: Int,
-    writeItem: ByteArrayEncoder.(Int) -> Unit,
+    writeItem: ByteArrayBinaryWriter.(Int) -> Unit,
 ) {
     var item = 0
     for (block in blocks) {
         val count = kotlin.math.abs(block)
-        val content = ByteArrayEncoder().apply { repeat(count) { writeItem(item++) } }.toByteArray()
+        val content = ByteArrayBinaryWriter().apply { repeat(count) { writeItem(item++) } }.toByteArray()
         writeLong(block.toLong())
         if (block < 0) writeLong(content.size.toLong())
         writeFixed(content)
@@ -775,10 +775,10 @@ private fun ByteArrayEncoder.writeBlocks(
 
 // ---- codecs that only record, or do nothing ----
 
-/** Records the calls of avro4k's direct encoder, and writes them for the decoder side. */
-private class RecordingAbiEncoder : AvroBinaryEncoder() {
+/** Records the calls of avro4k's binary encoder, and writes them for the decoder side. */
+private class RecordingAbiEncoder : AvroBinaryWriter() {
     val calls = mutableListOf<Call>()
-    private val delegate = ByteArrayEncoder()
+    private val delegate = ByteArrayBinaryWriter()
 
     fun bytes(): ByteArray = delegate.toByteArray()
 
@@ -825,8 +825,8 @@ private class RecordingAbiEncoder : AvroBinaryEncoder() {
     }
 }
 
-/** Records the calls of avro4k's direct decoder with the values they returned. */
-private class RecordingAbiDecoder(private val delegate: AvroBinaryDecoder) : AvroBinaryDecoder() {
+/** Records the calls of avro4k's binary decoder with the values they returned. */
+private class RecordingAbiDecoder(private val delegate: AvroBinaryReader) : AvroBinaryReader() {
     val calls = mutableListOf<Call>()
 
     private fun <T> record(
@@ -881,7 +881,7 @@ private class RecordingAbiDecoder(private val delegate: AvroBinaryDecoder) : Avr
     override fun skipMap(): Long = error("the models are decoded without skipping")
 }
 
-private object NoopAbiEncoder : AvroBinaryEncoder() {
+private object NoopAbiEncoder : AvroBinaryWriter() {
     override fun writeNull() {}
 
     override fun writeBoolean(value: Boolean) {}
@@ -918,7 +918,7 @@ private object NoopAbiEncoder : AvroBinaryEncoder() {
 }
 
 /** Returns [next] from every index and count read, and empty values otherwise. */
-private class ScriptedAbiDecoder : AvroBinaryDecoder() {
+private class ScriptedAbiDecoder : AvroBinaryReader() {
     var next = 0L
 
     override fun readNull() {}

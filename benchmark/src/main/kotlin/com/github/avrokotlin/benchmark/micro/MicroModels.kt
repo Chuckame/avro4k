@@ -23,7 +23,7 @@ private fun Random.randomString(length: Int): String = String(CharArray(length) 
 // Deeply nested records, one field each.
 //
 // Isolates the per-structure cost: one encoder/decoder object allocated per `beginStructure`
-// (see AbstractAvroDirectDecoder.beginStructure) and one RecordResolver.resolveFields lookup per
+// (see AbstractAvroBinaryDecoder.beginStructure) and one RecordResolver.resolveFields lookup per
 // record *instance*. Each level carries a single field so the payload stays ~1 byte and the
 // measurement is dominated by the structure handling rather than by the data.
 // ---------------------------------------------------------------------------

@@ -1,15 +1,13 @@
-@file:OptIn(kotlin.uuid.ExperimentalUuidApi::class, kotlin.time.ExperimentalTime::class)
-
 package com.github.avrokotlin.avro4k.serializer
 
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroFixed
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
-import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.convertDecoded
-import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
 import com.github.avrokotlin.avro4k.logicalTypeMismatchError
@@ -45,9 +43,9 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>("kotlin.uuid.Uuid") {
                 ?: element.fixed?.createSchema(element)
                     ?.withLogicalType(LOGICAL_TYPE_NAME)
                     ?.also {
-                        if (it.fixedSize != 16) {
+                        if (it.asType<AvroSchema.FixedSchema>().size != 16) {
                             throw SchemaGenerationFailure(
-                                "Uuid's @${AvroFixed::class.simpleName} must have bytes size of 16. Got ${it.fixedSize}."
+                                "Uuid's @${AvroFixed::class.simpleName} must have bytes size of 16. Got ${it.asType<AvroSchema.FixedSchema>().size}."
                             )
                         }
                     }
@@ -84,8 +82,8 @@ public object KotlinUuidSerializer : AvroSerializer<Uuid>("kotlin.uuid.Uuid") {
         val schema = decoder.currentWriterSchema
         return when {
             schema.type == AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "Uuid") { Uuid.parse(it) }
-            schema.type == AvroSchema.Type.FIXED && schema.fixedSize == 16 -> Uuid.fromByteArray(decoder.decodeBytes())
-            else -> throw decoder.UnexpectedDecodeSchemaError("Uuid", AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
+            schema.type == AvroSchema.Type.FIXED && schema.asType<AvroSchema.FixedSchema>().size == 16 -> Uuid.fromByteArray(decoder.decodeBytes())
+            else -> throw decoder.AvroSchemaMismatchException("Uuid", AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
         }
     }
 
@@ -158,12 +156,12 @@ public object KotlinInstantSerializer : AvroSerializer<Instant>("kotlin.time.Ins
                     LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> Instant.fromEpochMilliseconds(decoder.decodeLong())
                     LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> Instant.fromEpochMicros(decoder.decodeLong())
                     LOGICAL_TYPE_NAME_TIMESTAMP_NANOS -> Instant.fromEpochNanos(decoder.decodeLong())
-                    else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
+                    else -> throw decoder.AvroSchemaMismatchException("Instant", AvroSchema.Type.LONG)
                 }
 
             AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "Instant") { Instant.parse(it) }
 
-            else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
+            else -> throw decoder.AvroSchemaMismatchException("Instant", AvroSchema.Type.LONG)
         }
     }
 

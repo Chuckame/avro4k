@@ -7,7 +7,7 @@ import com.github.avrokotlin.avro4k.internal.codec.VarintTest.Companion.encodeLo
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
-class ByteArrayEncoderTest {
+class ByteArrayBinaryWriterTest {
     @Test
     fun `every varint length is written whole wherever it falls against the end of the array`() {
         // Offsets around the initial capacity: the varint fits, ends exactly at the end, or needs the array to grow
@@ -27,7 +27,7 @@ class ByteArrayEncoderTest {
         val values = (0 until 5_000).map { it * 37 - 100_000 }
         val expected = values.map { encodeInt(it) } + values.map { encodeLong(it.toLong() shl 20) }
         val bytes =
-            ByteArrayEncoder()
+            ByteArrayBinaryWriter()
                 .apply {
                     values.forEach { writeInt(it) }
                     values.forEach { writeLong(it.toLong() shl 20) }
@@ -40,7 +40,7 @@ class ByteArrayEncoderTest {
     fun `a payload of several hundred kilobytes mixing values and varints comes out whole`() {
         val chunk = ByteArray(1_000) { (it * 13).toByte() }
         val bytes =
-            ByteArrayEncoder()
+            ByteArrayBinaryWriter()
                 .apply {
                     repeat(400) {
                         writeFixed(chunk)
@@ -59,7 +59,7 @@ class ByteArrayEncoderTest {
             if (arrays.none { it === array }) arrays += array
             written += array.copyOf(length).asList()
         }
-        ByteArrayEncoder(writeChunk)
+        ByteArrayBinaryWriter(writeChunk)
             .apply {
                 repeat(1_000) {
                     writeFixed(chunk)
@@ -82,13 +82,13 @@ class ByteArrayEncoderTest {
     @Test
     fun `floats and doubles are written little-endian with every NaN as the canonical one`() {
         for (value in listOf(0f, -0f, 1.5f, -3.25f, Float.MIN_VALUE, Float.MAX_VALUE, Float.NEGATIVE_INFINITY, Float.NaN)) {
-            ByteArrayEncoder().apply { writeFloat(value) }.toByteArray() shouldBe littleEndian(value.toBits().toLong(), 4)
+            ByteArrayBinaryWriter().apply { writeFloat(value) }.toByteArray() shouldBe littleEndian(value.toBits().toLong(), 4)
         }
         for (value in listOf(0.0, -0.0, 1e-300, -2.5, Double.MIN_VALUE, Double.MAX_VALUE, Double.POSITIVE_INFINITY, Double.NaN)) {
-            ByteArrayEncoder().apply { writeDouble(value) }.toByteArray() shouldBe littleEndian(value.toBits(), 8)
+            ByteArrayBinaryWriter().apply { writeDouble(value) }.toByteArray() shouldBe littleEndian(value.toBits(), 8)
         }
         val otherNaN = Float.fromBits(0x7FC00001)
-        ByteArrayEncoder().apply { writeFloat(otherNaN) }.toByteArray() shouldBe littleEndian(Float.NaN.toBits().toLong(), 4)
+        ByteArrayBinaryWriter().apply { writeFloat(otherNaN) }.toByteArray() shouldBe littleEndian(Float.NaN.toBits().toLong(), 4)
         // Written next to the end of the array, so that the value needs it to grow
         val filler = ByteArray(253)
         encoded(filler) { writeDouble(-2.5) } shouldBe filler + littleEndian((-2.5).toBits(), 8)
@@ -97,15 +97,15 @@ class ByteArrayEncoderTest {
 
     @Test
     fun `an empty string or bytes or collection is a single zero byte`() {
-        ByteArrayEncoder().apply { writeString("") }.toByteArray() shouldBe byteArrayOf(0)
-        ByteArrayEncoder().apply { writeString(ByteArray(0)) }.toByteArray() shouldBe byteArrayOf(0)
-        ByteArrayEncoder().apply { writeBytes(ByteArray(0)) }.toByteArray() shouldBe byteArrayOf(0)
-        ByteArrayEncoder()
+        ByteArrayBinaryWriter().apply { writeString("") }.toByteArray() shouldBe byteArrayOf(0)
+        ByteArrayBinaryWriter().apply { writeString(ByteArray(0)) }.toByteArray() shouldBe byteArrayOf(0)
+        ByteArrayBinaryWriter().apply { writeBytes(ByteArray(0)) }.toByteArray() shouldBe byteArrayOf(0)
+        ByteArrayBinaryWriter()
             .apply {
                 writeArrayStart(0)
                 writeArrayEnd()
             }.toByteArray() shouldBe byteArrayOf(0)
-        ByteArrayEncoder()
+        ByteArrayBinaryWriter()
             .apply {
                 writeMapStart(0)
                 writeMapEnd()
@@ -114,15 +114,15 @@ class ByteArrayEncoderTest {
 
     @Test
     fun `nothing written is an empty array`() {
-        ByteArrayEncoder().toByteArray() shouldBe ByteArray(0)
-        ByteArrayEncoder().apply { writeNull() }.toByteArray() shouldBe ByteArray(0)
+        ByteArrayBinaryWriter().toByteArray() shouldBe ByteArray(0)
+        ByteArrayBinaryWriter().apply { writeNull() }.toByteArray() shouldBe ByteArray(0)
     }
 
     private fun encoded(
         prefix: ByteArray,
-        write: ByteArrayEncoder.() -> Unit,
+        write: ByteArrayBinaryWriter.() -> Unit,
     ): ByteArray =
-        ByteArrayEncoder()
+        ByteArrayBinaryWriter()
             .apply {
                 writeFixed(prefix)
                 write()

@@ -68,7 +68,7 @@ class ValidatingAvroBinaryCodecTest {
         )
 
     /** A valid datum of [everyType], with two array items and one map entry. */
-    private fun AvroBinaryEncoder.writeEveryType() {
+    private fun AvroBinaryWriter.writeEveryType() {
         writeNull()
         writeBoolean(true)
         writeInt(-3)
@@ -97,20 +97,20 @@ class ValidatingAvroBinaryCodecTest {
         writeInt(99)
     }
 
-    private fun bytesOf(write: AvroBinaryEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+    private fun bytesOf(write: AvroBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 
-    private fun validatingEncoder(schema: AvroSchema) = ValidatingAvroBinaryEncoder(ByteArrayEncoder(), schema)
+    private fun validatingEncoder(schema: AvroSchema) = ValidatingAvroBinaryWriter(ByteArrayBinaryWriter(), schema)
 
     private fun validatingDecoder(
         schema: AvroSchema,
         bytes: ByteArray,
-    ) = ValidatingAvroBinaryDecoder(ByteArrayDecoder(bytes), schema)
+    ) = ValidatingAvroBinaryReader(ByteArrayBinaryReader(bytes), schema)
 
     /** Writes with the validating encoder, which must reject the sequence with a message containing every [parts]. */
     private fun encoderRejects(
         schema: AvroSchema,
         vararg parts: String,
-        write: ValidatingAvroBinaryEncoder.() -> Unit,
+        write: ValidatingAvroBinaryWriter.() -> Unit,
     ) {
         val error =
             shouldThrow<SerializationException> {
@@ -126,7 +126,7 @@ class ValidatingAvroBinaryCodecTest {
         schema: AvroSchema,
         bytes: ByteArray,
         vararg parts: String,
-        read: ValidatingAvroBinaryDecoder.() -> Unit,
+        read: ValidatingAvroBinaryReader.() -> Unit,
     ) {
         val error =
             shouldThrow<SerializationException> {
@@ -142,8 +142,8 @@ class ValidatingAvroBinaryCodecTest {
 
     @Test
     fun `a valid datum is accepted and forwarded unchanged`() {
-        val encoder = ByteArrayEncoder()
-        ValidatingAvroBinaryEncoder(encoder, everyType).apply {
+        val encoder = ByteArrayBinaryWriter()
+        ValidatingAvroBinaryWriter(encoder, everyType).apply {
             writeEveryType()
             checkDatumComplete()
         }

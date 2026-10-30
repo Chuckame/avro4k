@@ -4,13 +4,14 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
-import com.github.avrokotlin.avro4k.internal.decoder.direct.MAX_PRESIZED_BLOCK_ITEMS
+import com.github.avrokotlin.avro4k.internal.decoder.MAX_PRESIZED_BLOCK_ITEMS
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ArraySerializer
@@ -27,6 +28,7 @@ import kotlin.test.Test
  * data, without allocating for items that are not there: about 2 billion items fit in five bytes. A large valid block
  * is decoded item by item rather than pre-sized, with the same result.
  */
+@OptIn(ExperimentalSerializationApi::class)
 class CollectionBlockGuardsTest {
     private val intList = ListSerializer(Int.serializer())
     private val stringArray = ArraySerializer(String.serializer())
@@ -211,9 +213,9 @@ class CollectionBlockGuardsTest {
     }
 
     /** Writes one collection as one block per size, then the terminating empty block; item `i` counts across the blocks. */
-    private fun ByteArrayEncoder.writeBlocks(
+    private fun ByteArrayBinaryWriter.writeBlocks(
         sizes: List<Int>,
-        writeItem: ByteArrayEncoder.(Int) -> Unit,
+        writeItem: ByteArrayBinaryWriter.(Int) -> Unit,
     ) {
         var item = 0
         for (size in sizes) {
@@ -223,7 +225,7 @@ class CollectionBlockGuardsTest {
         writeLong(0)
     }
 
-    private fun blocks(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+    private fun blocks(write: ByteArrayBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 
     private companion object {
         val VALIDATING = Avro { validateSerialization = true }

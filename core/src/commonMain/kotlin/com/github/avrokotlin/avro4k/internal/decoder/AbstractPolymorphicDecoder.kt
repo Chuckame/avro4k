@@ -45,19 +45,6 @@ public abstract class AbstractPolymorphicDecoder(
      */
     protected var chosenSchema: AvroSchema? = null
 
-    /**
-     * Makes this decoder decode a new polymorphic value, of [descriptor] written with [schema], as a new decoder would:
-     * its serial name is not found yet.
-     */
-    internal open fun reset(
-        descriptor: SerialDescriptor,
-        schema: AvroSchema,
-    ) {
-        this.descriptor = descriptor
-        this.schema = schema
-        chosenSchema = null
-    }
-
     final override fun decodeString(): String {
         return findSerialName(descriptor, schema)
             ?: throw AvroSchemaMismatchException(
@@ -116,6 +103,19 @@ public abstract class AbstractPolymorphicDecoder(
 
     final override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         throw IllegalIndexedAccessError()
+    }
+
+    /**
+     * Makes this decoder decode a new polymorphic value, of [descriptor] written with [schema], as a new decoder would:
+     * its serial name is not found yet.
+     */
+    internal open fun reset(
+        descriptor: SerialDescriptor,
+        schema: AvroSchema,
+    ) {
+        this.descriptor = descriptor
+        this.schema = schema
+        chosenSchema = null
     }
 }
 

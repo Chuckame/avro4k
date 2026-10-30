@@ -1,6 +1,6 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.codec.StringWriteTest.Companion.STRING_CASES
 import com.github.avrokotlin.avro4k.internal.codec.StringWriteTest.Companion.describe
 import io.kotest.assertions.withClue
@@ -15,7 +15,7 @@ class StringWriteJvmTest : StringSpec() {
         "every string case is written as Apache's BinaryEncoder writes it" {
             for (value in STRING_CASES) {
                 withClue(describe(value)) {
-                    ByteArrayEncoder().apply { writeString(value) }.toByteArray() shouldBe apache { writeString(value) }
+                    ByteArrayBinaryWriter().apply { writeString(value) }.toByteArray() shouldBe apache { writeString(value) }
                 }
             }
         }

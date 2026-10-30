@@ -164,9 +164,8 @@ public final synthetic class com/github/avrokotlin/avro4k/AvroProp$Impl : com/gi
 
 public abstract class com/github/avrokotlin/avro4k/AvroSchema {
 	public static final field Companion Lcom/github/avrokotlin/avro4k/AvroSchema$Companion;
-	public synthetic fun <init> (Lcom/github/avrokotlin/avro4k/AvroSchema$Type;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lcom/github/avrokotlin/avro4k/AvroSchema$Type;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getFullName ()Ljava/lang/String;
-	public final fun getLogicalTypeName ()Ljava/lang/String;
 	public abstract fun getSimpleName ()Ljava/lang/String;
 	public final fun getType ()Lcom/github/avrokotlin/avro4k/AvroSchema$Type;
 }
@@ -563,6 +562,7 @@ public final class com/github/avrokotlin/avro4k/Name {
 
 public abstract class com/github/avrokotlin/avro4k/ResolvedSchema : com/github/avrokotlin/avro4k/AvroSchema, com/github/avrokotlin/avro4k/WithProps {
 	public synthetic fun <init> (Lcom/github/avrokotlin/avro4k/AvroSchema$Type;Ljava/util/Map;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getLogicalTypeName ()Ljava/lang/String;
 }
 
 public final synthetic class com/github/avrokotlin/avro4k/internal/AvroGenerated$Impl : com/github/avrokotlin/avro4k/internal/AvroGenerated {

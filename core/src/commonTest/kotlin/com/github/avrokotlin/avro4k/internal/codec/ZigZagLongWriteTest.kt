@@ -24,9 +24,9 @@ class ZigZagLongWriteTest {
     @Test
     fun `writeLong writes the bytes of a plain long encoder and they are read back`() {
         for (value in VALUES) {
-            val bytes = ByteArrayEncoder().apply { writeLong(value) }.toByteArray()
+            val bytes = ByteArrayBinaryWriter().apply { writeLong(value) }.toByteArray()
             bytes.describe(value) shouldBe referenceEncode(value).describe(value)
-            ByteArrayDecoder(bytes).readLong() shouldBe value
+            ByteArrayBinaryReader(bytes).readLong() shouldBe value
         }
     }
 
@@ -37,7 +37,7 @@ class ZigZagLongWriteTest {
             val filler = ByteArray(prefix) { (it * 3).toByte() }
             for (value in VALUES.take(END_OF_CHUNK_VALUES)) {
                 val bytes =
-                    ByteArrayEncoder()
+                    ByteArrayBinaryWriter()
                         .apply {
                             writeFixed(filler)
                             writeLong(value)
@@ -52,15 +52,15 @@ class ZigZagLongWriteTest {
     fun `every value written one after the other across many chunks is read back in order`() {
         val expected = VALUES.flatMap { referenceEncode(it).asList() }.toByteArray()
 
-        val kept = ByteArrayEncoder().apply { VALUES.forEach { writeLong(it) } }.toByteArray()
+        val kept = ByteArrayBinaryWriter().apply { VALUES.forEach { writeLong(it) } }.toByteArray()
         kept.contentEquals(expected) shouldBe true
 
         val handed = mutableListOf<Byte>()
         val writeChunk = { chunk: ByteArray, length: Int -> handed += chunk.copyOf(length).asList() }
-        ByteArrayEncoder(writeChunk).apply { VALUES.forEach { writeLong(it) } }.writeChunksTo(writeChunk)
+        ByteArrayBinaryWriter(writeChunk).apply { VALUES.forEach { writeLong(it) } }.writeChunksTo(writeChunk)
         handed.toByteArray().contentEquals(expected) shouldBe true
 
-        val decoder = ByteArrayDecoder(kept)
+        val decoder = ByteArrayBinaryReader(kept)
         for (value in VALUES) {
             decoder.readLong() shouldBe value
         }

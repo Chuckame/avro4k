@@ -2,8 +2,6 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.decoder.generic.AvroValueGenericDecoder
 import com.github.avrokotlin.avro4k.internal.encoder.generic.AvroValueGenericEncoder
-import com.github.avrokotlin.avro4k.toApacheSchema
-import com.github.avrokotlin.avro4k.toAvro4k
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.serializer

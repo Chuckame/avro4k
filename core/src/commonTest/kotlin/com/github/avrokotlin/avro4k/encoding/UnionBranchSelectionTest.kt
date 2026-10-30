@@ -6,7 +6,7 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.ResolvedSchema
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
@@ -276,10 +276,10 @@ class UnionBranchSelectionTest {
             value: T,
             writer: AvroSchema,
             branch: Int? = null,
-            expected: ByteArrayEncoder.() -> Unit,
+            expected: ByteArrayBinaryWriter.() -> Unit,
         ) {
             val expectedBytes =
-                ByteArrayEncoder().apply {
+                ByteArrayBinaryWriter().apply {
                     if (branch != null) writeIndex(branch)
                     expected()
                 }.toByteArray()

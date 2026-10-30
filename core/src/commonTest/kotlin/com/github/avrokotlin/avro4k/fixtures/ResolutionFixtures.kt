@@ -307,7 +307,6 @@ private enum class ColorV1 { RED, GREEN, BLUE, PURPLE }
 @Serializable
 @SerialName("$NS.Colour")
 @AvroAlias("$NS.Color")
-@OptIn(ExperimentalAvro4kApi::class)
 private enum class ColorV2 {
     BLUE,
 

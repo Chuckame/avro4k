@@ -19,25 +19,25 @@ internal abstract class AbstractAvroGenericEncoder : AbstractAvroEncoder() {
         get() = avro.serializersModule
 
     override fun getRecordEncoder(descriptor: SerialDescriptor): CompositeEncoder {
-        return RecordGenericEncoder(descriptor, currentAvroSchema, avro) { encodeValue(it) }
+        return RecordGenericEncoder(descriptor, currentWriterSchema, avro) { encodeValue(it) }
     }
 
     override fun getPolymorphicEncoder(descriptor: SerialDescriptor): CompositeEncoder {
-        return PolymorphicEncoder(avro, currentAvroSchema) { encodeValue(it) }
+        return PolymorphicGenericEncoder(avro, currentWriterSchema) { encodeValue(it) }
     }
 
     override fun getArrayEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
-        return ArrayGenericEncoder(avro, collectionSize, currentAvroSchema) { encodeValue(it) }
+        return ArrayGenericEncoder(avro, collectionSize, currentWriterSchema) { encodeValue(it) }
     }
 
     override fun getMapEncoder(
         descriptor: SerialDescriptor,
         collectionSize: Int,
     ): CompositeEncoder {
-        return MapGenericEncoder(avro, collectionSize, currentAvroSchema) { encodeValue(it) }
+        return MapGenericEncoder(avro, collectionSize, currentWriterSchema) { encodeValue(it) }
     }
 
     override fun encodeBytesUnchecked(value: ByteArray) {
@@ -61,7 +61,7 @@ internal abstract class AbstractAvroGenericEncoder : AbstractAvroEncoder() {
     }
 
     override fun encodeFixedUnchecked(value: ByteArray) {
-        encodeValue(GenericData.Fixed(currentAvroSchema.toApacheSchema(), value))
+        encodeValue(GenericData.Fixed(currentWriterSchema.toApacheSchema(), value))
     }
 
     override fun encodeIntUnchecked(value: Int) {
@@ -81,6 +81,6 @@ internal abstract class AbstractAvroGenericEncoder : AbstractAvroEncoder() {
     }
 
     override fun encodeEnumUnchecked(symbol: String) {
-        encodeValue(GenericData.EnumSymbol(currentAvroSchema.toApacheSchema(), symbol))
+        encodeValue(GenericData.EnumSymbol(currentWriterSchema.toApacheSchema(), symbol))
     }
 }

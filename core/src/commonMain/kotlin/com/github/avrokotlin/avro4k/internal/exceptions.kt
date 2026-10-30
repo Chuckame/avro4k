@@ -8,11 +8,9 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
-import com.github.avrokotlin.avro4k.internal.schema.enumSymbols
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
-import com.github.avrokotlin.avro4k.internal.schema.getName
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
-import com.github.avrokotlin.avro4k.internal.schema.types
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.SerialKind
 import kotlinx.serialization.encoding.Decoder
@@ -39,55 +37,6 @@ internal fun DecodedNullError(
 
 internal fun Decoder.IllegalIndexedAccessError() = UnsupportedOperationException("${this::class.nameForMessages} does not support indexed access")
 
-context(_: Decoder)
-internal inline fun <reified ExpectedType> BadDecodedValueError(
-    value: Any?,
-    firstExpectedType: KClass<*>,
-    vararg expectedTypes: KClass<*>,
-): AvroSchemaMismatchException {
-    val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
-    return if (value == null) {
-        AvroSchemaMismatchException(
-            "Decoded null value for ${ExpectedType::class.nameForMessages} kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
-        )
-    } else {
-        AvroSchemaMismatchException(
-            "Decoded value '$value' of type ${value::class.nameForMessages} for " +
-                "${ExpectedType::class.nameForMessages} kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
-        )
-    }
-}
-
-context(_: Decoder)
-internal fun BadDecodedValueError(
-    value: Any?,
-    expectedKind: SerialKind,
-    firstExpectedType: KClass<*>,
-    vararg expectedTypes: KClass<*>,
-): AvroSchemaMismatchException {
-    val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
-    return if (value == null) {
-        AvroSchemaMismatchException(
-            "Decoded null value for $expectedKind kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
-        )
-    } else {
-        AvroSchemaMismatchException(
-            "Decoded value '$value' of type ${value::class.nameForMessages} for $expectedKind kind, expected one of [${allExpectedTypes.joinToString { it.nameForMessages }}]"
-        )
-    }
-}
-
-internal fun AvroDecoder.UnexpectedDecodeSchemaError(
-    actualType: String,
-    firstExpectedType: AvroSchema.Type,
-    vararg expectedTypes: AvroSchema.Type,
-): AvroSchemaMismatchException {
-    val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
-    return AvroSchemaMismatchException(
-        "For $actualType, expected type one of $allExpectedTypes, but had writer schema ${currentWriterSchema.toSchemaJsonString()}"
-    )
-}
-
 /**
  * A union branch index read from the input is out of the union's branches. Checked before indexing them, so that
  * corrupted input fails as malformed data rather than with an index error.
@@ -96,14 +45,18 @@ internal fun unionIndexOutOfRangeError(
     index: Int,
     unionSchema: AvroSchema,
 ): AvroMalformedDataException =
-    AvroMalformedDataException("Malformed data: union index $index out of range [0, ${unionSchema.types.size}) for ${unionSchema.fullNameForMessages}")
+    AvroMalformedDataException(
+        "Malformed data: union index $index out of range [0, ${unionSchema.asType<AvroSchema.UnionSchema>().types.size}) for ${unionSchema.fullNameForMessages}"
+    )
 
 /** An enum symbol index read from the input is out of the enum's symbols. */
 internal fun enumIndexOutOfRangeError(
     index: Int,
     enumSchema: AvroSchema,
 ): AvroMalformedDataException =
-    AvroMalformedDataException("Malformed data: enum index $index out of range [0, ${enumSchema.enumSymbols.size}) for ${enumSchema.fullNameForMessages}")
+    AvroMalformedDataException(
+        "Malformed data: enum index $index out of range [0, ${enumSchema.asType<AvroSchema.EnumSchema>().symbols.size}) for ${enumSchema.fullNameForMessages}"
+    )
 
 /**
  * The item count of a collection block read from the input is negative, or brings the collection's total count above
@@ -155,7 +108,7 @@ internal inline fun <V, R> V.convertForEncoding(
     try {
         return convert(this)
     } catch (e: Exception) {
-        throw AvroSchemaMismatchException("Cannot convert the $kotlinType value '$this' to the writer type ${writerType.getName()}: ${e.message}", e)
+        throw AvroSchemaMismatchException("Cannot convert the $kotlinType value '$this' to the writer type ${writerType.typeName}: ${e.message}", e)
     }
 }
 
@@ -169,4 +122,4 @@ internal fun valueConversionError(
     kotlinType: String,
     cause: Throwable,
 ): AvroSchemaMismatchException =
-    AvroSchemaMismatchException("Cannot convert the decoded value '$value' of writer type ${writerType.getName()} to $kotlinType: ${cause.message}", cause)
+    AvroSchemaMismatchException("Cannot convert the decoded value '$value' of writer type ${writerType.typeName} to $kotlinType: ${cause.message}", cause)

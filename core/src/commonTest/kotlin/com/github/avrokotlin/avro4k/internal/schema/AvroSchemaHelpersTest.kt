@@ -82,31 +82,23 @@ class AvroSchemaHelpersTest {
         }
     }
 
-    /** Asserts [block] throws exactly [RuntimeException] (as Apache's `AvroRuntimeException`, not a subclass of it) with [message]. */
-    private fun shouldThrowExactly(
-        message: String,
-        block: () -> Any?,
-    ) {
-        val e = shouldThrow<RuntimeException> { block() }
-        e::class shouldBe RuntimeException::class
-        e.message shouldBe message
-    }
-
-    // ---- accessors ----
+    // ---- casts ----
 
     @Test
-    fun `accessors return the model's values on the right kind`() {
-        union.isUnion shouldBe true
-        union.types shouldBeSameInstanceAs (union as UnionSchema).types
-        union.types.size shouldBe 4
-        fixed.fixedSize shouldBe 16
-        enum.enumSymbols shouldBe listOf("SPADES", "HEARTS")
-        (array.elementType is LongSchema) shouldBe true
-        (map.valueType is DoubleSchema) shouldBe true
-        record.fields.map { it.name } shouldBe listOf("a", "b")
-        record.aliases shouldBe setOf("com.old.OldRec", "other.Rec2")
-        enum.aliases shouldBe setOf("com.example.Colour")
-        fixed.aliases shouldBe emptySet()
+    fun `asType returns the schema itself on the right kind`() {
+        union.asType<UnionSchema>() shouldBeSameInstanceAs union
+        record.asType<AvroSchema>() shouldBeSameInstanceAs record
+    }
+
+    @Test
+    fun `asType fails on a wrong kind and names the expected class and the actual schema`() {
+        shouldThrow<IllegalStateException> { array.asType<MapSchema>() }.message shouldBe
+            "Expected a MapSchema, but was {\"type\":\"array\",\"items\":\"long\"}"
+        for (schema in everyKind) {
+            if (schema === union) continue
+            shouldThrow<IllegalStateException> { schema.getIndexTyped(Type.INT) }
+            shouldThrow<IllegalStateException> { schema.getIndexNamedOrAliased("x") }
+        }
     }
 
     @Test
@@ -115,57 +107,11 @@ class AvroSchemaHelpersTest {
     }
 
     @Test
-    fun `accessors throw on every wrong kind - with Apache's exception class and message`() {
-        val accessors: List<Triple<String, Type, (AvroSchema) -> Any?>> =
-            listOf(
-                Triple("Not a union", Type.UNION) { it.types },
-                Triple("Not fixed", Type.FIXED) { it.fixedSize },
-                Triple("Not an enum", Type.ENUM) { it.enumSymbols },
-                Triple("Not an enum", Type.ENUM) { it.hasEnumSymbol("SPADES") },
-                Triple("Not an enum", Type.ENUM) { it.getEnumOrdinal("SPADES") },
-                Triple("Not an array", Type.ARRAY) { it.elementType },
-                Triple("Not a map", Type.MAP) { it.valueType },
-                Triple("Not a record", Type.RECORD) { it.fields },
-                Triple("Not a union", Type.UNION) { it.getIndexTyped(Type.INT) },
-                Triple("Not a union", Type.UNION) { it.getIndexLogicallyTyped("date", Type.INT) },
-                Triple("Not a union", Type.UNION) { it.getIndexLogicallyTyped("date", Type.INT, Type.LONG) },
-                Triple("Not a union", Type.UNION) { it.getIndexNamedOrAliased("x") }
-            )
-        for ((prefix, rightType, accessor) in accessors) {
-            for (schema in everyKind) {
-                if (schema.type === rightType) continue
-                shouldThrowExactly("$prefix: ${schema.toSchemaJsonString()}") { accessor(schema) }
-            }
-        }
-        val named = setOf(Type.RECORD, Type.ENUM, Type.FIXED)
+    fun `type names are the lower-case enum names`() {
+        Type.entries.associateWith { it.typeName } shouldBe Type.entries.associateWith { it.name.lowercase() }
+        // and the full name of every unnamed schema is its type name
         for (schema in everyKind) {
-            if (schema.type in named) continue
-            shouldThrowExactly("Not a named type: ${schema.toSchemaJsonString()}") { schema.aliases }
-        }
-    }
-
-    @Test
-    fun `wrong-kind messages embed the schema as compact JSON - like Apache's toString`() {
-        shouldThrowExactly("Not a union: \"string\"") { StringSchema().types }
-        shouldThrowExactly("Not fixed: [\"null\",\"int\"]") { UnionSchema(NullSchema(), IntSchema()).fixedSize }
-        shouldThrowExactly("Not a map: {\"type\":\"array\",\"items\":\"long\"}") { array.valueType }
-    }
-
-    @Test
-    fun `enum symbol lookups`() {
-        enum.hasEnumSymbol("HEARTS") shouldBe true
-        enum.hasEnumSymbol("CLUBS") shouldBe false
-        enum.getEnumOrdinal("SPADES") shouldBe 0
-        enum.getEnumOrdinal("HEARTS") shouldBe 1
-        shouldThrowExactly("enum value 'CLUBS' is not in the enum symbol set: [SPADES, HEARTS]") { enum.getEnumOrdinal("CLUBS") }
-    }
-
-    @Test
-    fun `type names are Apache's lower-case names`() {
-        Type.entries.associateWith { it.getName() } shouldBe Type.entries.associateWith { it.name.lowercase() }
-        // and the full name of every unnamed schema is its type name, as in Apache
-        for (schema in everyKind) {
-            if (!schema.isNamedSchema()) schema.fullName shouldBe schema.type.getName()
+            if (!schema.isNamedSchema()) schema.fullName shouldBe schema.type.typeName
         }
     }
 
@@ -286,7 +232,7 @@ class AvroSchemaHelpersTest {
     fun `moveToHeadOfUnion moves the first matching branch to the head`() {
         val moved = union.moveToHeadOfUnion { it.type === Type.STRING } as UnionSchema
         moved.types.map { it.type } shouldBe listOf(Type.STRING, Type.NULL, Type.INT, Type.RECORD)
-        moved.types[0] shouldBeSameInstanceAs union.types[2]
+        moved.types[0] shouldBeSameInstanceAs (union as UnionSchema).types[2]
 
         (union.moveToHeadOfUnion(3) as UnionSchema).types.map { it.type } shouldBe listOf(Type.RECORD, Type.NULL, Type.INT, Type.STRING)
     }

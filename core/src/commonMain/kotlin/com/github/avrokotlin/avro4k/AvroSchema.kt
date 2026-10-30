@@ -40,7 +40,17 @@ public val AvroSchema.nullable: AvroSchema
 public sealed class ResolvedSchema(
     type: Type,
     props: Map<String, JsonElement>,
-) : AvroSchema(type, props.logicalTypeNameOrNull()), WithProps
+) : AvroSchema(type), WithProps {
+    /** The name of this schema's logical type (the `logicalType` prop), or null when it has none. Read once at construction. */
+    public val logicalTypeName: String? = props.logicalTypeNameOrNull()
+
+    /**
+     * Memo of [com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName], read by the serializers per value.
+     * Lazy because it depends on the subclass's fields (a fixed's size), not set yet while this constructor runs. A racy
+     * single-check is enough: every thread computes the same immutable value.
+     */
+    internal var knownLogicalTypeNameMemo: Any? = AvroSchema.NotComputed
+}
 
 /**
  * The `logicalType` prop as a string, or null when absent or not a JSON primitive (`JsonNull` included).
@@ -61,27 +71,9 @@ public sealed class AvroSchema(
      * once per value: a field read, like Apache Avro's `Schema.getType()`.
      */
     public val type: Type,
-    /**
-     * The name of this schema's logical type (the `logicalType` prop), or null when it has none.
-     * Always null for a [UnionSchema]: a logical type annotates a single, resolved type.
-     *
-     * Computed once at construction, as the props are fixed by then, so reading it per value is a field read instead of
-     * a map lookup plus a JSON cast. Like [type], it is derived from the constructor arguments, so it takes no part in
-     * `equals`, `hashCode` or `toString`.
-     */
-    public val logicalTypeName: String?,
 ) {
     public open val fullName: String get() = simpleName
     public abstract val simpleName: String
-
-    /**
-     * Memo of [com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName], which the serializers read per value:
-     * [NotComputed] until the first read. Computed lazily because it depends on the subclass's own fields (a fixed's
-     * size), which are not set yet while this constructor runs. Racy single-check: every thread computes the same
-     * immutable value (a `String` or null), so a lost or repeated write is harmless. Takes no part in `equals`,
-     * `hashCode` or `toString`.
-     */
-    internal var knownLogicalTypeNameMemo: Any? = NotComputed
 
     internal object NotComputed
 
@@ -96,21 +88,24 @@ public sealed class AvroSchema(
         return toString()
     }
 
-    public enum class Type {
-        RECORD,
-        ENUM,
-        FIXED,
-        ARRAY,
-        MAP,
-        UNION,
-        NULL,
-        BOOLEAN,
-        INT,
-        LONG,
-        FLOAT,
-        DOUBLE,
-        BYTES,
-        STRING,
+    public enum class Type(
+        /** The name of the type as written in a schema: `"record"`, `"int"`… */
+        internal val typeName: String,
+    ) {
+        RECORD("record"),
+        ENUM("enum"),
+        FIXED("fixed"),
+        ARRAY("array"),
+        MAP("map"),
+        UNION("union"),
+        NULL("null"),
+        BOOLEAN("boolean"),
+        INT("int"),
+        LONG("long"),
+        FLOAT("float"),
+        DOUBLE("double"),
+        BYTES("bytes"),
+        STRING("string"),
     }
 
     public sealed class PrimitiveSchema(
@@ -126,7 +121,7 @@ public sealed class AvroSchema(
         }
 
         override val simpleName: String
-            get() = "boolean"
+            get() = type.typeName
     }
 
     public data class IntSchema(
@@ -137,7 +132,7 @@ public sealed class AvroSchema(
         }
 
         override val simpleName: String
-            get() = "int"
+            get() = type.typeName
     }
 
     public data class LongSchema(
@@ -148,7 +143,7 @@ public sealed class AvroSchema(
         }
 
         override val simpleName: String
-            get() = "long"
+            get() = type.typeName
     }
 
     public data class FloatSchema(
@@ -159,7 +154,7 @@ public sealed class AvroSchema(
         }
 
         override val simpleName: String
-            get() = "float"
+            get() = type.typeName
     }
 
     public data class DoubleSchema(
@@ -170,7 +165,7 @@ public sealed class AvroSchema(
         }
 
         override val simpleName: String
-            get() = "double"
+            get() = type.typeName
     }
 
     public data class BytesSchema(
@@ -181,7 +176,7 @@ public sealed class AvroSchema(
         }
 
         override val simpleName: String
-            get() = "bytes"
+            get() = type.typeName
     }
 
     public data class StringSchema(
@@ -192,7 +187,7 @@ public sealed class AvroSchema(
         }
 
         override val simpleName: String
-            get() = "string"
+            get() = type.typeName
     }
 
     public data class NullSchema(
@@ -203,12 +198,12 @@ public sealed class AvroSchema(
         }
 
         override val simpleName: String
-            get() = "null"
+            get() = type.typeName
     }
 
     public data class UnionSchema(
         val types: List<ResolvedSchema>,
-    ) : AvroSchema(Type.UNION, null) {
+    ) : AvroSchema(Type.UNION) {
         val isNullable: Boolean = types.any { it is NullSchema }
         val isSimpleNullableType: Boolean get() = types.size == 2 && isNullable
 

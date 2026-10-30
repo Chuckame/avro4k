@@ -20,10 +20,10 @@ class StringWriteTest {
         for (value in STRING_CASES) {
             withClue(describe(value)) {
                 val expected = expectedString(value)
-                ByteArrayEncoder().apply { writeString(value) }.toByteArray() shouldBe expected
+                ByteArrayBinaryWriter().apply { writeString(value) }.toByteArray() shouldBe expected
                 value.encodeToUtf8() shouldBe referenceUtf8(value)
                 value.utf8Length() shouldBe referenceUtf8(value).size
-                ByteArrayEncoder().apply { writeBytes(value.encodeToUtf8()) }.toByteArray() shouldBe expected
+                ByteArrayBinaryWriter().apply { writeBytes(value.encodeToUtf8()) }.toByteArray() shouldBe expected
             }
         }
     }
@@ -67,7 +67,7 @@ class StringWriteTest {
             for (pattern in PATTERNS) {
                 val value = pattern.take(length)
                 withClue(describe(value)) {
-                    ByteArrayEncoder().apply { writeString(value) }.toByteArray() shouldBe expectedString(value)
+                    ByteArrayBinaryWriter().apply { writeString(value) }.toByteArray() shouldBe expectedString(value)
                 }
             }
         }
@@ -79,14 +79,14 @@ class StringWriteTest {
         for (value in values) {
             withClue(describe(value)) {
                 val expected = expectedString(value)
-                ByteArrayEncoder().apply { writeString(value) }.toByteArray() shouldBe expected
+                ByteArrayBinaryWriter().apply { writeString(value) }.toByteArray() shouldBe expected
                 writtenToChunks(byteArrayOf(1)) { writeString(value) } shouldBe byteArrayOf(1) + expected
             }
         }
         // Many strings in a row cross the chunk ends at every offset, past the largest chunk size
         val many = (0 until 10_000).map { MIXED_CONTENT.take(it % MIXED_CONTENT.length) }
         val expected = many.flatMap { expectedString(it).asList() }.toByteArray()
-        ByteArrayEncoder().apply { many.forEach { writeString(it) } }.toByteArray() shouldBe expected
+        ByteArrayBinaryWriter().apply { many.forEach { writeString(it) } }.toByteArray() shouldBe expected
         writtenToChunks(ByteArray(0)) { many.forEach { writeString(it) } } shouldBe expected
     }
 
@@ -94,7 +94,7 @@ class StringWriteTest {
     fun `the rest of a string crossing the end of a chunk goes to a next chunk sized for that rest`() {
         val chunks = mutableListOf<Pair<Int, Int>>()
         val writeChunk = { array: ByteArray, length: Int -> chunks += array.size to length }
-        ByteArrayEncoder(writeChunk)
+        ByteArrayBinaryWriter(writeChunk)
             .apply {
                 writeFixed(ByteArray(200))
                 writeString("x".repeat(1_000))
@@ -132,15 +132,15 @@ class StringWriteTest {
     )
 
     private fun lengthPrefix(value: String): List<Int> {
-        val bytes = ByteArrayEncoder().apply { writeString(value) }.toByteArray()
+        val bytes = ByteArrayBinaryWriter().apply { writeString(value) }.toByteArray()
         return bytes.copyOf(bytes.size - referenceUtf8(value).size).map { it.toInt() and 0xff }
     }
 
     private fun written(
         prefix: ByteArray,
-        write: ByteArrayEncoder.() -> Unit,
+        write: ByteArrayBinaryWriter.() -> Unit,
     ): ByteArray =
-        ByteArrayEncoder()
+        ByteArrayBinaryWriter()
             .apply {
                 writeFixed(prefix)
                 write()
@@ -149,11 +149,11 @@ class StringWriteTest {
     /** Written by an encoder handing each full chunk to a writer, as the JVM's streams do. */
     private fun writtenToChunks(
         prefix: ByteArray,
-        write: ByteArrayEncoder.() -> Unit,
+        write: ByteArrayBinaryWriter.() -> Unit,
     ): ByteArray {
         var written = ByteArray(0)
         val writeChunk = { array: ByteArray, length: Int -> written += array.copyOf(length) }
-        ByteArrayEncoder(writeChunk)
+        ByteArrayBinaryWriter(writeChunk)
             .apply {
                 writeFixed(prefix)
                 write()

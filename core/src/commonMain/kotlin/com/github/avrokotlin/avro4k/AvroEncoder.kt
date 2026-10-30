@@ -2,15 +2,13 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.aliases
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
-import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
 import com.github.avrokotlin.avro4k.internal.schema.getIndexNamedOrAliased
 import com.github.avrokotlin.avro4k.internal.schema.getIndexTyped
-import com.github.avrokotlin.avro4k.internal.schema.getName
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
 import com.github.avrokotlin.avro4k.internal.schema.nonFailingAliases
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
-import com.github.avrokotlin.avro4k.internal.schema.types
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Encoder
 
@@ -100,13 +98,13 @@ internal fun AvroEncoder.unsupportedWriterTypeError(
     val fallbacksStr = if (fallbackTypes.isNotEmpty()) ", and also not matching to any compatible type (one of ${fallbackTypes.joinToString()})." else ""
     val schema = currentWriterSchema
     return AvroSchemaMismatchException(
-        "Unsupported schema '${schema.fullNameForMessages}' for encoded type of ${mainType.getName()}$fallbacksStr. Actual schema: ${schema.toSchemaJsonString()}"
+        "Unsupported schema '${schema.fullNameForMessages}' for encoded type of ${mainType.typeName}$fallbacksStr. Actual schema: ${schema.toSchemaJsonString()}"
     )
 }
 
 internal fun AvroEncoder.ensureFixedSize(byteArray: ByteArray): ByteArray {
     val schema = currentWriterSchema
-    if (schema.fixedSize != byteArray.size) {
+    if (schema.asType<AvroSchema.FixedSchema>().size != byteArray.size) {
         throw AvroSchemaMismatchException("Fixed size mismatch for actual size of ${byteArray.size}. Actual schema: ${schema.toSchemaJsonString()}")
     }
     return byteArray
@@ -125,7 +123,7 @@ internal fun AvroEncoder.logicalTypeMismatchError(
     type: AvroSchema.Type,
 ): Throwable {
     return AvroSchemaMismatchException(
-        "Expected schema type of ${type.getName()} with logical type $logicalType but had schema ${currentWriterSchema.toSchemaJsonString()}"
+        "Expected schema type of ${type.typeName} with logical type $logicalType but had schema ${currentWriterSchema.toSchemaJsonString()}"
     )
 }
 
@@ -141,7 +139,7 @@ internal fun AvroEncoder.trySelectTypeNameFromUnion(expectedType: AvroSchema.Typ
 }
 
 internal fun AvroEncoder.trySelectFixedSchemaForSize(fixedSize: Int): Boolean {
-    val branches = currentWriterSchema.types
+    val branches = currentWriterSchema.asType<AvroSchema.UnionSchema>().types
     for (index in branches.indices) {
         val branch = branches[index]
         if (branch is AvroSchema.FixedSchema && branch.size == fixedSize) {
@@ -153,7 +151,7 @@ internal fun AvroEncoder.trySelectFixedSchemaForSize(fixedSize: Int): Boolean {
 }
 
 internal fun AvroEncoder.trySelectEnumSchemaForSymbol(symbol: String): Boolean {
-    val branches = currentWriterSchema.types
+    val branches = currentWriterSchema.asType<AvroSchema.UnionSchema>().types
     for (index in branches.indices) {
         val branch = branches[index]
         if (branch is AvroSchema.EnumSchema && branch.getSymbolIndexOrNull(symbol) != null) {
@@ -238,7 +236,7 @@ private fun AvroSchema.getIndexValidlyLogicallyTyped(
     logicalTypeName: String,
     expectedType: AvroSchema.Type,
 ): Int {
-    val branches = types
+    val branches = asType<AvroSchema.UnionSchema>().types
     for (i in branches.indices) {
         val branch = branches[i]
         if (branch.type === expectedType && branch.knownLogicalTypeName == logicalTypeName) return i

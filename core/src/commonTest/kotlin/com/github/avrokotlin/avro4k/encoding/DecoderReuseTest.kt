@@ -7,7 +7,7 @@ import com.github.avrokotlin.avro4k.AvroDefault
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
@@ -317,7 +317,7 @@ class DecoderReuseTest {
     fun `the busy cases decode records read in order and records read by their decoding steps alike`() {
         // Inner read with its own schema is decoded in order, by the exact record decoder; read with a field more, it is
         // decoded by its decoding steps, by the general one. Each keeps its own busy state.
-        for ((inner, writeOne) in listOf<Pair<AvroSchema, ByteArrayEncoder.(Inner) -> Unit>>(
+        for ((inner, writeOne) in listOf<Pair<AvroSchema, ByteArrayBinaryWriter.(Inner) -> Unit>>(
             Avro.schema<Inner>() to { writeInner(it) },
             EXTENDED_INNER to { writeExtendedInner(it) }
         )) {
@@ -964,19 +964,19 @@ private fun record(
     vararg fields: Pair<String, AvroSchema>,
 ): AvroSchema.RecordSchema = AvroSchema.RecordSchema(Name(name), fields.map { AvroSchema.RecordSchema.Field(it.first, it.second) })
 
-private fun bytes(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+private fun bytes(write: ByteArrayBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 
-private fun ByteArrayEncoder.writeInner(value: Inner) {
+private fun ByteArrayBinaryWriter.writeInner(value: Inner) {
     writeInt(value.x)
     writeString(value.s)
 }
 
-private fun ByteArrayEncoder.writeExtendedInner(value: Inner) {
+private fun ByteArrayBinaryWriter.writeExtendedInner(value: Inner) {
     writeInner(value)
     writeBoolean(value.x % 2 == 0)
 }
 
-private fun ByteArrayEncoder.writeShared(
+private fun ByteArrayBinaryWriter.writeShared(
     x: Int,
     y: String,
 ) {
@@ -988,10 +988,10 @@ private fun ByteArrayEncoder.writeShared(
  * Writes [items] as one collection, one block per entry of [blocks] (the item count of each block, negative for a
  * block written with a negative count followed by its byte size), then the closing empty block.
  */
-private fun <I> ByteArrayEncoder.writeBlocks(
+private fun <I> ByteArrayBinaryWriter.writeBlocks(
     items: List<I>,
     blocks: List<Int>,
-    writeItem: ByteArrayEncoder.(I) -> Unit,
+    writeItem: ByteArrayBinaryWriter.(I) -> Unit,
 ) {
     check(blocks.sumOf { abs(it) } == items.size && blocks.none { it == 0 })
     var next = 0

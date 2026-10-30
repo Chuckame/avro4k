@@ -23,14 +23,14 @@ internal class MapGenericEncoder(
     private val entries: MutableMap<String, Any?> = LinkedHashMap(mapSize)
     private var currentKey: String? = null
 
-    override lateinit var currentAvroSchema: AvroSchema
+    override lateinit var currentWriterSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        currentAvroSchema =
+        currentWriterSchema =
             if (index % 2 == 0) {
                 currentKey = null
                 STRING_SCHEMA

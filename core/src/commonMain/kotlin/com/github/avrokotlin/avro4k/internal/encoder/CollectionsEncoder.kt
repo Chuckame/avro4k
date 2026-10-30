@@ -1,24 +1,24 @@
-package com.github.avrokotlin.avro4k.internal.encoder.direct
+package com.github.avrokotlin.avro4k.internal.encoder
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.schema.elementType
-import com.github.avrokotlin.avro4k.internal.schema.valueType
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryWriter
+import com.github.avrokotlin.avro4k.internal.schema.PlainSchemas
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import kotlinx.serialization.descriptors.SerialDescriptor
 
 /**
  * Encodes one map after another: its parent keeps it and hands it each next map it begins, through [reset], instead of
  * creating an encoder per map. Nothing of the previous map survives a [reset].
  */
-internal class MapDirectEncoder(avro: Avro, binaryEncoder: AvroBinaryEncoder) :
-    AbstractAvroDirectEncoder(avro, binaryEncoder) {
+internal class MapEncoder(avro: Avro, binaryWriter: AvroBinaryWriter) :
+    AbstractAvroBinaryEncoder(avro, binaryWriter) {
     /** The writer schema of the map's values, read once per map. */
     private var valueType: AvroSchema? = null
 
     /** The schema of the key or value being encoded: none until [encodeElement] begins one, as on a new encoder. */
     private var entrySchema: AvroSchema? = null
-    override var currentAvroSchema: AvroSchema
+    override var currentWriterSchema: AvroSchema
         get() = entrySchema ?: throw noElementBegunError()
         set(value) {
             entrySchema = value
@@ -26,23 +26,19 @@ internal class MapDirectEncoder(avro: Avro, binaryEncoder: AvroBinaryEncoder) :
 
     /** Begins a map of [mapSize] entries written with [mapSchema]: writes its start, as a new encoder did when created. */
     fun reset(
-        mapSchema: AvroSchema,
+        mapSchema: AvroSchema.MapSchema,
         mapSize: Int,
-    ): MapDirectEncoder {
-        valueType = mapSchema.valueType
+    ): MapEncoder {
+        valueType = mapSchema.valueSchema
         entrySchema = null
-        binaryEncoder.writeMapStart(mapSize.toLong())
+        binaryWriter.writeMapStart(mapSize.toLong())
         beginReuse()
         return this
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
-        binaryEncoder.writeMapEnd()
+        binaryWriter.writeMapEnd()
         super.endStructure(descriptor)
-    }
-
-    companion object {
-        private val STRING_SCHEMA = AvroSchema.StringSchema()
     }
 
     override fun encodeElement(
@@ -50,10 +46,11 @@ internal class MapDirectEncoder(avro: Avro, binaryEncoder: AvroBinaryEncoder) :
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
+        // kotlinx-serialization encodes key and value separately, the key (always a string) coming first, then the value
         entrySchema =
             if (index % 2 == 0) {
-                binaryEncoder.startItem()
-                STRING_SCHEMA
+                binaryWriter.startItem()
+                PlainSchemas.STRING
             } else {
                 valueType
             }
@@ -65,16 +62,16 @@ internal class MapDirectEncoder(avro: Avro, binaryEncoder: AvroBinaryEncoder) :
  * Encodes one array after another: its parent keeps it and hands it each next array it begins, through [reset], instead
  * of creating an encoder per array. Nothing of the previous array survives a [reset].
  */
-internal class ArrayDirectEncoder(
+internal class ArrayEncoder(
     avro: Avro,
-    binaryEncoder: AvroBinaryEncoder,
-) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
+    binaryWriter: AvroBinaryWriter,
+) : AbstractAvroBinaryEncoder(avro, binaryWriter) {
     /** The writer schema of the array's items, read once per array. */
     private var elementType: AvroSchema? = null
 
     /** The schema of the item being encoded: none until [encodeElement] begins one, as on a new encoder. */
     private var itemSchema: AvroSchema? = null
-    override var currentAvroSchema: AvroSchema
+    override var currentWriterSchema: AvroSchema
         get() = itemSchema ?: throw noElementBegunError()
         set(value) {
             itemSchema = value
@@ -82,12 +79,12 @@ internal class ArrayDirectEncoder(
 
     /** Begins an array of [arraySize] items written with [arraySchema]: writes its start, as a new encoder did when created. */
     fun reset(
-        arraySchema: AvroSchema,
+        arraySchema: AvroSchema.ArraySchema,
         arraySize: Int,
-    ): ArrayDirectEncoder {
-        elementType = arraySchema.elementType
+    ): ArrayEncoder {
+        elementType = arraySchema.elementSchema
         itemSchema = null
-        binaryEncoder.writeArrayStart(arraySize.toLong())
+        binaryWriter.writeArrayStart(arraySize.toLong())
         beginReuse()
         return this
     }
@@ -97,13 +94,13 @@ internal class ArrayDirectEncoder(
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        binaryEncoder.startItem()
+        binaryWriter.startItem()
         itemSchema = elementType
         return true
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {
-        binaryEncoder.writeArrayEnd()
+        binaryWriter.writeArrayEnd()
         super.endStructure(descriptor)
     }
 }

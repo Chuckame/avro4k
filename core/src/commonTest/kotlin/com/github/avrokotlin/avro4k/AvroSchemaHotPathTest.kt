@@ -69,18 +69,16 @@ class AvroSchemaHotPathTest {
         StringSchema(logical).logicalTypeName shouldBe "my-type"
         ArraySchema(IntSchema(), logical).logicalTypeName shouldBe "my-type"
         RecordSchema(Name("R"), emptyList(), props = logical).logicalTypeName shouldBe "my-type"
-        parse("""{"type":"fixed","name":"F","size":8,"logicalType":"decimal","precision":5}""").logicalTypeName shouldBe "decimal"
-        parse("""{"type":"bytes","logicalType":"decimal","precision":5}""").logicalTypeName shouldBe "decimal"
-        parse("""{"type":"long","logicalType":"timestamp-millis"}""").logicalTypeName shouldBe "timestamp-millis"
+        (parse("""{"type":"fixed","name":"F","size":8,"logicalType":"decimal","precision":5}""") as ResolvedSchema).logicalTypeName shouldBe "decimal"
+        (parse("""{"type":"bytes","logicalType":"decimal","precision":5}""") as ResolvedSchema).logicalTypeName shouldBe "decimal"
+        (parse("""{"type":"long","logicalType":"timestamp-millis"}""") as ResolvedSchema).logicalTypeName shouldBe "timestamp-millis"
     }
 
     @Test
-    fun logicalTypeNameIsNullWhenAbsentOnUnionsAndWhenMalformed() {
+    fun logicalTypeNameIsNullWhenAbsentAndWhenMalformed() {
         IntSchema().logicalTypeName shouldBe null
         IntSchema(mapOf("other" to JsonPrimitive("x"))).logicalTypeName shouldBe null
         RecordSchema(Name("R"), emptyList()).logicalTypeName shouldBe null
-        // a union never has one, even when its branches do
-        UnionSchema(NullSchema(), StringSchema(mapOf("logicalType" to JsonPrimitive("uuid")))).logicalTypeName shouldBe null
         // JSON null, or not a primitive: ignored instead of throwing
         IntSchema(mapOf("logicalType" to JsonNull)).logicalTypeName shouldBe null
         IntSchema(mapOf("logicalType" to JsonObject(emptyMap()))).logicalTypeName shouldBe null

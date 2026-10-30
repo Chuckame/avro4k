@@ -1,30 +1,20 @@
-package com.github.avrokotlin.avro4k.internal.decoder.direct
+package com.github.avrokotlin.avro4k.internal.decoder
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.internal.IllegalIndexedAccessError
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.schema.fields
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryReader
+import com.github.avrokotlin.avro4k.internal.schema.PlainSchemas
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 
-internal class RecordAsMapDirectDecoder(
-    private val writerRecordSchema: AvroSchema,
+internal class RecordAsMapDecoder(
+    private val writerRecordSchema: AvroSchema.RecordSchema,
     avro: Avro,
-    binaryDecoder: AvroBinaryDecoder,
-) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
+    binaryReader: AvroBinaryReader,
+) : AbstractAvroBinaryDecoder(avro, binaryReader) {
     private var fieldNameToRead: String? = null
-
-    /**
-     * Kotlin's error for a `lateinit` property read before it is assigned, with its message: the one a read of the writer
-     * schema before the first field threw when this decoder kept its schema in a `lateinit` property of its own. Raised
-     * by reading such a property, as the error's class is not public on every platform.
-     */
-    override fun noWriterSchemaError(): Throwable = runCatching { NeverAssigned().currentAvroSchema }.exceptionOrNull() ?: noElementBegunError()
-
-    private class NeverAssigned {
-        lateinit var currentAvroSchema: AvroSchema
-    }
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {
         return writerRecordSchema.fields.size
@@ -36,7 +26,8 @@ internal class RecordAsMapDirectDecoder(
     ) {
         val field = writerRecordSchema.fields[index / 2]
         if (index % 2 == 0) {
-            currentAvroSchema = KEY_SCHEMA
+            // the key is always a string
+            currentAvroSchema = PlainSchemas.STRING
             fieldNameToRead = field.name
         } else {
             currentAvroSchema = field.schema
@@ -53,10 +44,6 @@ internal class RecordAsMapDirectDecoder(
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         throw IllegalIndexedAccessError()
-    }
-
-    companion object {
-        private val KEY_SCHEMA = AvroSchema.StringSchema()
     }
 
     override fun decodeBoolean(): Boolean {

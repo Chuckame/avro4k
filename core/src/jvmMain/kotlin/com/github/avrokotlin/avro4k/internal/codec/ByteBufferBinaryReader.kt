@@ -11,7 +11,7 @@ import java.nio.ByteOrder
  * Every read advances the [buffer]'s position, so once a value is decoded, the position sits right after its last
  * byte: nothing past it is read nor copied, whatever the number of bytes remaining after the value.
  *
- * It reads the buffer in place: going through a [ByteArrayDecoder] would copy all its remaining bytes first (a direct or
+ * It reads the buffer in place: going through a [ByteArrayBinaryReader] would copy all its remaining bytes first (a direct or
  * read-only buffer has no array to wrap), even when the value only takes a few of them.
  *
  * A single-byte read past the limit throws the [ByteBuffer]'s [java.nio.BufferUnderflowException], left to the caller
@@ -19,9 +19,9 @@ import java.nio.ByteOrder
  * bytes itself, before allocating anything. The [buffer]'s byte order is left as is: floats and doubles are read
  * little-endian whatever it is.
  */
-internal class ByteBufferDecoder(
+internal class ByteBufferBinaryReader(
     private val buffer: ByteBuffer,
-) : AvroBinaryDecoder() {
+) : AvroBinaryReader() {
     private val swapBytes = buffer.order() == ByteOrder.BIG_ENDIAN
 
     override fun readNull() {

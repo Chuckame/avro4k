@@ -10,11 +10,11 @@ import java.io.EOFException
 import java.io.InputStream
 import kotlin.test.Test
 
-class InputStreamDecoderTest {
+class InputStreamBinaryReaderTest {
     @Test
     fun `every value split across two refills is read whole at every split position`() {
         val encoded =
-            ByteArrayEncoder().apply {
+            ByteArrayBinaryWriter().apply {
                 writeBoolean(true)
                 writeInt(-300_000)
                 writeLong(Long.MIN_VALUE)
@@ -29,7 +29,7 @@ class InputStreamDecoderTest {
                 writeLong(7)
             }.toByteArray()
         for (bytesInFirstRead in 1..encoded.size) {
-            InputStreamDecoder(SplitInputStream(encoded, bytesInFirstRead)).apply {
+            InputStreamBinaryReader(SplitInputStream(encoded, bytesInFirstRead)).apply {
                 readBoolean() shouldBe true
                 readInt() shouldBe -300_000
                 readLong() shouldBe Long.MIN_VALUE
@@ -51,7 +51,7 @@ class InputStreamDecoderTest {
     fun `every varint split across two refills is read whole at every split position`() {
         for ((value, encoded) in INT_VECTORS) {
             for (bytesInFirstRead in 1..encoded.size) {
-                InputStreamDecoder(SplitInputStream(encoded + TRAILER, bytesInFirstRead)).apply {
+                InputStreamBinaryReader(SplitInputStream(encoded + TRAILER, bytesInFirstRead)).apply {
                     readInt() shouldBe value
                     readFixed(TRAILER.size) shouldBe TRAILER
                 }
@@ -59,7 +59,7 @@ class InputStreamDecoderTest {
         }
         for ((value, encoded) in LONG_VECTORS) {
             for (bytesInFirstRead in 1..encoded.size) {
-                InputStreamDecoder(SplitInputStream(encoded + TRAILER, bytesInFirstRead)).apply {
+                InputStreamBinaryReader(SplitInputStream(encoded + TRAILER, bytesInFirstRead)).apply {
                     readLong() shouldBe value
                     readFixed(TRAILER.size) shouldBe TRAILER
                 }
@@ -72,25 +72,25 @@ class InputStreamDecoderTest {
         val intTooLong = bytes(0x80, 0x80, 0x80, 0x80, 0x80, 0x01)
         val longTooLong = bytes(0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01)
         for (bytesInFirstRead in 1..MAX_VARINT_INT_BYTES) {
-            shouldThrow<AvroMalformedDataException> { InputStreamDecoder(SplitInputStream(intTooLong + TRAILER, bytesInFirstRead)).readInt() }
+            shouldThrow<AvroMalformedDataException> { InputStreamBinaryReader(SplitInputStream(intTooLong + TRAILER, bytesInFirstRead)).readInt() }
         }
         for (bytesInFirstRead in 1..MAX_VARINT_LONG_BYTES) {
-            shouldThrow<AvroMalformedDataException> { InputStreamDecoder(SplitInputStream(longTooLong + TRAILER, bytesInFirstRead)).readLong() }
+            shouldThrow<AvroMalformedDataException> { InputStreamBinaryReader(SplitInputStream(longTooLong + TRAILER, bytesInFirstRead)).readLong() }
         }
     }
 
     @Test
     fun `the input ending inside a varint read one byte at a time is an end of input`() {
-        shouldThrow<EOFException> { InputStreamDecoder(ByteArrayInputStream(ByteArray(0))).readInt() }
-        shouldThrow<EOFException> { InputStreamDecoder(ByteArrayInputStream(ByteArray(0))).readLong() }
+        shouldThrow<EOFException> { InputStreamBinaryReader(ByteArrayInputStream(ByteArray(0))).readInt() }
+        shouldThrow<EOFException> { InputStreamBinaryReader(ByteArrayInputStream(ByteArray(0))).readLong() }
         for ((_, encoded) in INT_VECTORS) {
             for (size in 1 until encoded.size) {
-                shouldThrow<EOFException> { InputStreamDecoder(OneByteInputStream(encoded.copyOf(size))).readInt() }
+                shouldThrow<EOFException> { InputStreamBinaryReader(OneByteInputStream(encoded.copyOf(size))).readInt() }
             }
         }
         for ((_, encoded) in LONG_VECTORS) {
             for (size in 1 until encoded.size) {
-                shouldThrow<EOFException> { InputStreamDecoder(OneByteInputStream(encoded.copyOf(size))).readLong() }
+                shouldThrow<EOFException> { InputStreamBinaryReader(OneByteInputStream(encoded.copyOf(size))).readLong() }
             }
         }
     }

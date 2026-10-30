@@ -20,7 +20,7 @@ import com.github.avrokotlin.avro4k.MissingFieldsEncodingException
 import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.fromJsonString
 import com.github.avrokotlin.avro4k.internal.EOFException
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
 import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
@@ -228,7 +228,7 @@ class AvroSerializationExceptionTest {
 
     private fun encodedLong(value: Long): ByteArray = encoded { writeLong(value) }
 
-    private fun encoded(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+    private fun encoded(write: ByteArrayBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 
     private companion object {
         val VALIDATING = Avro { validateSerialization = true }

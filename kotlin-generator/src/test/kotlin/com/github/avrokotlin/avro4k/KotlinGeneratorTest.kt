@@ -78,7 +78,6 @@ class KotlinGeneratorTest {
     }
 
     companion object {
-        @OptIn(ExperimentalPathApi::class)
         @JvmStatic
         fun getSchemasToTest(): List<File> {
             val output = mutableListOf<File>()

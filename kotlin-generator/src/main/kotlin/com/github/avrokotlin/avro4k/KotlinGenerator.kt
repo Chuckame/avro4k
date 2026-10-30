@@ -357,7 +357,7 @@ public class KotlinGenerator(
 
     private fun AvroSchema.typeNameFromMetadata(): TypeName? {
         return actualJavaClassName?.let { parseJavaClassName(it) }
-            ?: logicalTypeName?.let { logicalTypes[it] }
+            ?: (this as? ResolvedSchema)?.logicalTypeName?.let { logicalTypes[it] }
     }
 
     private fun getTypeName(schema: AvroSchema, potentialAnonymousBaseName: String): TypeName {

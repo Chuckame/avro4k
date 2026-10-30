@@ -4,7 +4,7 @@ import kotlin.jvm.JvmField
 
 /**
  * Writes Avro binary into an array it owns, byte for byte as Apache Avro's `BinaryEncoder` does, and hands the bytes
- * written with [toByteArray]. The mirror of [ByteArrayDecoder]: an array and a position.
+ * written with [toByteArray]. The mirror of [ByteArrayBinaryReader]: an array and a position.
  *
  * The bytes go into chunks: the first one small, enough for a typical record, each next one twice the previous up to
  * [MAX_CHUNK_SIZE], so that growing never copies what is already written. [toByteArray] copies the chunks into an array
@@ -14,11 +14,11 @@ import kotlin.jvm.JvmField
  * have reached [MAX_CHUNK_SIZE]: the memory held stays bounded by the chunk size whatever the value's size. Only
  * [writeChunksTo] then hands the rest, [toByteArray] no longer holding every byte.
  *
- * Only [writeLong] is written per platform, in [ByteArrayEncoder]: everything else is here.
+ * Only [writeLong] is written per platform, in [ByteArrayBinaryWriter]: everything else is here.
  */
-internal abstract class ChunkedByteArrayEncoder(
+internal abstract class ChunkedByteArrayBinaryWriter(
     private val writeFullChunk: ((chunk: ByteArray, length: Int) -> Unit)?,
-) : AvroBinaryEncoder() {
+) : AvroBinaryWriter() {
     /** The chunk being written. */
     @JvmField
     internal var bytes = ByteArray(FIRST_CHUNK_SIZE)
@@ -248,13 +248,13 @@ internal abstract class ChunkedByteArrayEncoder(
         position = p + encodeZigZagInt(value, bytes, p)
     }
 
-    /** The out-of-line part of [ByteArrayEncoder.writeLong] on the JVM and native. */
+    /** The out-of-line part of [ByteArrayBinaryWriter.writeLong] on the JVM and native. */
     internal fun writeVarLong(value: Long) {
         val p = reserveUpTo(MAX_VARINT_LONG_BYTES)
         position = p + encodeZigZagLong(value, bytes, p)
     }
 
-    /** The out-of-line part of [ByteArrayEncoder.writeLong] on Kotlin/JS, the long given as its two 32-bit halves. */
+    /** The out-of-line part of [ByteArrayBinaryWriter.writeLong] on Kotlin/JS, the long given as its two 32-bit halves. */
     internal fun writeVarLong(
         low: Int,
         high: Int,
@@ -312,15 +312,15 @@ internal abstract class ChunkedByteArrayEncoder(
 }
 
 /**
- * The [ChunkedByteArrayEncoder] with its [writeLong], written per platform.
+ * The [ChunkedByteArrayBinaryWriter] with its [writeLong], written per platform.
  *
  * A `Long` is a 64-bit integer on the JVM and native, which keep the zig-zag in `Long` arithmetic. Kotlin/JS emulates
  * it with an object of two 32-bit halves, each shift, mask or comparison on it being a call that allocates a new one:
  * there the zig-zag is done on the halves, as `Int`s.
  */
-internal expect class ByteArrayEncoder(
+internal expect class ByteArrayBinaryWriter(
     writeFullChunk: ((chunk: ByteArray, length: Int) -> Unit)? = null,
-) : ChunkedByteArrayEncoder {
+) : ChunkedByteArrayBinaryWriter {
     /** Kept small as [writeInt]. */
     override fun writeLong(value: Long)
 }

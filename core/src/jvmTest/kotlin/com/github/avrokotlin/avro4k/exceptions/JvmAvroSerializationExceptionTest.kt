@@ -9,7 +9,7 @@ import com.github.avrokotlin.avro4k.AvroSchemaGenerationException
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.AvroSingleObject
 import com.github.avrokotlin.avro4k.AvroStringable
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.schema
 import com.github.avrokotlin.avro4k.serializer.BigDecimalSerializer
 import com.github.avrokotlin.avro4k.serializer.BigIntegerSerializer
@@ -102,7 +102,7 @@ class JvmAvroSerializationExceptionTest {
         shouldThrow<AvroMalformedDataException> { singleObject.decodeFromByteArray(WithDecimal.serializer(), byteArrayOf(0xC3.toByte(), 1, 2)) }
     }
 
-    private fun encoded(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+    private fun encoded(write: ByteArrayBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 }
 
 private val JVM_TARGETS: List<DecodingTarget> =

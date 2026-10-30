@@ -1,4 +1,4 @@
-package com.github.avrokotlin.avro4k.internal.decoder.direct
+package com.github.avrokotlin.avro4k.internal.decoder
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
@@ -6,8 +6,7 @@ import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.internal.DecodingStep
 import com.github.avrokotlin.avro4k.internal.NullableUnionField
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.decoder.JsonDefaultDecoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryReader
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.schema.skip
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
@@ -19,30 +18,19 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonNull
 
 /**
- * Decodes one record after another: its parent decoder keeps it and hands it each next record it begins, through
- * [reset], instead of creating a decoder per record. Nothing of the previous record survives a [reset].
- *
- * Created with its first record begun, written with [writerRecordSchema] into [descriptor] with its resolved
- * [decodingSteps], in the state a [reset] for that record leaves it in: each field is written once, where a decoder
- * created empty and then reset wrote most of them twice. A record's decoders are created per call, one per nesting level,
- * so every record of a value nested in another, and the first record of each call, begins on a new decoder.
- *
- * Decodes the records whose fields do not match the writer schema's exactly: reordered, skipped, or taking a default
- * value. The others are decoded by [ExactRecordDirectDecoder].
+ * Decodes a record whose fields differ from the writer schema's: reordered, skipped, or taking a default value. The
+ * others are decoded by [ExactRecordDecoder].
  */
-internal class RecordDirectDecoder(
+internal class RecordDecoder(
     avro: Avro,
-    binaryDecoder: AvroBinaryDecoder,
-    writerRecordSchema: AvroSchema,
-    descriptor: SerialDescriptor,
-    decodingSteps: Array<DecodingStep>,
-) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
+    binaryReader: AvroBinaryReader,
     /** The writer schema of the record being decoded, and with [resolvedDescriptor], what [decodingSteps] were resolved for. */
-    private var writerRecordSchema: AvroSchema = writerRecordSchema
-    private var resolvedDescriptor: SerialDescriptor = descriptor
-
+    private var writerRecordSchema: AvroSchema,
+    descriptor: SerialDescriptor,
     // in the writer schema's field order. The missing fields are at the end to decode the default values
-    private var decodingSteps: Array<DecodingStep> = decodingSteps
+    private var decodingSteps: Array<DecodingStep>,
+) : AbstractAvroBinaryDecoder(avro, binaryReader) {
+    private var resolvedDescriptor: SerialDescriptor = descriptor
 
     /**
      * The next step [decodeElementIndex] takes; [NOT_IN_USE] once the record is ended. 0, the first step, on a new
@@ -51,17 +39,8 @@ internal class RecordDirectDecoder(
     private var nextDecodingStepIndex = 0
 
     /**
-     * When the field being decoded takes its default value, the index in [decodingSteps] of the step that follows its
-     * [DecodingStep.GetDefaultValue], so never 0; [READ_FROM_INPUT], 0, when it is read from the input, and until
-     * [decodeElementIndex] returns a field. 0 rather than -1 so that a new decoder starts with it without writing it.
-     *
-     * An index rather than the step itself: [decodeElementIndex] writes it for every field, and an int is a plain write,
-     * where a reference is a write with the garbage collector's barriers, on top of the field's schema written to
-     * [currentAvroSchema]. A field read from the input, the most common by far, then costs that one reference write, and
-     * each value decoded tells it from a default value by comparing an int.
-     *
-     * Before any field is begun, each value is decoded as read from the input: [currentAvroSchema] is then the marker of
-     * no field begun, on which every read fails with [noElementBegunError] without reading the input.
+     * The index in [decodingSteps] after the [DecodingStep.GetDefaultValue] of the field being decoded, or [READ_FROM_INPUT]
+     * when the field is read from the input. An int rather than the step: it is written for every field.
      */
     private var stepAfterDefaultValue = READ_FROM_INPUT
 
@@ -74,27 +53,6 @@ internal class RecordDirectDecoder(
         writerRecordSchema: AvroSchema,
         descriptor: SerialDescriptor,
     ): Boolean = writerRecordSchema === this.writerRecordSchema && descriptor === resolvedDescriptor
-
-    /** Begins decoding a record written with [writerRecordSchema] into [descriptor], with its resolved [decodingSteps]. */
-    fun reset(
-        writerRecordSchema: AvroSchema,
-        descriptor: SerialDescriptor,
-        decodingSteps: Array<DecodingStep>,
-    ): RecordDirectDecoder {
-        this.decodingSteps = decodingSteps
-        this.writerRecordSchema = writerRecordSchema
-        resolvedDescriptor = descriptor
-        return reset()
-    }
-
-    /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
-    fun reset(): RecordDirectDecoder {
-        stepAfterDefaultValue = READ_FROM_INPUT
-        currentAvroSchema = NO_ELEMENT_SCHEMA
-        beginReuse()
-        nextDecodingStepIndex = 0
-        return this
-    }
 
     override fun endStructure(descriptor: SerialDescriptor) {
         nextDecodingStepIndex = NOT_IN_USE
@@ -112,7 +70,7 @@ internal class RecordDirectDecoder(
                     // loop again to ignore the optional element
                 }
 
-                is DecodingStep.SkipWriterField -> binaryDecoder.skip(field.schema)
+                is DecodingStep.SkipWriterField -> binaryReader.skip(field.schema)
 
                 is DecodingStep.MissingElementValueFailure -> {
                     throw AvroSchemaMismatchException(
@@ -214,45 +172,49 @@ internal class RecordDirectDecoder(
         val step = stepAfterDefaultValue
         return if (step == READ_FROM_INPUT) super.decodeBytes() else defaultDecoder(step).decodeBytes()
     }
+
+    /** Begins decoding a record written with [writerRecordSchema] into [descriptor], with its resolved [decodingSteps]. */
+    fun reset(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+        decodingSteps: Array<DecodingStep>,
+    ): RecordDecoder {
+        this.decodingSteps = decodingSteps
+        this.writerRecordSchema = writerRecordSchema
+        resolvedDescriptor = descriptor
+        return reset()
+    }
+
+    /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
+    fun reset(): RecordDecoder {
+        stepAfterDefaultValue = READ_FROM_INPUT
+        currentAvroSchema = NO_ELEMENT_SCHEMA
+        beginReuse()
+        nextDecodingStepIndex = 0
+        return this
+    }
 }
 
-/** [RecordDirectDecoder]'s field being decoded is read from the input, not taken from a default value. */
+/** [RecordDecoder]'s field being decoded is read from the input, not taken from a default value. */
 private const val READ_FROM_INPUT = 0
 
 /**
- * Decodes the records whose elements are exactly the writer schema's fields, in its order: field i is element i, no
- * writer field is skipped and no element takes a default value (the workflow's `exactFieldSchemas`). Most records are
- * read with the schema they were written with, and so are such records.
- *
- * Their elements are read in order: [decodeSequentially] lets kotlinx's generated deserializers decode each element in
- * turn, without asking [decodeElementIndex] which one comes next and dispatching on its answer. Each element's schema is
- * taken by its index when it is begun, and each value decoded as it is, without the per-field decoding step checks that
- * [RecordDirectDecoder] makes for default values. A serializer that ignores [decodeSequentially] still gets every element
- * in order from [decodeElementIndex], then [CompositeDecoder.DECODE_DONE]. A nullable element written as a union of
- * `null` and one other type takes its branch on a shorter path ([decodeNullableSerializableElement]).
- *
- * Like [RecordDirectDecoder], its parent decoder keeps it and hands it each next exact record it begins, through
- * [reset]. Nothing of the previous record survives a [reset]. Like it too, it is created with its first record begun,
- * written with [writerRecordSchema] into [descriptor], whose fields have [fieldSchemas], and [nullableFields] for those
- * written as a union of `null` and one other type: each field is written once.
+ * Decodes a record whose fields are exactly the writer schema's, in the same order: field `i` is element `i`, none is
+ * skipped and none takes a default value. Its elements are read in order ([decodeSequentially]), without a decoding
+ * step per field, and a nullable element written as a union of `null` and one other type reads its branch directly.
  */
-internal class ExactRecordDirectDecoder(
+internal class ExactRecordDecoder(
     avro: Avro,
-    binaryDecoder: AvroBinaryDecoder,
-    writerRecordSchema: AvroSchema,
-    descriptor: SerialDescriptor,
-    fieldSchemas: Array<AvroSchema>,
-    nullableFields: Array<NullableUnionField?>,
-) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
+    binaryReader: AvroBinaryReader,
     /** The writer schema of the record being decoded, and with [resolvedDescriptor], what [fieldSchemas] were resolved for. */
-    private var writerRecordSchema: AvroSchema = writerRecordSchema
-    private var resolvedDescriptor: SerialDescriptor = descriptor
-
+    private var writerRecordSchema: AvroSchema,
+    descriptor: SerialDescriptor,
     /** The writer schema of each field, by element index. */
-    private var fieldSchemas: Array<AvroSchema> = fieldSchemas
-
+    private var fieldSchemas: Array<AvroSchema>,
     /** Each field's [NullableUnionField], by element index, or null when its schema is not such a union. */
-    private var nullableFields: Array<NullableUnionField?> = nullableFields
+    private var nullableFields: Array<NullableUnionField?>,
+) : AbstractAvroBinaryDecoder(avro, binaryReader) {
+    private var resolvedDescriptor: SerialDescriptor = descriptor
 
     /**
      * The next element [decodeElementIndex] returns; [NOT_IN_USE] once the record is ended. 0, the first element, on a
@@ -269,31 +231,6 @@ internal class ExactRecordDirectDecoder(
         writerRecordSchema: AvroSchema,
         descriptor: SerialDescriptor,
     ): Boolean = writerRecordSchema === this.writerRecordSchema && descriptor === resolvedDescriptor
-
-    /**
-     * Begins decoding a record written with [writerRecordSchema] into [descriptor], whose fields have [fieldSchemas], and
-     * [nullableFields] for those written as a union of `null` and one other type.
-     */
-    fun reset(
-        writerRecordSchema: AvroSchema,
-        descriptor: SerialDescriptor,
-        fieldSchemas: Array<AvroSchema>,
-        nullableFields: Array<NullableUnionField?>,
-    ): ExactRecordDirectDecoder {
-        this.fieldSchemas = fieldSchemas
-        this.nullableFields = nullableFields
-        this.writerRecordSchema = writerRecordSchema
-        resolvedDescriptor = descriptor
-        return reset()
-    }
-
-    /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
-    fun reset(): ExactRecordDirectDecoder {
-        currentAvroSchema = NO_ELEMENT_SCHEMA
-        beginReuse()
-        nextElementIndex = 0
-        return this
-    }
 
     override fun endStructure(descriptor: SerialDescriptor) {
         nextElementIndex = NOT_IN_USE
@@ -324,7 +261,6 @@ internal class ExactRecordDirectDecoder(
      *
      * An index of neither branch fails as on the general path, and the input is read with the same calls.
      */
-    @OptIn(ExperimentalSerializationApi::class)
     override fun <T : Any> decodeNullableSerializableElement(
         descriptor: SerialDescriptor,
         index: Int,
@@ -334,10 +270,10 @@ internal class ExactRecordDirectDecoder(
         beginElement(descriptor, index)
         val field = nullableFields.getOrNull(index)
         if (field == null || currentAvroSchema !== field.union || deserializer.descriptor.isNullable) return decodeNullableValue(deserializer)
-        val branchIndex = binaryDecoder.readIndex()
+        val branchIndex = binaryReader.readIndex()
         if (branchIndex == field.nullIndex) {
             currentAvroSchema = field.nullBranch
-            binaryDecoder.readNull()
+            binaryReader.readNull()
             return null
         }
         if (branchIndex != field.valueIndex) throw unionIndexOutOfRangeError(branchIndex, field.union)
@@ -354,5 +290,30 @@ internal class ExactRecordDirectDecoder(
         nextElementIndex = index + 1
         currentAvroSchema = fieldSchemas[index]
         return index
+    }
+
+    /**
+     * Begins decoding a record written with [writerRecordSchema] into [descriptor], whose fields have [fieldSchemas], and
+     * [nullableFields] for those written as a union of `null` and one other type.
+     */
+    fun reset(
+        writerRecordSchema: AvroSchema,
+        descriptor: SerialDescriptor,
+        fieldSchemas: Array<AvroSchema>,
+        nullableFields: Array<NullableUnionField?>,
+    ): ExactRecordDecoder {
+        this.fieldSchemas = fieldSchemas
+        this.nullableFields = nullableFields
+        this.writerRecordSchema = writerRecordSchema
+        resolvedDescriptor = descriptor
+        return reset()
+    }
+
+    /** Begins decoding a record of the type this decoder was last reset for, from its first field. */
+    fun reset(): ExactRecordDecoder {
+        currentAvroSchema = NO_ELEMENT_SCHEMA
+        beginReuse()
+        nextElementIndex = 0
+        return this
     }
 }

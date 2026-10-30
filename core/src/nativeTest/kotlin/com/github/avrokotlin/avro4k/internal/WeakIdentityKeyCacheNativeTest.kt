@@ -11,7 +11,7 @@ import kotlin.native.concurrent.TransferMode
 import kotlin.native.concurrent.Worker
 import kotlin.test.Test
 
-@OptIn(ObsoleteWorkersApi::class, ExperimentalAtomicApi::class)
+@OptIn(ExperimentalAtomicApi::class)
 class WeakIdentityKeyCacheNativeTest {
     private class Shared(
         val cache: WeakIdentityKeyCache<Any, Any>,

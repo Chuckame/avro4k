@@ -326,8 +326,6 @@ sealed class com.github.avrokotlin.avro4k/Avro : kotlinx.serialization/BinaryFor
 sealed class com.github.avrokotlin.avro4k/AvroSchema { // com.github.avrokotlin.avro4k/AvroSchema|null[0]
     abstract val simpleName // com.github.avrokotlin.avro4k/AvroSchema.simpleName|{}simpleName[0]
         abstract fun <get-simpleName>(): kotlin/String // com.github.avrokotlin.avro4k/AvroSchema.simpleName.<get-simpleName>|<get-simpleName>(){}[0]
-    final val logicalTypeName // com.github.avrokotlin.avro4k/AvroSchema.logicalTypeName|{}logicalTypeName[0]
-        final fun <get-logicalTypeName>(): kotlin/String? // com.github.avrokotlin.avro4k/AvroSchema.logicalTypeName.<get-logicalTypeName>|<get-logicalTypeName>(){}[0]
     final val type // com.github.avrokotlin.avro4k/AvroSchema.type|{}type[0]
         final fun <get-type>(): com.github.avrokotlin.avro4k/AvroSchema.Type // com.github.avrokotlin.avro4k/AvroSchema.type.<get-type>|<get-type>(){}[0]
     open val fullName // com.github.avrokotlin.avro4k/AvroSchema.fullName|{}fullName[0]
@@ -659,7 +657,10 @@ sealed class com.github.avrokotlin.avro4k/AvroSchema { // com.github.avrokotlin.
     final object Companion // com.github.avrokotlin.avro4k/AvroSchema.Companion|null[0]
 }
 
-sealed class com.github.avrokotlin.avro4k/ResolvedSchema : com.github.avrokotlin.avro4k/AvroSchema, com.github.avrokotlin.avro4k/WithProps // com.github.avrokotlin.avro4k/ResolvedSchema|null[0]
+sealed class com.github.avrokotlin.avro4k/ResolvedSchema : com.github.avrokotlin.avro4k/AvroSchema, com.github.avrokotlin.avro4k/WithProps { // com.github.avrokotlin.avro4k/ResolvedSchema|null[0]
+    final val logicalTypeName // com.github.avrokotlin.avro4k/ResolvedSchema.logicalTypeName|{}logicalTypeName[0]
+        final fun <get-logicalTypeName>(): kotlin/String? // com.github.avrokotlin.avro4k/ResolvedSchema.logicalTypeName.<get-logicalTypeName>|<get-logicalTypeName>(){}[0]
+}
 
 final object com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer : com.github.avrokotlin.avro4k.serializer/AvroSerializer<kotlin.time/Instant> { // com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer|null[0]
     final fun deserializeAvro(com.github.avrokotlin.avro4k/AvroDecoder): kotlin.time/Instant // com.github.avrokotlin.avro4k.serializer/KotlinInstantSerializer.deserializeAvro|deserializeAvro(com.github.avrokotlin.avro4k.AvroDecoder){}[0]

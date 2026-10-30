@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Avro writes an array or a map as a sequence of blocks: `count, items..., count, items..., 0`. A negative count is
  * followed by the block's size in bytes. avro4k's own encoder always writes a single block, but other writers (Apache's
- * blocking encoders, object container files...) split collections, and the direct decoder must read all the blocks of
+ * blocking encoders, object container files...) split collections, and the binary decoder must read all the blocks of
  * one collection into one value. The bytes below are written by hand so the block boundaries are explicit.
  *
  * Varints are zig-zag encoded: 0 -> 00, 1 -> 02, 2 -> 04, 3 -> 06, -1 -> 01.

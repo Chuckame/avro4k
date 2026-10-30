@@ -184,7 +184,6 @@ public class SpecificAvro4kKafkaDeserializer<T : Any>(
         initialize(schemaRegistry, props, isKey)
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     override fun configure(config: KafkaAvroDeserializerConfig) {
         val specificAvroClassLookupKey =
             when (isKey) {

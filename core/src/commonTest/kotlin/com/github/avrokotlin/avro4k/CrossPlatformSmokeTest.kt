@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalUuidApi::class)
-
 package com.github.avrokotlin.avro4k
 
 import io.kotest.matchers.shouldBe

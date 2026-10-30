@@ -9,7 +9,7 @@ class VarintTest {
         for ((value, expected) in INT_VECTORS) {
             encodeInt(value) shouldBe expected
             writeIntToByteArray(value) shouldBe expected
-            ByteArrayDecoder(expected).readInt() shouldBe value
+            ByteArrayBinaryReader(expected).readInt() shouldBe value
         }
     }
 
@@ -18,7 +18,7 @@ class VarintTest {
         for ((value, expected) in LONG_VECTORS) {
             encodeLong(value) shouldBe expected
             writeLongToByteArray(value) shouldBe expected
-            ByteArrayDecoder(expected).readLong() shouldBe value
+            ByteArrayBinaryReader(expected).readLong() shouldBe value
         }
     }
 
@@ -68,7 +68,7 @@ class VarintTest {
         val encoded = encodeInt(value)
         encoded.size shouldBe expectedLength
         writeIntToByteArray(value) shouldBe encoded
-        ByteArrayDecoder(encoded).readInt() shouldBe value
+        ByteArrayBinaryReader(encoded).readInt() shouldBe value
     }
 
     private fun assertLongRoundTrip(
@@ -78,7 +78,7 @@ class VarintTest {
         val encoded = encodeLong(value)
         encoded.size shouldBe expectedLength
         writeLongToByteArray(value) shouldBe encoded
-        ByteArrayDecoder(encoded).readLong() shouldBe value
+        ByteArrayBinaryReader(encoded).readLong() shouldBe value
     }
 
     companion object {
@@ -139,8 +139,8 @@ class VarintTest {
             return bytes.copyOf(encodeZigZagLong(value, bytes, 0))
         }
 
-        fun writeIntToByteArray(value: Int): ByteArray = ByteArrayEncoder().apply { writeInt(value) }.toByteArray()
+        fun writeIntToByteArray(value: Int): ByteArray = ByteArrayBinaryWriter().apply { writeInt(value) }.toByteArray()
 
-        fun writeLongToByteArray(value: Long): ByteArray = ByteArrayEncoder().apply { writeLong(value) }.toByteArray()
+        fun writeLongToByteArray(value: Long): ByteArray = ByteArrayBinaryWriter().apply { writeLong(value) }.toByteArray()
     }
 }

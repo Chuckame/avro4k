@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalSerializationApi::class)
-
 package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
@@ -16,7 +14,6 @@ import com.github.avrokotlin.avro4k.AvroSchema.NullSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement

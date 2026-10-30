@@ -10,7 +10,7 @@ import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.SerializersModule
 
 @OptIn(ExperimentalSerializationApi::class)
-internal class PolymorphicEncoder(
+internal class PolymorphicGenericEncoder(
     private val avro: Avro,
     private val schema: AvroSchema,
     private val onEncoded: (Any) -> Unit,

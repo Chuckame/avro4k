@@ -6,6 +6,7 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -23,6 +24,7 @@ import kotlin.test.Test
  * handed it for, union branches resolved; and, asked before any field or item is begun, fails as it always did, without
  * reading anything from the input.
  */
+@OptIn(ExperimentalSerializationApi::class)
 class CurrentWriterSchemaTest {
     @Test
     fun `each decoder kind reports the writer schema of the value it decodes`() {
@@ -329,10 +331,7 @@ private object EarlyCountsSerializer : KSerializer<Map<String, Int>> {
     }
 }
 
-/**
- * Peeks before the first key of a record read as a map: that decoder kept its schema in a `lateinit` property, and fails
- * with Kotlin's error for it.
- */
+/** Peeks before the first key of a record read as a map. */
 private object EarlyRecordAsMapSerializer : KSerializer<Map<String, String>> {
     private val delegate = MapSerializer(String.serializer(), String.serializer())
     override val descriptor: SerialDescriptor get() = delegate.descriptor
@@ -344,7 +343,7 @@ private object EarlyRecordAsMapSerializer : KSerializer<Map<String, String>> {
 
     override fun deserialize(decoder: Decoder): Map<String, String> {
         val record = decoder.beginStructure(descriptor)
-        record.shouldFailBeforeAnyElement("UninitializedPropertyAccessException", "lateinit property currentAvroSchema has not been initialized")
+        record.shouldFailBeforeAnyElement("IllegalStateException", NO_ELEMENT_MESSAGE)
         val size = record.decodeCollectionSize(descriptor)
         val entries = (0 until size).associate { record.decodeStringElement(descriptor, 2 * it) to record.decodeSerializableElement(descriptor, 2 * it + 1, EarlyPairValue) }
         record.endStructure(descriptor)

@@ -16,12 +16,9 @@ import com.github.avrokotlin.avro4k.internal.encodeToUtf8
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import com.github.avrokotlin.avro4k.internal.resolveDefaultBranch
 import com.github.avrokotlin.avro4k.internal.schema.CHAR_LOGICAL_TYPE_NAME
-import com.github.avrokotlin.avro4k.internal.schema.elementType
-import com.github.avrokotlin.avro4k.internal.schema.fields
-import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.PlainSchemas
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
-import com.github.avrokotlin.avro4k.internal.schema.types
-import com.github.avrokotlin.avro4k.internal.schema.valueType
 import com.github.avrokotlin.avro4k.internal.toByteExact
 import com.github.avrokotlin.avro4k.internal.toFloatExact
 import com.github.avrokotlin.avro4k.internal.toIntExact
@@ -95,7 +92,7 @@ internal class JsonDefaultDecoder(
             StructureKind.LIST ->
                 when {
                     value is JsonArray && currentAvroSchema.type == AvroSchema.Type.ARRAY ->
-                        ArrayJsonDefaultDecoder(avro, value, currentAvroSchema.elementType)
+                        ArrayJsonDefaultDecoder(avro, value, currentAvroSchema.asType<AvroSchema.ArraySchema>().elementSchema)
 
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
@@ -103,7 +100,7 @@ internal class JsonDefaultDecoder(
             StructureKind.MAP ->
                 when {
                     value is JsonObject && currentAvroSchema.type == AvroSchema.Type.MAP ->
-                        MapJsonDefaultDecoder(avro, value, currentAvroSchema.valueType)
+                        MapJsonDefaultDecoder(avro, value, currentAvroSchema.asType<AvroSchema.MapSchema>().valueSchema)
 
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.MAP)
                 }
@@ -179,7 +176,7 @@ internal class JsonDefaultDecoder(
     private fun bytesValue(): ByteArray =
         when (currentAvroSchema.type) {
             AvroSchema.Type.BYTES -> primitive.content.defaultValueBytes()
-            AvroSchema.Type.FIXED -> primitive.content.defaultValueBytes().copyOf(currentAvroSchema.fixedSize)
+            AvroSchema.Type.FIXED -> primitive.content.defaultValueBytes().copyOf(currentAvroSchema.asType<AvroSchema.FixedSchema>().size)
             else -> primitive.content.encodeToUtf8()
         }
 
@@ -391,13 +388,9 @@ private class MapJsonDefaultDecoder(
     override fun elementDecoder(index: Int): JsonDefaultDecoder {
         if (index % 2 == 0) {
             currentEntry = entries.next()
-            return JsonDefaultDecoder(avro, JsonPrimitive(currentEntry.key), STRING_SCHEMA)
+            return JsonDefaultDecoder(avro, JsonPrimitive(currentEntry.key), PlainSchemas.STRING)
         }
         return JsonDefaultDecoder(avro, currentEntry.value, valueSchema)
-    }
-
-    private companion object {
-        val STRING_SCHEMA: AvroSchema = AvroSchema.StringSchema()
     }
 }
 
@@ -420,7 +413,7 @@ private class RecordJsonDefaultDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         while (nextDecodingStepIndex < workflow.decoding.size) {
             var step = workflow.decoding[nextDecodingStepIndex++]
-            if (step is DecodingStep.DeserializeWriterField && recordSchema.fields[step.writerFieldIndex].name !in record) {
+            if (step is DecodingStep.DeserializeWriterField && recordSchema.asType<AvroSchema.RecordSchema>().fields[step.writerFieldIndex].name !in record) {
                 step = avro.recordResolver.missingElements(workflow, descriptor)[step.elementIndex]
             }
             when (step) {
@@ -444,7 +437,7 @@ private class RecordJsonDefaultDecoder(
     override fun elementDecoder(index: Int): JsonDefaultDecoder =
         when (val step = currentDecodingStep) {
             is DecodingStep.DeserializeWriterField ->
-                JsonDefaultDecoder(avro, record.getValue(recordSchema.fields[step.writerFieldIndex].name), step.schema)
+                JsonDefaultDecoder(avro, record.getValue(recordSchema.asType<AvroSchema.RecordSchema>().fields[step.writerFieldIndex].name), step.schema)
 
             is DecodingStep.GetDefaultValue -> JsonDefaultDecoder(avro, step.defaultValue, step.schema)
         }
@@ -460,7 +453,7 @@ private class PolymorphicJsonDefaultDecoder(
         namesAndAliasesToSerialName: Map<String, String>,
         schema: AvroSchema,
     ): String? {
-        return schema.types.firstNotNullOfOrNull { tryFindSerialName(namesAndAliasesToSerialName, it) }
+        return schema.asType<AvroSchema.UnionSchema>().types.firstNotNullOfOrNull { tryFindSerialName(namesAndAliasesToSerialName, it) }
     }
 
     override fun newDecoder(chosenSchema: AvroSchema): Decoder {

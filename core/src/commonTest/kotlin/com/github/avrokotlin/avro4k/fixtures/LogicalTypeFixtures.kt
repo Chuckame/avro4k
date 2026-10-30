@@ -173,7 +173,6 @@ private data class InstantHolder(
 
 // No whole Double such as 1.0: its text is not the same on Kotlin/JS (see the floating-point fixture below)
 @Serializable
-@OptIn(ExperimentalAvro4kApi::class)
 private data class Stringables(
     @AvroStringable val int: Int,
     @AvroStringable val long: Long,
@@ -184,7 +183,6 @@ private data class Stringables(
 )
 
 @Serializable
-@OptIn(ExperimentalAvro4kApi::class)
 private data class StringableFloatingPoints(
     @AvroStringable val one: Double,
     @AvroStringable val negativeZero: Double,

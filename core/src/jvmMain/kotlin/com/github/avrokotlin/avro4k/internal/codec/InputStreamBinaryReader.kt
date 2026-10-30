@@ -5,7 +5,7 @@ import java.io.EOFException
 import java.io.InputStream
 
 /**
- * Reads Avro binary from an [InputStream] through an array it refills as it decodes (see [BufferedDecoder]), never the
+ * Reads Avro binary from an [InputStream] through an array it refills as it decodes (see [BufferedBinaryReader]), never the
  * whole input at once.
  *
  * The array starts at the size the stream says it holds, so that a small value is not decoded through a large array
@@ -15,9 +15,9 @@ import java.io.InputStream
  * single value, and [requireEnd] checks that nothing follows it, as kotlinx-serialization-json's `decodeFromStream`
  * does. The stream is neither rewound nor closed.
  */
-internal class InputStreamDecoder(
+internal class InputStreamBinaryReader(
     private val input: InputStream,
-) : BufferedDecoder(ByteArray(input.available().coerceIn(MIN_BUFFER_SIZE, MAX_BUFFER_SIZE)), 0, 0) {
+) : BufferedBinaryReader(ByteArray(input.available().coerceIn(MIN_BUFFER_SIZE, MAX_BUFFER_SIZE)), 0, 0) {
     /** Throws unless every byte of the stream has been read. */
     fun requireEnd() {
         if (position < limit || input.read() != -1) {

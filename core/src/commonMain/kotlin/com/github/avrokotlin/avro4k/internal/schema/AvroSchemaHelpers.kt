@@ -10,7 +10,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.Type
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.ResolvedSchema
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryReader
 import com.github.avrokotlin.avro4k.internal.unionIndexOutOfRangeError
 import com.github.avrokotlin.avro4k.toJsonElement
 import kotlinx.serialization.json.JsonElement
@@ -21,120 +21,36 @@ import kotlin.math.log10
 import kotlin.math.roundToLong
 
 /*
- * The helpers that the runtime (encoders, decoders, resolvers), the serializers and the schema visitors use on Apache's
- * `Schema`, ported to [AvroSchema]. Each one keeps the name and the semantics of the Apache-typed helper it
- * replaces, so switching a call site is an import swap; the few deliberate differences are called out in the KDoc.
- *
- * Hot-path rules (they run per value once the runtime reads `AvroSchema`):
+ * Hot-path rules for these helpers, which run per value:
  * - never `==`, `indexOf` or `contains` on an `AvroSchema` or a `Field` (structural walks): kinds are compared through
  *   the stored [AvroSchema.type] (an enum, compared by identity), names and logical types as `String`s;
  * - no allocation on the lookup paths: plain indexed loops, no `listOf`, no capturing lambda, no boxed return value.
  */
 
-// ---- Apache-shaped accessors ----
-// Each throws on the wrong kind of schema exactly like the Apache getter it mirrors: same exception class as far as
-// common code allows (Apache's `AvroRuntimeException` is a direct `RuntimeException` subclass, so a plain
-// `RuntimeException` is thrown, neither an `IllegalArgumentException` nor an `IllegalStateException`), and the same
-// message, `"<Not a …>: <the schema as JSON>"`.
+/** This schema as a [T], or an error naming the expected kind and the actual schema. */
+internal inline fun <reified T : AvroSchema> AvroSchema.asType(): T =
+    this as? T ?: throw IllegalStateException("Expected a ${T::class.simpleName}, but was ${toSchemaJsonString()}")
 
-/** Apache's `Schema.isUnion()`. */
+/** Whether this schema is a union: a field read and an identity comparison, cheaper than an `is` check on JS. */
 internal val AvroSchema.isUnion: Boolean
     get() = type === Type.UNION
 
-/** Apache's `Schema.getTypes()`: the branches of a union. Throws `Not a union` on any other schema. */
-internal val AvroSchema.types: List<ResolvedSchema>
-    get() = (this as? UnionSchema ?: throw wrongKind("Not a union")).types
-
-/** Apache's `Schema.getFixedSize()`. Throws `Not fixed` on any other schema. */
-internal val AvroSchema.fixedSize: Int
-    get() = (this as? FixedSchema ?: throw wrongKind("Not fixed")).size
-
-/** Apache's `Schema.getEnumSymbols()`. Throws `Not an enum` on any other schema. */
-internal val AvroSchema.enumSymbols: List<String>
-    get() = (this as? EnumSchema ?: throw wrongKind("Not an enum")).symbols
-
-/** Apache's `Schema.getElementType()`. Throws `Not an array` on any other schema. */
-internal val AvroSchema.elementType: AvroSchema
-    get() = (this as? ArraySchema ?: throw wrongKind("Not an array")).elementSchema
-
-/** Apache's `Schema.getValueType()`. Throws `Not a map` on any other schema. */
-internal val AvroSchema.valueType: AvroSchema
-    get() = (this as? MapSchema ?: throw wrongKind("Not a map")).valueSchema
-
-/** Apache's `Schema.getFields()`. Throws `Not a record` on any other schema. */
-internal val AvroSchema.fields: List<RecordSchema.Field>
-    get() = (this as? RecordSchema ?: throw wrongKind("Not a record")).fields
-
-/**
- * Apache's `Schema.getAliases()`: the **full names** of the aliases of a named schema. Throws `Not a named type` on
- * any other schema. Allocates a new set on each call: for error messages and name-miss fallbacks only. To test one
- * name without allocating, use [isFullNameMatch].
- */
-internal val AvroSchema.aliases: Set<String>
-    get() = (this as? NamedSchema ?: throw wrongKind("Not a named type")).aliasFullNames()
-
-/** Apache's `Schema.hasEnumSymbol(symbol)`. O(1). Throws `Not an enum` on any other schema. */
-internal fun AvroSchema.hasEnumSymbol(symbol: String): Boolean {
-    return (this as? EnumSchema ?: throw wrongKind("Not an enum")).getSymbolIndexOrNull(symbol) != null
-}
-
-/**
- * Apache's `Schema.getEnumOrdinal(symbol)`. O(1). Throws `Not an enum` on any other schema, and, like Apache,
- * `enum value '<symbol>' is not in the enum symbol set: [<symbols>]` for an unknown symbol.
- */
-internal fun AvroSchema.getEnumOrdinal(symbol: String): Int {
-    val enumSchema = this as? EnumSchema ?: throw wrongKind("Not an enum")
-    return enumSchema.getSymbolIndexOrNull(symbol)
-        ?: throw RuntimeException("enum value '$symbol' is not in the enum symbol set: ${enumSchema.symbols}")
-}
-
-/**
- * Apache's `Schema.Type.getName()`: the lower-case name of the type, as written in a schema (`"int"`, `"record"`).
- * Returns a constant: no `lowercase()` allocation.
- */
-internal fun Type.getName(): String =
-    when (this) {
-        Type.RECORD -> "record"
-        Type.ENUM -> "enum"
-        Type.FIXED -> "fixed"
-        Type.ARRAY -> "array"
-        Type.MAP -> "map"
-        Type.UNION -> "union"
-        Type.NULL -> "null"
-        Type.BOOLEAN -> "boolean"
-        Type.INT -> "int"
-        Type.LONG -> "long"
-        Type.FLOAT -> "float"
-        Type.DOUBLE -> "double"
-        Type.BYTES -> "bytes"
-        Type.STRING -> "string"
-    }
-
-/**
- * The full name as Apache's `Schema.getFullName()` returns it, for error messages (`Unsupported schema '<full name>'…`):
- * the same as [AvroSchema.fullName], except for a union, which Apache names after its branches' simple names,
- * `union[null, int, MyRecord]`, where the model says `union`. Allocates for a union: error paths only.
- */
+/** The full name for error messages: a union is named after its branches, `union[null, int, MyRecord]`. Allocates. */
 internal val AvroSchema.fullNameForMessages: String
     get() {
         if (this !is UnionSchema) return fullName
         return types.joinToString(separator = ", ", prefix = "union[", postfix = "]") { it.simpleName }
     }
 
-/**
- * The schema as compact JSON, the shape of Apache's `Schema.toString()` (e.g. `"string"`, `["null","int"]`), for error
- * messages that embed the writer schema. Cold: it renders the whole schema on each call.
- */
+/** The schema as compact JSON (`"string"`, `["null","int"]`), for error messages. Renders the whole schema. */
 internal fun AvroSchema.toSchemaJsonString(): String = toJsonElement().toString()
-
-private fun AvroSchema.wrongKind(prefix: String): RuntimeException = RuntimeException("$prefix: ${toSchemaJsonString()}")
 
 // ---- names and aliases ----
 
-/** A record, an enum or a fixed. Was `@InternalAvro4kApi public` on Apache's `Schema` only for Confluent. */
+/** A record, an enum or a fixed. */
 internal fun AvroSchema.isNamedSchema(): Boolean = this is NamedSchema
 
-/** [aliases] for a named schema, an empty set for any other one (never throws). Allocates, like [aliases]. */
+/** The full names of a named schema's aliases, an empty set for any other one. Allocates. */
 internal fun AvroSchema.nonFailingAliases(): Set<String> = if (this is NamedSchema) aliasFullNames() else emptySet()
 
 private fun NamedSchema.aliasFullNames(): Set<String> {
@@ -144,9 +60,7 @@ private fun NamedSchema.aliasFullNames(): Set<String> {
 
 /**
  * True if [fullNameToMatch] is this schema's full name or, for a named schema, the full name of one of its aliases.
- * A non-named schema's full name is its type name (`"int"`, `"array"`), as in Apache, except for a union: `"union"`
- * here, `"union[…]"` in Apache ([fullNameForMessages]). No call site matches a union's name: they all resolve the
- * union first. Allocation-free on a full-name hit; iterates the aliases (an iterator) only on a miss.
+ * A non-named schema's full name is its type name (`"int"`, `"array"`, `"union"`).
  */
 internal fun AvroSchema.isFullNameMatch(fullNameToMatch: String): Boolean {
     if (fullName == fullNameToMatch) return true
@@ -176,35 +90,22 @@ internal inline fun AvroSchema.isFullNameOrAliasMatch(
 // ---- union branch lookups ----
 
 /**
- * The index of the first union branch of type [expectedType], or **-1** if there is none (not `null`: no boxing).
- * Throws `Not a union` when this schema is not a union, like Apache's `getIndexNamed`.
- *
- * One read of the union's table of first branches by type ([UnionSchema.firstIndexByType]), built at construction.
- * For an unnamed type (primitives, `null`, `array`, `map`) a union has at most one such branch, so this is exactly
- * Apache's `getIndexNamed(expectedType.getName())`. For a named type it returns the first record/enum/fixed branch,
- * where Apache's name lookup would only have matched a named schema literally called `record`, `enum` or `fixed`: no
- * call site asks for a named type.
+ * The index of the first union branch of type [expectedType], or -1 (not `null`: no boxing). For a named type, the
+ * first record, enum or fixed branch. One read of [UnionSchema.firstIndexByType].
  */
 internal fun AvroSchema.getIndexTyped(expectedType: Type): Int {
-    return (this as? UnionSchema ?: throw wrongKind("Not a union")).firstIndexByType[expectedType.ordinal]
+    return asType<UnionSchema>().firstIndexByType[expectedType.ordinal]
 }
 
 /**
- * The index of the first union branch of type [expectedType] whose logical type is [logicalTypeName], or **-1**.
- * Throws `Not a union` when this schema is not a union.
- *
- * Compares the cached [AvroSchema.logicalTypeName] (a `String` field), never the props. Replaces the `vararg` Apache
- * helper with one overload per arity used (one or two types), so no array is allocated per call.
- *
- * **Differs from Apache for invalid or unregistered logical types:** Apache's `getLogicalType()` is null when the
- * `logicalType` prop names a type Apache does not know (e.g. avro4k's own `char` on a schema parsed from JSON) or one
- * that fails validation (e.g. `decimal` without `precision`), while [AvroSchema.logicalTypeName] is the raw prop.
+ * The index of the first union branch of type [expectedType] whose raw [ResolvedSchema.logicalTypeName] is
+ * [logicalTypeName], or -1. One overload per number of types rather than a `vararg`: no array per call.
  */
 internal fun AvroSchema.getIndexLogicallyTyped(
     logicalTypeName: String,
     expectedType: Type,
 ): Int {
-    val branches = types
+    val branches = asType<AvroSchema.UnionSchema>().types
     for (i in branches.indices) {
         val branch = branches[i]
         if (branch.type === expectedType && branch.logicalTypeName == logicalTypeName) return i
@@ -214,7 +115,7 @@ internal fun AvroSchema.getIndexLogicallyTyped(
 
 /**
  * [getIndexLogicallyTyped] for [firstExpectedType], then for [secondExpectedType]: the order of the types is the
- * priority, as in the Apache `vararg` helper, whatever the order of the branches.
+ * priority, whatever the order of the branches.
  */
 internal fun AvroSchema.getIndexLogicallyTyped(
     logicalTypeName: String,
@@ -227,18 +128,14 @@ internal fun AvroSchema.getIndexLogicallyTyped(
 }
 
 /**
- * False when this schema's `logicalType` names one of the specification's logical types (Apache Java's built-in ones) but
- * breaks its rules, e.g. `date` on a string, `uuid` on a `fixed` of another size than 16, or `decimal` without a positive
- * int `precision`: the specification says an implementation must then ignore the logical type and use the underlying
- * type, which is what Apache's `getLogicalType()` returns (null). True otherwise, including for no logical type and for
- * any other name (avro4k's own `char`, a user's custom one), which avro4k resolves by name.
- *
- * Mirrors Apache Java 1.12's `LogicalTypes.fromSchemaIgnoreInvalid(schema) != null` for those names. Allocation-free: a
- * few map lookups for a decimal, a type compare otherwise.
+ * False when this schema's `logicalType` names one of the specification's logical types but breaks its rules, e.g.
+ * `date` on a string, `uuid` on a `fixed` of another size than 16, or `decimal` without a positive int `precision`: the
+ * specification says to ignore such a logical type. True otherwise, including for no logical type and for any other name
+ * (avro4k's own `char`, a user's custom one).
  */
-internal fun AvroSchema.hasValidLogicalType(): Boolean {
+internal fun ResolvedSchema.hasValidLogicalType(): Boolean {
     val name = logicalTypeName ?: return true
-    val props = (this as? ResolvedSchema)?.props ?: return true
+    val props = props
     val validForType =
         when (name) {
             "decimal" -> isValidDecimal(props)
@@ -257,7 +154,7 @@ internal fun AvroSchema.hasValidLogicalType(): Boolean {
 
             else -> return true
         }
-    // Apache rejects a logical type next to one of its Java-binding props, when that prop is a string
+    // a logical type next to one of the Java binding props is ignored, as Java does
     return validForType &&
         !props.isStringProp("avro.java.string") &&
         !props.isStringProp("java-class") &&
@@ -265,7 +162,7 @@ internal fun AvroSchema.hasValidLogicalType(): Boolean {
         !props.isStringProp("java-element-class")
 }
 
-/** The logical types of the specification, which Apache Java 1.12 knows natively (`LogicalTypes.fromSchemaImpl`). */
+/** The logical types of the specification. */
 private val SPECIFICATION_LOGICAL_TYPES =
     setOf(
         "decimal",
@@ -289,18 +186,14 @@ private val SPECIFICATION_LOGICAL_TYPES =
  * invalid one (a `uuid` on a fixed of 8 bytes, a `decimal` without precision), and any other name as it is (avro4k's
  * own `char`, a user's custom one).
  */
-internal val AvroSchema.configuredLogicalTypeName: String?
+internal val ResolvedSchema.configuredLogicalTypeName: String?
     get() = logicalTypeName?.let { if (it in SPECIFICATION_LOGICAL_TYPES) knownLogicalTypeName else it }
 
 /**
  * The name of this schema's logical type when it is one of the specification's and valid ([hasValidLogicalType]), or
- * null: what Apache's `getLogicalType()?.name` returns for a schema it parsed, so that the serializers, which compare it
- * with the specification's names and read a missing one as "no logical type", keep Apache's semantics. Another name
- * (avro4k's own `char`, a user's custom one) is null here: [AvroSchema.logicalTypeName] is the raw prop.
- *
- * Memoized per schema instance ([AvroSchema.knownLogicalTypeNameMemo]): a field read per value after the first one.
+ * null, also for any other name ([ResolvedSchema.logicalTypeName] is the raw prop). Memoized per schema instance.
  */
-internal val AvroSchema.knownLogicalTypeName: String?
+internal val ResolvedSchema.knownLogicalTypeName: String?
     get() {
         val memo = knownLogicalTypeNameMemo
         if (memo !== AvroSchema.NotComputed) return memo as String?
@@ -309,10 +202,18 @@ internal val AvroSchema.knownLogicalTypeName: String?
         return name
     }
 
+/** [ResolvedSchema.knownLogicalTypeName], or null for a union: for the encoders, whose writer schema is a union until a branch is selected. */
+internal val AvroSchema.knownLogicalTypeName: String?
+    get() = (this as? ResolvedSchema)?.knownLogicalTypeName
+
+/** [ResolvedSchema.configuredLogicalTypeName], or null for a union. */
+internal val AvroSchema.configuredLogicalTypeName: String?
+    get() = (this as? ResolvedSchema)?.configuredLogicalTypeName
+
 private fun Map<String, JsonElement>.isStringProp(key: String): Boolean = (this[key] as? JsonPrimitive)?.isString == true
 
-/** Apache's `Decimal` rules: an int `precision` > 0 that the fixed size can hold, an int `scale` (0 when absent) in `0..precision`. */
-private fun AvroSchema.isValidDecimal(props: Map<String, JsonElement>): Boolean {
+/** An int `precision` > 0 that the fixed size can hold, and an int `scale` (0 when absent) in `0..precision`. */
+private fun ResolvedSchema.isValidDecimal(props: Map<String, JsonElement>): Boolean {
     if (type !== Type.BYTES && type !== Type.FIXED) return false
     val precision = props.intProp("precision") ?: return false
     val scale = if ("scale" in props) props.intProp("scale") ?: return false else 0
@@ -324,7 +225,7 @@ private fun AvroSchema.isValidDecimal(props: Map<String, JsonElement>): Boolean 
     return true
 }
 
-/** The prop as an `Int`, when it is a json integer in the `Int` range (Apache reads it as an `Integer`), else null. */
+/** The prop as an `Int`, when it is a json integer in the `Int` range, else null. */
 private fun Map<String, JsonElement>.intProp(key: String): Int? {
     val value = this[key] as? JsonPrimitive ?: return null
     if (value.isString || value is JsonNull) return null
@@ -332,21 +233,17 @@ private fun Map<String, JsonElement>.intProp(key: String): Int? {
 }
 
 /**
- * The index of the union branch whose full name, or one of whose aliases' full names, is [expectedName], or null.
- * Throws `Not a union` when this schema is not a union.
- *
- * One hash lookup ([UnionSchema.getIndexOrNull]). Apache looked the full names up first, then scanned the aliases;
- * the model rejects a union where a name is both a branch's full name and another branch's alias, so both orders give
- * the same answer. Returns the map's own boxed index: nothing is allocated.
+ * The index of the union branch whose full name, or one of whose aliases' full names, is [expectedName], or null. One
+ * hash lookup ([UnionSchema.getIndexOrNull]).
  */
 internal fun AvroSchema.getIndexNamedOrAliased(expectedName: String): Int? {
-    return (this as? UnionSchema ?: throw wrongKind("Not a union")).getIndexOrNull(expectedName)
+    return asType<UnionSchema>().getIndexOrNull(expectedName)
 }
 
 // ---- union shaping (schema generation) ----
 
 /** The branches of a union, or a single-element list of this schema. Allocates for a non-union: not for per-value paths. */
-internal fun AvroSchema.asSchemaList(): List<AvroSchema> = if (this is UnionSchema) types else listOf(this)
+internal fun AvroSchema.asSchemaList(): List<ResolvedSchema> = if (this is UnionSchema) types else listOf(this as ResolvedSchema)
 
 /**
  * Moves the first union branch matching [predicate] to the head of the union. Returns this schema when it is not a
@@ -421,21 +318,19 @@ internal fun AvroSchema.isNonNullScalarType(): Boolean =
 // ---- skipping ----
 
 /**
- * Skips one value written with [schema], a union's branch index included. Mirrors the Apache-typed skip of
- * `RecordDirectDecoder` call for call: collections are skipped block by block through [AvroBinaryDecoder.skipArray]
- * / [AvroBinaryDecoder.skipMap], which jump over a block written with its byte size (negative count) in one go and
- * return the item count of the next block to skip item by item.
- *
- * Allocation-free: indexed loops over the record fields, no iterator.
+ * Skips one value written with [schema], a union's branch index included. Collections are skipped block by block
+ * through [AvroBinaryReader.skipArray] / [AvroBinaryReader.skipMap], which jump over a block written with its byte size
+ * (negative count) in one go and return the item count of the next block to skip item by item.
  */
-internal fun AvroBinaryDecoder.skip(schema: AvroSchema) {
-    val resolved =
+internal fun AvroBinaryReader.skip(schema: AvroSchema) {
+    // a `when` over the type, one table jump, rather than over the schema's class, where `is` tests each class in turn
+    val resolved: ResolvedSchema =
         if (schema is UnionSchema) {
             val index = readIndex()
             if (index < 0 || index >= schema.types.size) throw unionIndexOutOfRangeError(index, schema)
             schema.types[index]
         } else {
-            schema
+            schema as ResolvedSchema
         }
     when (resolved.type) {
         Type.BOOLEAN -> readBoolean()

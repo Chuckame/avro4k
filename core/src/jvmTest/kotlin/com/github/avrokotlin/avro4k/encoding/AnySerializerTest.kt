@@ -12,7 +12,7 @@ import com.github.avrokotlin.avro4k.apacheSchema
 import com.github.avrokotlin.avro4k.copy
 import com.github.avrokotlin.avro4k.decodeWith
 import com.github.avrokotlin.avro4k.encodeWith
-import com.github.avrokotlin.avro4k.internal.decoder.direct.AbstractAvroDirectDecoder
+import com.github.avrokotlin.avro4k.internal.decoder.AbstractAvroBinaryDecoder
 import com.github.avrokotlin.avro4k.serializer.AnySerializer
 import com.github.avrokotlin.avro4k.serializer.AvroDuration
 import com.github.avrokotlin.avro4k.serializer.UUIDSerializer
@@ -87,7 +87,7 @@ class AnySerializerTest : StringSpec() {
             Avro.decodeFromByteArray(writerSchema, AnyThroughInlineElement, bytes) shouldBe 42L
         }
         "should throw error when serializing null schema" {
-            val decoder = mockk<AbstractAvroDirectDecoder>()
+            val decoder = mockk<AbstractAvroBinaryDecoder>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             every { decoder.avro } returns Avro
             decoder.stubWriterSchemas(Schema.create(Schema.Type.NULL))
@@ -258,7 +258,7 @@ class AnySerializerTest : StringSpec() {
             Avro.decodeWith(schema, AnySerializer(), bytes) shouldBe listOf(33, null, 123456789L, "Hello")
         }
         "deserializing an ARRAY schema with a custom DeserializationStrategy should return the custom type" {
-            val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
+            val decoder = mockk<AbstractAvroBinaryDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             decoder.stubWriterSchemas(Avro.apacheSchema<List<PolymorphicType?>>())
@@ -292,7 +292,7 @@ class AnySerializerTest : StringSpec() {
                 )
         }
         "deserializing a MAP schema with a custom DeserializationStrategy should return the custom type" {
-            val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
+            val decoder = mockk<AbstractAvroBinaryDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             decoder.stubWriterSchemas(Avro.apacheSchema<Map<String, String>>())
@@ -322,7 +322,7 @@ class AnySerializerTest : StringSpec() {
                 )
         }
         "deserializing a RECORD schema with a custom DeserializationStrategy should return the custom type" {
-            val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
+            val decoder = mockk<AbstractAvroBinaryDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             decoder.stubWriterSchemas(Avro.apacheSchema<RecordType>())
@@ -337,7 +337,7 @@ class AnySerializerTest : StringSpec() {
             verify { decoder.decodeSerializableValue(fallbackSerializer) }
         }
         "deserializing a ENUM schema with a custom DeserializationStrategy should return the custom type" {
-            val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
+            val decoder = mockk<AbstractAvroBinaryDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             decoder.stubWriterSchemas(Avro.apacheSchema<SomeEnum>())
@@ -352,7 +352,7 @@ class AnySerializerTest : StringSpec() {
             verify { decoder.decodeSerializableValue(fallbackSerializer) }
         }
         "deserializing a FIXED schema with a custom DeserializationStrategy should return the custom type" {
-            val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
+            val decoder = mockk<AbstractAvroBinaryDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
             decoder.stubWriterSchemas(Schema.createFixed("the.name", null, null, 5))
@@ -367,7 +367,7 @@ class AnySerializerTest : StringSpec() {
             verify { decoder.decodeSerializableValue(fallbackSerializer) }
         }
         "deserializing with a custom DeserializationStrategy given in preResolveDeserializationStrategy() should ignore the other custom serializers" {
-            val decoder = mockk<AbstractAvroDirectDecoder>(relaxed = true)
+            val decoder = mockk<AbstractAvroBinaryDecoder>(relaxed = true)
             val fallbackSerializer = mockk<DeserializationStrategy<Any>>()
             val serializerThatShouldNotBeUsed = mockk<DeserializationStrategy<Any>>()
             every { decoder.serializersModule } returns EmptySerializersModule()
@@ -550,10 +550,10 @@ class AnySerializerTest : StringSpec() {
 
 /**
  * Stubs the writer schema of a mocked core decoder, both its internal field, which [AnySerializer] reads, and the public
- * [AbstractAvroDirectDecoder.currentWriterSchema] over it: one instance for both, as in a real decoder. The field is a
+ * [AbstractAvroBinaryDecoder.currentWriterSchema] over it: one instance for both, as in a real decoder. The field is a
  * plain JVM field, with no getter to stub, so it is assigned on the mock.
  */
-private fun AbstractAvroDirectDecoder.stubWriterSchemas(writerSchema: Schema) {
+private fun AbstractAvroBinaryDecoder.stubWriterSchemas(writerSchema: Schema) {
     val converted = writerSchema.toAvro4k()
     currentAvroSchema = converted
     every { currentWriterSchema } returns converted as ResolvedSchema

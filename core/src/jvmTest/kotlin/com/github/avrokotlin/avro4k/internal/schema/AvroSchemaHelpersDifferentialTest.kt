@@ -3,10 +3,14 @@ package com.github.avrokotlin.avro4k.internal.schema
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecimal
 import com.github.avrokotlin.avro4k.AvroSchema
+import com.github.avrokotlin.avro4k.AvroSchema.ArraySchema
+import com.github.avrokotlin.avro4k.AvroSchema.EnumSchema
+import com.github.avrokotlin.avro4k.AvroSchema.MapSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.AvroSchema.Type
+import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.apacheSchema
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryReader
 import com.github.avrokotlin.avro4k.toAvro4k
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
@@ -75,7 +79,7 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
             walk(schema, schema.toAvro4k()) { apache, model ->
                 withClue("$name: $apache") {
                     model.isUnion shouldBe apache.isUnion
-                    model.type.getName() shouldBe apache.type.getName()
+                    model.type.typeName shouldBe apache.type.getName()
                     model.fullNameForMessages shouldBe apache.fullName
                     // the model names a union `union`, Apache `union[<branches' simple names>]`
                     model.fullName shouldBe if (apache.isUnion) "union" else apache.fullName
@@ -96,58 +100,15 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
         }
     }
 
-    "the Apache-shaped accessors return the same values, or fail with the same exception class and message" {
-        val accessors: List<Pair<(Schema) -> Any?, (AvroSchema) -> Any?>> =
-            listOf(
-                { s: Schema -> s.types.map { it.fullName } } to { s: AvroSchema -> s.types.map { it.fullName } },
-                { s: Schema -> s.fixedSize } to { s: AvroSchema -> s.fixedSize },
-                { s: Schema -> s.enumSymbols } to { s: AvroSchema -> s.enumSymbols },
-                { s: Schema -> s.elementType.fullName } to { s: AvroSchema -> s.elementType.fullNameForMessages },
-                { s: Schema -> s.valueType.fullName } to { s: AvroSchema -> s.valueType.fullNameForMessages },
-                { s: Schema -> s.fields.map { it.name() } } to { s: AvroSchema -> s.fields.map { it.name } },
-                { s: Schema -> s.aliases } to { s: AvroSchema -> s.aliases },
-                { s: Schema -> s.hasEnumSymbol("A") } to { s: AvroSchema -> s.hasEnumSymbol("A") }
-            )
-        var failures = 0
-        corpus.forEach { (name, schema) ->
-            walk(schema, schema.toAvro4k()) { apache, model ->
-                accessors.forEachIndexed { index, (apacheAccessor, modelAccessor) ->
-                    withClue("$name, accessor #$index: $apache") {
-                        val expected = runCatching { apacheAccessor(apache) }
-                        val actual = runCatching { modelAccessor(model) }
-                        actual.isSuccess shouldBe expected.isSuccess
-                        if (expected.isSuccess) {
-                            actual.getOrNull() shouldBe expected.getOrNull()
-                        } else {
-                            failures++
-                            val apacheError = expected.exceptionOrNull()!!
-                            val modelError = actual.exceptionOrNull()!!
-                            apacheError::class shouldBe AvroRuntimeException::class
-                            modelError::class shouldBe RuntimeException::class
-                            // "Not a union: " etc.; the JSON after it is compared for unnamed schemas, whose rendering is
-                            // canonical (a named schema's key order is the JSON serializer's own)
-                            modelError.message!!.substringBefore(": ") shouldBe apacheError.message!!.substringBefore(": ")
-                            if (!apache.isNamedSchemaRef() && !apache.containsNamedSchema()) {
-                                modelError.message shouldBe apacheError.message
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        failures shouldBeGreaterThan 1000
-    }
-
     "enum ordinals match" {
         corpus.forEach { (name, schema) ->
             walk(schema, schema.toAvro4k()) { apache, model ->
                 if (apache.type == Schema.Type.ENUM) {
                     withClue("$name: $apache") {
                         apache.enumSymbols.forEach { symbol ->
-                            model.getEnumOrdinal(symbol) shouldBe apache.getEnumOrdinal(symbol)
-                            model.hasEnumSymbol(symbol) shouldBe true
+                            (model as EnumSchema).getSymbolIndexOrNull(symbol) shouldBe apache.getEnumOrdinal(symbol)
                         }
-                        model.hasEnumSymbol("not-a-symbol") shouldBe apache.hasEnumSymbol("not-a-symbol")
+                        (model as EnumSchema).getSymbolIndexOrNull("not-a-symbol") shouldBe null
                     }
                 }
             }
@@ -256,7 +217,7 @@ internal class AvroSchemaHelpersDifferentialTest : StringSpec({
 
         listOf(direct.toByteArray(), blocking.toByteArray()).forEach { bytes ->
             // twice in a row, to also check that the first skip stops exactly at the end of the first value
-            val decoder = ByteArrayDecoder(bytes + bytes)
+            val decoder = ByteArrayBinaryReader(bytes + bytes)
             decoder.skip(model)
             decoder.isExhausted shouldBe false
             decoder.skip(model)
@@ -295,11 +256,11 @@ private fun walk(
 ) {
     visit(apache, model)
     when (apache.type!!) {
-        Schema.Type.UNION -> apache.types.forEachIndexed { i, branch -> walk(branch, model.types[i], seen, visit) }
+        Schema.Type.UNION -> apache.types.forEachIndexed { i, branch -> walk(branch, (model as UnionSchema).types[i], seen, visit) }
 
-        Schema.Type.ARRAY -> walk(apache.elementType, model.elementType, seen, visit)
+        Schema.Type.ARRAY -> walk(apache.elementType, (model as ArraySchema).elementSchema, seen, visit)
 
-        Schema.Type.MAP -> walk(apache.valueType, model.valueType, seen, visit)
+        Schema.Type.MAP -> walk(apache.valueType, (model as MapSchema).valueSchema, seen, visit)
 
         Schema.Type.RECORD -> {
             if (!seen.add(apache)) return
@@ -320,7 +281,7 @@ private fun Schema.containsNamedSchema(): Boolean =
         else -> false
     }
 
-private fun AvroSchema.branchNames(): Any = if (isUnion) types.map { it.fullName } else fullName
+private fun AvroSchema.branchNames(): Any = if (this is UnionSchema) types.map { it.fullName } else fullName
 
 private fun Schema.branchNames(): Any = if (isUnion) types.map { it.fullName } else fullName
 

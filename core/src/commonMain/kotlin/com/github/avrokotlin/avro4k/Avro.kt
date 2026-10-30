@@ -4,8 +4,8 @@ import com.github.avrokotlin.avro4k.internal.EnumResolver
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
 import com.github.avrokotlin.avro4k.internal.PolymorphicResolver
 import com.github.avrokotlin.avro4k.internal.RecordResolver
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryReader
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.decodeWithValidation
 import com.github.avrokotlin.avro4k.internal.defaultSerializersModule
 import com.github.avrokotlin.avro4k.internal.encodeWithValidation
@@ -135,7 +135,7 @@ public sealed class Avro(
         serializer: SerializationStrategy<T>,
         value: T,
     ): ByteArray {
-        val encoder = ByteArrayEncoder()
+        val encoder = ByteArrayBinaryWriter()
         encodeWithValidation(writerSchema, serializer, value, encoder)
         return encoder.toByteArray()
     }
@@ -162,7 +162,7 @@ public sealed class Avro(
         deserializer: DeserializationStrategy<T>,
         bytes: ByteArray,
     ): T {
-        val decoder = ByteArrayDecoder(bytes)
+        val decoder = ByteArrayBinaryReader(bytes)
         val result = decodeWithValidation(writerSchema, deserializer, decoder)
         if (!decoder.isExhausted) {
             throw AvroMalformedDataException("Not all bytes were consumed during deserialization")

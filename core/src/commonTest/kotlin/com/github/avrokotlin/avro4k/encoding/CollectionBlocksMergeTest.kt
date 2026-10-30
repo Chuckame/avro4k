@@ -4,12 +4,13 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.codec.MAX_BINARY_LENGTH
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ArraySerializer
 import kotlinx.serialization.builtins.ListSerializer
@@ -27,6 +28,7 @@ import kotlin.test.Test
  * these tests decode every collection shape from bytes written by hand, in one block and in several, with and without
  * byte sizes, at the root, nested, inside records, inside unions, and with validation on.
  */
+@OptIn(ExperimentalSerializationApi::class)
 class CollectionBlocksMergeTest {
     private val schema = Avro.schema<MergedCollections>()
 
@@ -319,16 +321,16 @@ private data class WrappedCollections(val rows: List<WrappedInts>, val single: W
 @Serializable
 private data class MergedItem(val name: String, val tags: List<String>, val scores: Map<String, Int>)
 
-private fun bytes(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+private fun bytes(write: ByteArrayBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 
 /**
  * Writes [items] as one collection, split into one block per entry of [layout] (the item count of each block, negative
  * for a block written with a negative count followed by its byte size), then the closing empty block.
  */
-private fun <I> ByteArrayEncoder.writeCollection(
+private fun <I> ByteArrayBinaryWriter.writeCollection(
     items: List<I>,
     layout: (Int) -> List<Int>,
-    writeItem: ByteArrayEncoder.(I) -> Unit,
+    writeItem: ByteArrayBinaryWriter.(I) -> Unit,
 ) {
     val blocks = layout(items.size)
     check(blocks.sumOf { abs(it) } == items.size && blocks.none { it == 0 })
@@ -350,9 +352,9 @@ private fun <I> ByteArrayEncoder.writeCollection(
 }
 
 /** One block of [items], without the closing empty block. */
-private fun <I> ByteArrayEncoder.writeCollectionBlock(
+private fun <I> ByteArrayBinaryWriter.writeCollectionBlock(
     items: List<I>,
-    writeItem: ByteArrayEncoder.(I) -> Unit,
+    writeItem: ByteArrayBinaryWriter.(I) -> Unit,
 ) {
     writeLong(items.size.toLong())
     items.forEach { writeItem(it) }

@@ -3,18 +3,18 @@ package com.github.avrokotlin.avro4k.internal
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.decoder.direct.AvroValueDirectDecoder
-import com.github.avrokotlin.avro4k.internal.encoder.direct.AvroValueDirectEncoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryReader
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryWriter
+import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryReader
+import com.github.avrokotlin.avro4k.internal.codec.ValidatingAvroBinaryWriter
+import com.github.avrokotlin.avro4k.internal.decoder.AvroValueDecoder
+import com.github.avrokotlin.avro4k.internal.encoder.AvroValueEncoder
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 
 /**
- * Encodes [value] with [binaryEncoder], every call checked against [writerSchema] when
- * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled (see [ValidatingAvroBinaryEncoder]).
+ * Encodes [value] with [binaryWriter], every call checked against [writerSchema] when
+ * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled (see [ValidatingAvroBinaryWriter]).
  * Disabled, the encoder is used as is: a single branch.
  *
  * Public for the apache-interop module, whose Apache codec entry points encode through it.
@@ -24,19 +24,19 @@ public fun <T> Avro.encodeWithValidation(
     writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
-    binaryEncoder: AvroBinaryEncoder,
+    binaryWriter: AvroBinaryWriter,
 ) {
     if (configuration.validateSerialization) {
-        val validatingEncoder = ValidatingAvroBinaryEncoder(binaryEncoder, writerSchema)
-        encodeWithBinaryEncoder(writerSchema, serializer, value, validatingEncoder)
+        val validatingEncoder = ValidatingAvroBinaryWriter(binaryWriter, writerSchema)
+        encodeWithBinaryWriter(writerSchema, serializer, value, validatingEncoder)
         validatingEncoder.checkDatumComplete()
     } else {
-        encodeWithBinaryEncoder(writerSchema, serializer, value, binaryEncoder)
+        encodeWithBinaryWriter(writerSchema, serializer, value, binaryWriter)
     }
 }
 
 /**
- * Decodes a value with [binaryDecoder], every call checked against [writerSchema] when
+ * Decodes a value with [binaryReader], every call checked against [writerSchema] when
  * [com.github.avrokotlin.avro4k.AvroConfiguration.validateSerialization] is enabled, as [encodeWithValidation] does.
  *
  * The single entry point of every decode, so this is where the end of the input in the middle of a value becomes an
@@ -47,36 +47,36 @@ public fun <T> Avro.encodeWithValidation(
 public fun <T> Avro.decodeWithValidation(
     writerSchema: AvroSchema,
     deserializer: DeserializationStrategy<T>,
-    binaryDecoder: AvroBinaryDecoder,
+    binaryReader: AvroBinaryReader,
 ): T {
     try {
         if (configuration.validateSerialization) {
-            val validatingDecoder = ValidatingAvroBinaryDecoder(binaryDecoder, writerSchema)
-            val value = decodeWithBinaryDecoder(writerSchema, deserializer, validatingDecoder)
+            val validatingDecoder = ValidatingAvroBinaryReader(binaryReader, writerSchema)
+            val value = decodeWithBinaryReader(writerSchema, deserializer, validatingDecoder)
             validatingDecoder.checkDatumComplete()
             return value
         }
-        return decodeWithBinaryDecoder(writerSchema, deserializer, binaryDecoder)
+        return decodeWithBinaryReader(writerSchema, deserializer, binaryReader)
     } catch (e: EOFException) {
         throw endOfInputError(e)
     }
 }
 
-internal fun <T> Avro.encodeWithBinaryEncoder(
+internal fun <T> Avro.encodeWithBinaryWriter(
     writerSchema: AvroSchema,
     serializer: SerializationStrategy<T>,
     value: T,
-    binaryEncoder: AvroBinaryEncoder,
+    binaryWriter: AvroBinaryWriter,
 ) {
-    AvroValueDirectEncoder(writerSchema, this, binaryEncoder)
+    AvroValueEncoder(writerSchema, this, binaryWriter)
         .encodeSerializableValue(serializer, value)
 }
 
-internal fun <T> Avro.decodeWithBinaryDecoder(
+internal fun <T> Avro.decodeWithBinaryReader(
     writerSchema: AvroSchema,
     deserializer: DeserializationStrategy<T>,
-    binaryDecoder: AvroBinaryDecoder,
+    binaryReader: AvroBinaryReader,
 ): T {
-    return AvroValueDirectDecoder(writerSchema, this, binaryDecoder)
+    return AvroValueDecoder(writerSchema, this, binaryReader)
         .decodeSerializableValue(deserializer)
 }

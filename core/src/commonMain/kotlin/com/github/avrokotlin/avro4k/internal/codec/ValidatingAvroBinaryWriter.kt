@@ -10,10 +10,10 @@ import com.github.avrokotlin.avro4k.AvroSchema.Type
  *
  * Created for each encoded value; call [checkDatumComplete] once the value is encoded.
  */
-internal class ValidatingAvroBinaryEncoder(
-    private val encoder: AvroBinaryEncoder,
+internal class ValidatingAvroBinaryWriter(
+    private val encoder: AvroBinaryWriter,
     writerSchema: AvroSchema,
-) : AvroBinaryEncoder() {
+) : AvroBinaryWriter() {
     private val validator = WriterSchemaCallValidator(writerSchema, decoding = false)
 
     /** Checks that the whole datum was written. */

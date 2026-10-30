@@ -6,7 +6,7 @@ import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
@@ -1119,14 +1119,14 @@ private data class WPeeks(
     @Serializable(with = PeekingCountsWriter::class) val peekedCounts: Map<String, Int?>,
 )
 
-private fun bytes(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+private fun bytes(write: ByteArrayBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 
-private fun ByteArrayEncoder.writeInner(value: WInner) {
+private fun ByteArrayBinaryWriter.writeInner(value: WInner) {
     writeInt(value.x)
     writeString(value.s)
 }
 
-private fun ByteArrayEncoder.writeTwins(
+private fun ByteArrayBinaryWriter.writeTwins(
     first: WInner,
     second: WInner,
 ) {
@@ -1134,12 +1134,12 @@ private fun ByteArrayEncoder.writeTwins(
     writeInner(second)
 }
 
-private fun ByteArrayEncoder.writeXY(value: WXY) {
+private fun ByteArrayBinaryWriter.writeXY(value: WXY) {
     writeInt(value.x)
     writeString(value.y)
 }
 
-private fun ByteArrayEncoder.writeNullableInt(value: Int?) {
+private fun ByteArrayBinaryWriter.writeNullableInt(value: Int?) {
     if (value == null) {
         writeIndex(0)
         writeNull()
@@ -1149,17 +1149,17 @@ private fun ByteArrayEncoder.writeNullableInt(value: Int?) {
     }
 }
 
-private fun ByteArrayEncoder.writeNullableLast(value: WNullableLast) {
+private fun ByteArrayBinaryWriter.writeNullableLast(value: WNullableLast) {
     writeInt(value.x)
     writeNullableInt(value.n)
 }
 
-private fun ByteArrayEncoder.writeSkipLast(value: WSkipLast) {
+private fun ByteArrayBinaryWriter.writeSkipLast(value: WSkipLast) {
     writeInt(value.x)
     writeNullableInt(value.n)
 }
 
-private fun ByteArrayEncoder.writeBase(value: WBase) {
+private fun ByteArrayBinaryWriter.writeBase(value: WBase) {
     when (value) {
         is WExact -> {
             writeInt(value.a)
@@ -1179,7 +1179,7 @@ private fun ByteArrayEncoder.writeBase(value: WBase) {
 }
 
 /** A shape as a branch of [SHAPE], or of [NULLABLE_SHAPE] when [nullable]. */
-private fun ByteArrayEncoder.writeShape(
+private fun ByteArrayBinaryWriter.writeShape(
     value: WShape?,
     nullable: Boolean,
 ) {
@@ -1210,9 +1210,9 @@ private fun ByteArrayEncoder.writeShape(
 }
 
 /** [items] as one array, written with the calls an array encoder makes. */
-private fun <I> ByteArrayEncoder.writeList(
+private fun <I> ByteArrayBinaryWriter.writeList(
     items: List<I>,
-    writeItem: ByteArrayEncoder.(I) -> Unit,
+    writeItem: ByteArrayBinaryWriter.(I) -> Unit,
 ) {
     writeArrayStart(items.size.toLong())
     items.forEach {
@@ -1223,9 +1223,9 @@ private fun <I> ByteArrayEncoder.writeList(
 }
 
 /** [entries] as one map, written with the calls a map encoder makes. */
-private fun <V> ByteArrayEncoder.writeMap(
+private fun <V> ByteArrayBinaryWriter.writeMap(
     entries: Map<String, V>,
-    writeValue: ByteArrayEncoder.(V) -> Unit,
+    writeValue: ByteArrayBinaryWriter.(V) -> Unit,
 ) {
     writeMapStart(entries.size.toLong())
     entries.forEach { (key, value) ->

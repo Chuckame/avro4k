@@ -2,9 +2,9 @@ package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.EOFException
 import com.github.avrokotlin.avro4k.internal.IdentityFirstCache
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryReader
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryReader
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.decodeWithValidation
 import com.github.avrokotlin.avro4k.internal.encodeWithValidation
 import com.github.avrokotlin.avro4k.internal.endOfInputError
@@ -60,7 +60,7 @@ public class AvroSingleObject(
         writerSchema: AvroSchema,
         serializer: SerializationStrategy<T>,
         value: T,
-        encoder: ByteArrayEncoder,
+        encoder: ByteArrayBinaryWriter,
     ) {
         encoder.writeByte(MAGIC_BYTE)
         encoder.writeByte(FORMAT_VERSION)
@@ -71,7 +71,7 @@ public class AvroSingleObject(
     /** Reads the header from [decoder], then the value with the writer schema it names. */
     internal fun <T> decodeWithHeader(
         deserializer: DeserializationStrategy<T>,
-        decoder: AvroBinaryDecoder,
+        decoder: AvroBinaryReader,
     ): T {
         val header =
             try {
@@ -96,7 +96,7 @@ public class AvroSingleObject(
                 }
                 bytes[index++]
             }
-        return avro.decodeWithValidation(writerSchema(fingerprint), deserializer, ByteArrayDecoder(bytes, index))
+        return avro.decodeWithValidation(writerSchema(fingerprint), deserializer, ByteArrayBinaryReader(bytes, index))
     }
 
     /** Reads the marker and the version, then returns the writer schema's fingerprint, read little-endian. */
@@ -141,7 +141,7 @@ public fun <T> AvroSingleObject.encodeToByteArray(
     serializer: SerializationStrategy<T>,
     value: T,
 ): ByteArray {
-    val encoder = ByteArrayEncoder()
+    val encoder = ByteArrayBinaryWriter()
     encodeWithHeader(writerSchema, serializer, value, encoder)
     return encoder.toByteArray()
 }

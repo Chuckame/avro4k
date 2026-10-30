@@ -13,9 +13,9 @@ import com.github.avrokotlin.avro4k.internal.convertForEncoding
 import com.github.avrokotlin.avro4k.internal.encodeToUtf8
 import com.github.avrokotlin.avro4k.internal.isFullNameOrAliasMatch
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
-import com.github.avrokotlin.avro4k.internal.schema.types
 import com.github.avrokotlin.avro4k.internal.toFloatExact
 import com.github.avrokotlin.avro4k.internal.toIntExact
 import com.github.avrokotlin.avro4k.namedSchemaNotFoundInUnionError
@@ -36,28 +36,18 @@ import kotlinx.serialization.encoding.CompositeEncoder
  * The base of every avro4k encoder: it resolves unions and checks each value against the writer schema, then hands the
  * value to the `*Unchecked` method of the right Avro type.
  *
- * Each value method (`encodeString`, `encodeInt`, …) keeps in its own body only a value written to its own Avro type:
- * selecting a union branch, converting to another compatible type and building the errors are private functions of
- * their own. The JVM never inlines a hot method larger than 325 bytes of bytecode, and the conversions (each with its
- * `try`) and the error type lists (each an array) made `encodeString` more than twice that, and the others several times
- * larger than the case they are almost always called for.
+ * Each `encodeXxx` only handles a value written to its own Avro type; the union selection (`selectUnionBranchForXxx`),
+ * the conversions and the errors are out of line, so that `encodeXxx` stays small enough for the JIT to inline it.
  *
- * Public only for the generic data encoder of the `apache-interop` module, which builds Apache `GenericData` values
- * instead of bytes.
+ * Public only for the generic data encoder of the `apache-interop` module.
  */
 @InternalAvro4kApi
 @OptIn(ExperimentalSerializationApi::class)
 public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     private var selectedUnionIndex: Int = -1
 
-    /**
-     * The writer schema of the value being encoded, as avro4k's own model: the schema core's runtime reads. Once a union
-     * branch is selected ([encodeUnionIndex]), it is that branch.
-     */
-    public abstract var currentAvroSchema: AvroSchema
-
-    final override val currentWriterSchema: AvroSchema
-        get() = currentAvroSchema
+    /** The writer schema of the value being encoded. Once a union branch is selected ([encodeUnionIndex]), it is that branch. */
+    abstract override var currentWriterSchema: AvroSchema
 
     public abstract fun getRecordEncoder(descriptor: SerialDescriptor): CompositeEncoder
 
@@ -112,16 +102,16 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
             StructureKind.OBJECT,
             -> {
                 val nameChecked: Boolean
-                if (currentAvroSchema.isUnion) {
+                if (currentWriterSchema.isUnion) {
                     trySelectNamedSchema(descriptor) ||
                         throw namedSchemaNotFoundInUnionError(descriptor.nonNullSerialName, descriptor.aliases)
                     nameChecked = true
                 } else {
                     nameChecked = false
                 }
-                when (currentAvroSchema.type) {
+                when (currentWriterSchema.type) {
                     AvroSchema.Type.RECORD -> {
-                        if (nameChecked || currentAvroSchema.isFullNameOrAliasMatch(descriptor)) {
+                        if (nameChecked || currentWriterSchema.isFullNameOrAliasMatch(descriptor)) {
                             getRecordEncoder(descriptor)
                         } else {
                             throw fullNameOrAliasMismatchError(descriptor.nonNullSerialName, descriptor.aliases)
@@ -144,20 +134,20 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     ): CompositeEncoder {
         return when (descriptor.kind) {
             StructureKind.LIST -> {
-                if (currentAvroSchema.isUnion) {
+                if (currentWriterSchema.isUnion) {
                     trySelectTypeNameFromUnion(AvroSchema.Type.ARRAY) || throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
-                when (currentAvroSchema.type) {
+                when (currentWriterSchema.type) {
                     AvroSchema.Type.ARRAY -> getArrayEncoder(descriptor, collectionSize)
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.ARRAY)
                 }
             }
 
             StructureKind.MAP -> {
-                if (currentAvroSchema.isUnion) {
+                if (currentWriterSchema.isUnion) {
                     trySelectTypeNameFromUnion(AvroSchema.Type.MAP) || throw unsupportedWriterTypeError(AvroSchema.Type.MAP)
                 }
-                when (currentAvroSchema.type) {
+                when (currentWriterSchema.type) {
                     AvroSchema.Type.MAP -> getMapEncoder(descriptor, collectionSize)
                     else -> throw unsupportedWriterTypeError(AvroSchema.Type.MAP)
                 }
@@ -169,9 +159,9 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
 
     override fun encodeUnionIndex(index: Int) {
         if (selectedUnionIndex != -1) {
-            throw AvroSerializationException("Already selected union index: $selectedUnionIndex, got $index, for selected schema ${currentAvroSchema.toSchemaJsonString()}")
+            throw AvroSerializationException("Already selected union index: $selectedUnionIndex, got $index, for selected schema ${currentWriterSchema.toSchemaJsonString()}")
         }
-        currentAvroSchema = currentAvroSchema.types[index]
+        currentWriterSchema = currentWriterSchema.asType<AvroSchema.UnionSchema>().types[index]
         encodeUnionIndexUnchecked(index)
         selectedUnionIndex = index
     }
@@ -194,18 +184,18 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     override fun encodeNull() {
-        if (currentAvroSchema.isUnion) {
+        if (currentWriterSchema.isUnion) {
             trySelectTypeNameFromUnion(AvroSchema.Type.NULL) ||
-                throw AvroSchemaMismatchException("Cannot encode null value for non-nullable schema: ${currentAvroSchema.toSchemaJsonString()}")
-        } else if (currentAvroSchema.type != AvroSchema.Type.NULL) {
-            throw AvroSchemaMismatchException("Cannot encode null value for non-null schema: ${currentAvroSchema.toSchemaJsonString()}")
+                throw AvroSchemaMismatchException("Cannot encode null value for non-nullable schema: ${currentWriterSchema.toSchemaJsonString()}")
+        } else if (currentWriterSchema.type != AvroSchema.Type.NULL) {
+            throw AvroSchemaMismatchException("Cannot encode null value for non-null schema: ${currentWriterSchema.toSchemaJsonString()}")
         }
         encodeNullUnchecked()
     }
 
     override fun encodeBytes(value: ByteArray) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForBytes(value)
-        if (currentAvroSchema.type === AvroSchema.Type.BYTES) encodeBytesUnchecked(value) else encodeBytesConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForBytes(value)
+        if (currentWriterSchema.type === AvroSchema.Type.BYTES) encodeBytesUnchecked(value) else encodeBytesConverted(value)
     }
 
     private fun selectUnionBranchForBytes(value: ByteArray) {
@@ -216,7 +206,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeBytesConverted(value: ByteArray) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.STRING -> encodeStringUnchecked(utf8 = value)
             AvroSchema.Type.FIXED -> encodeFixedUnchecked(ensureFixedSize(value))
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.BYTES, AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
@@ -224,8 +214,8 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     override fun encodeFixed(value: ByteArray) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForFixed(value)
-        if (currentAvroSchema.type === AvroSchema.Type.FIXED) encodeFixedUnchecked(ensureFixedSize(value)) else encodeFixedConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForFixed(value)
+        if (currentWriterSchema.type === AvroSchema.Type.FIXED) encodeFixedUnchecked(ensureFixedSize(value)) else encodeFixedConverted(value)
     }
 
     private fun selectUnionBranchForFixed(value: ByteArray) {
@@ -236,7 +226,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeFixedConverted(value: ByteArray) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.BYTES -> encodeBytesUnchecked(value)
             AvroSchema.Type.STRING -> encodeStringUnchecked(utf8 = value)
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.FIXED, AvroSchema.Type.BYTES, AvroSchema.Type.STRING)
@@ -247,9 +237,9 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
         enumDescriptor: SerialDescriptor,
         index: Int,
     ) {
-        val nameChecked = currentAvroSchema.isUnion && selectUnionBranchForEnum(enumDescriptor)
+        val nameChecked = currentWriterSchema.isUnion && selectUnionBranchForEnum(enumDescriptor)
         val enumName = enumDescriptor.getElementName(index)
-        if (currentAvroSchema.type === AvroSchema.Type.ENUM && (nameChecked || currentAvroSchema.isFullNameOrAliasMatch(enumDescriptor))) {
+        if (currentWriterSchema.type === AvroSchema.Type.ENUM && (nameChecked || currentWriterSchema.isFullNameOrAliasMatch(enumDescriptor))) {
             encodeEnumUnchecked(enumName)
         } else {
             encodeEnumConverted(enumDescriptor, enumName)
@@ -273,7 +263,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
         enumDescriptor: SerialDescriptor,
         enumName: String,
     ) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.ENUM -> throw fullNameOrAliasMismatchError(enumDescriptor.nonNullSerialName, enumDescriptor.aliases)
             AvroSchema.Type.STRING -> encodeStringUnchecked(enumName)
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.ENUM, AvroSchema.Type.STRING)
@@ -281,8 +271,8 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     override fun encodeBoolean(value: Boolean) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForBoolean()
-        if (currentAvroSchema.type === AvroSchema.Type.BOOLEAN) encodeBooleanUnchecked(value) else encodeBooleanConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForBoolean()
+        if (currentWriterSchema.type === AvroSchema.Type.BOOLEAN) encodeBooleanUnchecked(value) else encodeBooleanConverted(value)
     }
 
     private fun selectUnionBranchForBoolean() {
@@ -292,7 +282,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeBooleanConverted(value: Boolean) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.STRING -> encodeStringUnchecked(value.toString())
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.BOOLEAN, AvroSchema.Type.STRING)
         }
@@ -307,8 +297,8 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     override fun encodeInt(value: Int) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForInt()
-        if (currentAvroSchema.type === AvroSchema.Type.INT) encodeIntUnchecked(value) else encodeIntConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForInt()
+        if (currentWriterSchema.type === AvroSchema.Type.INT) encodeIntUnchecked(value) else encodeIntConverted(value)
     }
 
     private fun selectUnionBranchForInt() {
@@ -319,7 +309,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeIntConverted(value: Int) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.LONG -> encodeLongUnchecked(value.toLong())
             AvroSchema.Type.STRING -> encodeStringUnchecked(value.toString())
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
@@ -327,8 +317,8 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     override fun encodeLong(value: Long) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForLong()
-        if (currentAvroSchema.type === AvroSchema.Type.LONG) encodeLongUnchecked(value) else encodeLongConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForLong()
+        if (currentWriterSchema.type === AvroSchema.Type.LONG) encodeLongUnchecked(value) else encodeLongConverted(value)
     }
 
     private fun selectUnionBranchForLong() {
@@ -339,7 +329,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeLongConverted(value: Long) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.INT -> encodeIntUnchecked(value.toIntExact())
             AvroSchema.Type.STRING -> encodeStringUnchecked(value.toString())
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
@@ -347,8 +337,8 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     override fun encodeFloat(value: Float) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForFloat()
-        if (currentAvroSchema.type === AvroSchema.Type.FLOAT) encodeFloatUnchecked(value) else encodeFloatConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForFloat()
+        if (currentWriterSchema.type === AvroSchema.Type.FLOAT) encodeFloatUnchecked(value) else encodeFloatConverted(value)
     }
 
     private fun selectUnionBranchForFloat() {
@@ -359,7 +349,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeFloatConverted(value: Float) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.DOUBLE -> encodeDoubleUnchecked(value.toDouble())
             AvroSchema.Type.STRING -> encodeStringUnchecked(value.toString())
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.FLOAT, AvroSchema.Type.DOUBLE, AvroSchema.Type.STRING)
@@ -367,8 +357,8 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     override fun encodeDouble(value: Double) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForDouble()
-        if (currentAvroSchema.type === AvroSchema.Type.DOUBLE) encodeDoubleUnchecked(value) else encodeDoubleConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForDouble()
+        if (currentWriterSchema.type === AvroSchema.Type.DOUBLE) encodeDoubleUnchecked(value) else encodeDoubleConverted(value)
     }
 
     private fun selectUnionBranchForDouble() {
@@ -379,7 +369,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeDoubleConverted(value: Double) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.FLOAT -> encodeFloatUnchecked(value.toFloatExact())
             AvroSchema.Type.STRING -> encodeStringUnchecked(value.toString())
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.DOUBLE, AvroSchema.Type.FLOAT, AvroSchema.Type.STRING)
@@ -387,8 +377,8 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     override fun encodeChar(value: Char) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForChar()
-        if (currentAvroSchema.type === AvroSchema.Type.INT) encodeIntUnchecked(value.code) else encodeCharConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForChar()
+        if (currentWriterSchema.type === AvroSchema.Type.INT) encodeIntUnchecked(value.code) else encodeCharConverted(value)
     }
 
     private fun selectUnionBranchForChar() {
@@ -398,15 +388,15 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeCharConverted(value: Char) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.STRING -> encodeStringUnchecked(value.toString())
             else -> throw unsupportedWriterTypeError(AvroSchema.Type.INT, AvroSchema.Type.STRING)
         }
     }
 
     override fun encodeString(value: String) {
-        if (currentAvroSchema.isUnion) selectUnionBranchForString(value)
-        if (currentAvroSchema.type === AvroSchema.Type.STRING) encodeStringUnchecked(value) else encodeStringConverted(value)
+        if (currentWriterSchema.isUnion) selectUnionBranchForString(value)
+        if (currentWriterSchema.type === AvroSchema.Type.STRING) encodeStringUnchecked(value) else encodeStringConverted(value)
     }
 
     private fun selectUnionBranchForString(value: String) {
@@ -423,7 +413,7 @@ public abstract class AbstractAvroEncoder : AbstractEncoder(), AvroEncoder {
     }
 
     private fun encodeStringConverted(value: String) {
-        when (currentAvroSchema.type) {
+        when (currentWriterSchema.type) {
             AvroSchema.Type.BOOLEAN -> encodeBooleanUnchecked(value.convertForEncoding("String", AvroSchema.Type.BOOLEAN) { it.toBooleanStrict() })
             AvroSchema.Type.INT -> encodeIntUnchecked(value.convertForEncoding("String", AvroSchema.Type.INT) { it.toInt() })
             AvroSchema.Type.LONG -> encodeLongUnchecked(value.convertForEncoding("String", AvroSchema.Type.LONG) { it.toLong() })

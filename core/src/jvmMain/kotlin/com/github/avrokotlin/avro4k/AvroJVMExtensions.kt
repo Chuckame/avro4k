@@ -1,9 +1,9 @@
 package com.github.avrokotlin.avro4k
 
 import com.github.avrokotlin.avro4k.internal.EOFException
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
-import com.github.avrokotlin.avro4k.internal.codec.ByteBufferDecoder
-import com.github.avrokotlin.avro4k.internal.codec.InputStreamDecoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
+import com.github.avrokotlin.avro4k.internal.codec.ByteBufferBinaryReader
+import com.github.avrokotlin.avro4k.internal.codec.InputStreamBinaryReader
 import com.github.avrokotlin.avro4k.internal.decodeWithValidation
 import com.github.avrokotlin.avro4k.internal.encodeWithValidation
 import com.github.avrokotlin.avro4k.internal.endOfInputError
@@ -42,7 +42,7 @@ public fun <T> Avro.encodeToStream(
     outputStream: OutputStream,
 ) {
     val write = outputStream.chunkWriter()
-    val encoder = ByteArrayEncoder(write)
+    val encoder = ByteArrayBinaryWriter(write)
     encodeWithValidation(writerSchema, serializer, value, encoder)
     encoder.writeChunksTo(write)
 }
@@ -106,7 +106,7 @@ public fun <T> Avro.decodeFromStream(
     deserializer: DeserializationStrategy<T>,
     inputStream: InputStream,
 ): T {
-    val decoder = InputStreamDecoder(inputStream)
+    val decoder = InputStreamBinaryReader(inputStream)
     val result = decodeWithValidation(writerSchema, deserializer, decoder)
     decoder.requireEnd()
     return result
@@ -157,7 +157,7 @@ public fun <T> AvroSingleObject.encodeToStream(
     outputStream: OutputStream,
 ) {
     val write = outputStream.chunkWriter()
-    val encoder = ByteArrayEncoder(write)
+    val encoder = ByteArrayBinaryWriter(write)
     encodeWithHeader(writerSchema, serializer, value, encoder)
     encoder.writeChunksTo(write)
 }
@@ -179,7 +179,7 @@ public fun <T> AvroSingleObject.decodeFromStream(
     deserializer: DeserializationStrategy<T>,
     inputStream: InputStream,
 ): T {
-    val decoder = InputStreamDecoder(inputStream)
+    val decoder = InputStreamBinaryReader(inputStream)
     val result = decodeWithHeader(deserializer, decoder)
     decoder.requireEnd()
     return result
@@ -217,7 +217,7 @@ public fun <T> Avro.decodeFromByteBufferInternal(
 ): T {
     val start = input.position()
     try {
-        return decodeWithValidation(writerSchema, deserializer, ByteBufferDecoder(input))
+        return decodeWithValidation(writerSchema, deserializer, ByteBufferBinaryReader(input))
     } catch (e: BufferUnderflowException) {
         input.position(start)
         throw endOfInputError(EOFException("the ByteBuffer ended in the middle of a value").apply { initCause(e) })

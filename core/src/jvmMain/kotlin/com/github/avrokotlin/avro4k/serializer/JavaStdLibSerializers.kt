@@ -10,12 +10,11 @@ import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.internal.EOFException
 import com.github.avrokotlin.avro4k.internal.SchemaGenerationFailure
-import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryReader
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.convertForEncoding
-import com.github.avrokotlin.avro4k.internal.schema.fixedSize
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
 import com.github.avrokotlin.avro4k.trySelectFixedSchemaForSize
@@ -78,9 +77,9 @@ public object UUIDSerializer : AvroSerializer<UUID>(UUID::class.qualifiedName!!)
                 ?: element.fixed?.createSchema(element)
                     ?.withLogicalType(LOGICAL_TYPE_NAME)
                     ?.also {
-                        if (it.fixedSize != 16) {
+                        if (it.asType<AvroSchema.FixedSchema>().size != 16) {
                             throw SchemaGenerationFailure(
-                                "UUID's @${AvroFixed::class.simpleName} must have bytes size of 16. Got ${it.fixedSize}."
+                                "UUID's @${AvroFixed::class.simpleName} must have bytes size of 16. Got ${it.asType<AvroSchema.FixedSchema>().size}."
                             )
                         }
                     }
@@ -123,8 +122,8 @@ public object UUIDSerializer : AvroSerializer<UUID>(UUID::class.qualifiedName!!)
         val schema = decoder.currentWriterSchema
         return when {
             schema.type == AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "UUID") { UUID.fromString(it) }
-            schema.type == AvroSchema.Type.FIXED && schema.fixedSize == 16 -> parseUuid(decoder.decodeBytes())
-            else -> throw decoder.UnexpectedDecodeSchemaError("UUID", AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
+            schema.type == AvroSchema.Type.FIXED && schema.asType<AvroSchema.FixedSchema>().size == 16 -> parseUuid(decoder.decodeBytes())
+            else -> throw decoder.AvroSchemaMismatchException("UUID", AvroSchema.Type.STRING, AvroSchema.Type.FIXED)
         }
     }
 
@@ -190,7 +189,7 @@ public object BigIntegerSerializer : AvroSerializer<BigInteger>(BigInteger::clas
 
             AvroSchema.Type.DOUBLE -> decoder.decodeDouble().convertDecoded(AvroSchema.Type.DOUBLE, "BigInteger") { it.toBigDecimal().toBigIntegerExact() }
 
-            else -> throw decoder.UnexpectedDecodeSchemaError(
+            else -> throw decoder.AvroSchemaMismatchException(
                 "BigInteger",
                 AvroSchema.Type.STRING,
                 AvroSchema.Type.INT,
@@ -342,7 +341,7 @@ public object BigDecimalSerializer : AvroSerializer<BigDecimal>(BigDecimal::clas
     }
 
     private fun AvroDecoder.bigDecimalSchemaError() =
-        UnexpectedDecodeSchemaError("BigDecimal", AvroSchema.Type.STRING, AvroSchema.Type.BYTES, AvroSchema.Type.FIXED)
+        AvroSchemaMismatchException("BigDecimal", AvroSchema.Type.STRING, AvroSchema.Type.BYTES, AvroSchema.Type.FIXED)
 
     override fun deserializeGeneric(decoder: Decoder): BigDecimal {
         return decoder.decodeString().toBigDecimal()
@@ -369,7 +368,7 @@ private fun BigDecimal.toDecimalFixed(schema: AvroSchema): ByteArray {
     val value = validateDecimal(schema)
     val fillByte = if (value.signum() < 0) 0xFF.toByte() else 0x00
     val unscaled = value.unscaledValue().toByteArray()
-    val bytes = ByteArray(schema.fixedSize)
+    val bytes = ByteArray(schema.asType<AvroSchema.FixedSchema>().size)
     val offset = bytes.size - unscaled.size
     bytes.fill(fillByte, 0, offset)
     unscaled.copyInto(bytes, offset)
@@ -420,7 +419,7 @@ private fun BigDecimal.validateDecimal(schema: AvroSchema): BigDecimal {
 
 /** `BigDecimalConversion.toBytes`: the unscaled value as length-prefixed bytes, then the scale, both in Avro's binary encoding. */
 private fun BigDecimal.toBigDecimalBytes(): ByteArray {
-    val encoder = ByteArrayEncoder()
+    val encoder = ByteArrayBinaryWriter()
     encoder.writeBytes(unscaledValue().toByteArray())
     encoder.writeInt(scale())
     return encoder.toByteArray()
@@ -431,7 +430,7 @@ private fun BigDecimal.toBigDecimalBytes(): ByteArray {
  * throws a `NullPointerException`), when the bytes end before the scale, or when bytes are left after it.
  */
 private fun bigDecimalFromBytes(bytes: ByteArray): BigDecimal {
-    val decoder = ByteArrayDecoder(bytes)
+    val decoder = ByteArrayBinaryReader(bytes)
     val unscaled: ByteArray
     val scale: Int
     try {

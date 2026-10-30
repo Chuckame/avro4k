@@ -1,4 +1,4 @@
-package com.github.avrokotlin.avro4k.internal.decoder.direct
+package com.github.avrokotlin.avro4k.internal.decoder
 
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -6,6 +6,10 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
 
+/**
+ * Routes every `decodeXxxElement` call of [CompositeDecoder] to [beginElement], then to the matching `decodeXxx` of
+ * [Decoder]: a decoder positions itself on the element in one place, and decodes the value as for a top-level one.
+ */
 internal abstract class AbstractInterceptingDecoder : Decoder, CompositeDecoder {
     protected open fun beginElement(
         descriptor: SerialDescriptor,

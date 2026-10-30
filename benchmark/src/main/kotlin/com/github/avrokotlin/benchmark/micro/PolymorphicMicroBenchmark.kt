@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Isolates the polymorphic resolve cost: `PolymorphicResolver.getFullNamesAndAliasesToSerialName`
  * allocates a [Pair] and does a cache lookup per polymorphic value, on top of the extra
- * encoder/decoder layer (`PolymorphicDirectEncoder` wrapping an `AvroValueDirectEncoder`).
+ * encoder/decoder layer (`PolymorphicEncoder` wrapping an `AvroValueEncoder`).
  *
  * [readConcrete]/[writeConcrete] are the monomorphic control: the same [Circle] payload in the
  * same array, but typed as the concrete class, so no union index and no polymorphic resolution.

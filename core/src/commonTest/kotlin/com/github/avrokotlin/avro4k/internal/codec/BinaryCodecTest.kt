@@ -8,7 +8,7 @@ import kotlin.test.Test
 class BinaryCodecTest {
     @Test
     fun `every encoder method round trips through the decoder`() {
-        val encoder = ByteArrayEncoder().apply {
+        val encoder = ByteArrayBinaryWriter().apply {
             writeNull()
             writeBoolean(true)
             writeBoolean(false)
@@ -41,7 +41,7 @@ class BinaryCodecTest {
             writeMapStart(0)
             writeMapEnd()
         }
-        ByteArrayDecoder(encoder.toByteArray()).apply {
+        ByteArrayBinaryReader(encoder.toByteArray()).apply {
             readNull()
             readBoolean() shouldBe true
             readBoolean() shouldBe false
@@ -74,7 +74,7 @@ class BinaryCodecTest {
 
     @Test
     fun `the encoder writes the bytes the Avro spec says`() {
-        val encoder = ByteArrayEncoder().apply {
+        val encoder = ByteArrayBinaryWriter().apply {
             writeNull()
             writeBoolean(true)
             writeFloat(1.0f)
@@ -136,14 +136,14 @@ class BinaryCodecTest {
     fun `values spanning several of the encoder's chunks are read whole`() {
         val big = ByteArray(3 * 8192 + 17) { (it % 251).toByte() }
         val bigString = "é".repeat(3 * 8192)
-        val encoder = ByteArrayEncoder().apply {
+        val encoder = ByteArrayBinaryWriter().apply {
             writeBytes(big)
             writeString(bigString)
             writeString(big)
             writeFixed(big)
             writeInt(123)
         }
-        ByteArrayDecoder(encoder.toByteArray()).apply {
+        ByteArrayBinaryReader(encoder.toByteArray()).apply {
             readBytes() shouldBe big
             readString() shouldBe bigString
             readStringBytes() shouldBe big
@@ -154,11 +154,11 @@ class BinaryCodecTest {
 
     @Test
     fun `returned arrays are not shared with the input`() {
-        val encoder = ByteArrayEncoder().apply {
+        val encoder = ByteArrayBinaryWriter().apply {
             writeBytes(byteArrayOf(1, 2))
             writeBytes(byteArrayOf(1, 2))
         }
-        val decoder = ByteArrayDecoder(encoder.toByteArray())
+        val decoder = ByteArrayBinaryReader(encoder.toByteArray())
         val first = decoder.readBytes()
         first[0] = 99
         decoder.readBytes() shouldBe byteArrayOf(1, 2)
@@ -166,7 +166,7 @@ class BinaryCodecTest {
 
     @Test
     fun `skipping reads past every value`() {
-        val encoder = ByteArrayEncoder().apply {
+        val encoder = ByteArrayBinaryWriter().apply {
             writeString("skipped")
             writeBytes(byteArrayOf(1, 2, 3))
             writeFixed(byteArrayOf(4, 5))
@@ -183,7 +183,7 @@ class BinaryCodecTest {
             writeMapEnd()
             writeInt(42)
         }
-        ByteArrayDecoder(encoder.toByteArray()).apply {
+        ByteArrayBinaryReader(encoder.toByteArray()).apply {
             skipString()
             skipBytes()
             skipFixed(2)
@@ -205,7 +205,7 @@ class BinaryCodecTest {
         // array of ints [1, 2] as a block of -2 items spanning 2 bytes, then [3] as a positive block, then the end
         val encoded = bytes(0x03, 0x04, 0x02, 0x04, 0x02, 0x06, 0x00, 0x54)
 
-        ByteArrayDecoder(encoded).apply {
+        ByteArrayBinaryReader(encoded).apply {
             readArrayStart() shouldBe 2
             readInt() shouldBe 1
             readInt() shouldBe 2
@@ -214,14 +214,14 @@ class BinaryCodecTest {
             arrayNext() shouldBe 0
             readInt() shouldBe 42
         }
-        ByteArrayDecoder(encoded).apply {
+        ByteArrayBinaryReader(encoded).apply {
             // the sized block is skipped whole, the positive one is left to the caller
             skipArray() shouldBe 1
             readInt() shouldBe 3
             skipArray() shouldBe 0
             readInt() shouldBe 42
         }
-        ByteArrayDecoder(encoded).apply {
+        ByteArrayBinaryReader(encoded).apply {
             readMapStart() shouldBe 2
         }
     }
@@ -229,7 +229,7 @@ class BinaryCodecTest {
     @Test
     fun `a negative length is rejected before anything is read`() {
         val lengthOfMinusOne = bytes(0x01, 0x00, 0x00)
-        val reads: List<AvroBinaryDecoder.() -> Unit> =
+        val reads: List<AvroBinaryReader.() -> Unit> =
             listOf(
                 { readString() },
                 { readStringBytes() },
@@ -238,7 +238,7 @@ class BinaryCodecTest {
                 { skipBytes() }
             )
         for (read in reads) {
-            val decoder = ByteArrayDecoder(lengthOfMinusOne)
+            val decoder = ByteArrayBinaryReader(lengthOfMinusOne)
             shouldThrow<SerializationException> { decoder.read() }
             // only the length was read
             decoder.readFixed(2) shouldBe bytes(0x00, 0x00)
@@ -247,7 +247,7 @@ class BinaryCodecTest {
 
     @Test
     fun `a length above the maximum array size is rejected before anything is allocated`() {
-        val reads: List<AvroBinaryDecoder.() -> Unit> =
+        val reads: List<AvroBinaryReader.() -> Unit> =
             listOf(
                 { readString() },
                 { readStringBytes() },
@@ -256,8 +256,8 @@ class BinaryCodecTest {
                 { skipBytes() }
             )
         for (read in reads) {
-            val input = ByteArrayEncoder().apply { writeLong(MAX_BINARY_LENGTH.toLong() + 1) }.toByteArray()
-            shouldThrow<SerializationException> { ByteArrayDecoder(input).read() }
+            val input = ByteArrayBinaryWriter().apply { writeLong(MAX_BINARY_LENGTH.toLong() + 1) }.toByteArray()
+            shouldThrow<SerializationException> { ByteArrayBinaryReader(input).read() }
         }
     }
 
@@ -274,7 +274,7 @@ class BinaryCodecTest {
     @Test
     fun `a string is written as the JVM writes its UTF-8 bytes and an unpaired surrogate as a question mark`() {
         fun written(value: String): List<Int> {
-            val encoder = ByteArrayEncoder()
+            val encoder = ByteArrayBinaryWriter()
             encoder.writeString(value)
             return encoder.toByteArray().map { it.toInt() and 0xff }
         }
@@ -295,9 +295,9 @@ class BinaryCodecTest {
     @Test
     fun `a malformed string is decoded as the JVM decodes it`() {
         fun read(vararg utf8: Int): String {
-            val encoder = ByteArrayEncoder()
+            val encoder = ByteArrayBinaryWriter()
             encoder.writeString(bytes(*utf8))
-            return ByteArrayDecoder(encoder.toByteArray()).readString()
+            return ByteArrayBinaryReader(encoder.toByteArray()).readString()
         }
         read(0xc0, 0x80) shouldBe "��"
         read(0xc1, 0xbf) shouldBe "��"

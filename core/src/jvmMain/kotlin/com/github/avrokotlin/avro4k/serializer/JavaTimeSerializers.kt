@@ -4,7 +4,6 @@ import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroEncoder
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
-import com.github.avrokotlin.avro4k.internal.UnexpectedDecodeSchemaError
 import com.github.avrokotlin.avro4k.internal.convertDecoded
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
@@ -93,7 +92,7 @@ public object LocalDateSerializer : AvroSerializer<LocalDate>(LocalDate::class.q
         }
     }
 
-    private fun AvroDecoder.localDateSchemaError() = UnexpectedDecodeSchemaError("LocalDate", AvroSchema.Type.INT, AvroSchema.Type.LONG)
+    private fun AvroDecoder.localDateSchemaError() = AvroSchemaMismatchException("LocalDate", AvroSchema.Type.INT, AvroSchema.Type.LONG)
 
     override fun deserializeGeneric(decoder: Decoder): LocalDate {
         return LocalDate.parse(decoder.decodeString())
@@ -178,7 +177,7 @@ public object LocalTimeSerializer : AvroSerializer<LocalTime>(LocalTime::class.q
     }
 
     private fun AvroDecoder.localTimeSchemaError() =
-        UnexpectedDecodeSchemaError("LocalTime", AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
+        AvroSchemaMismatchException("LocalTime", AvroSchema.Type.INT, AvroSchema.Type.LONG, AvroSchema.Type.STRING)
 
     override fun deserializeGeneric(decoder: Decoder): LocalTime {
         return LocalTime.parse(decoder.decodeString())
@@ -237,12 +236,12 @@ public object LocalDateTimeSerializer : AvroSerializer<LocalDateTime>(LocalDateT
                         LocalDateTime.ofInstant(Instant.EPOCH.plus(it, ChronoUnit.MICROS), ZoneOffset.UTC)
                     }
 
-                    else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
+                    else -> throw decoder.AvroSchemaMismatchException("Instant", AvroSchema.Type.LONG)
                 }
 
             AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "LocalDateTime") { LocalDateTime.parse(it) }
 
-            else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
+            else -> throw decoder.AvroSchemaMismatchException("Instant", AvroSchema.Type.LONG)
         }
     }
 
@@ -297,12 +296,12 @@ public object InstantSerializer : AvroSerializer<Instant>(Instant::class.qualifi
                 when (schema.knownLogicalTypeName) {
                     LOGICAL_TYPE_NAME_TIMESTAMP_MILLIS, null -> Instant.ofEpochMilli(decoder.decodeLong())
                     LOGICAL_TYPE_NAME_TIMESTAMP_MICROS -> decoder.decodeLong().convertDecoded(AvroSchema.Type.LONG, "Instant") { Instant.EPOCH.plus(it, ChronoUnit.MICROS) }
-                    else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
+                    else -> throw decoder.AvroSchemaMismatchException("Instant", AvroSchema.Type.LONG)
                 }
 
             AvroSchema.Type.STRING -> decoder.decodeString().convertDecoded(AvroSchema.Type.STRING, "Instant") { Instant.parse(it) }
 
-            else -> throw decoder.UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG)
+            else -> throw decoder.AvroSchemaMismatchException("Instant", AvroSchema.Type.LONG)
         }
     }
 
@@ -366,7 +365,7 @@ public object InstantToMicroSerializer : AvroSerializer<Instant>(Instant::class.
         }
     }
 
-    private fun AvroDecoder.instantToMicroSchemaError() = UnexpectedDecodeSchemaError("Instant", AvroSchema.Type.LONG, AvroSchema.Type.STRING)
+    private fun AvroDecoder.instantToMicroSchemaError() = AvroSchemaMismatchException("Instant", AvroSchema.Type.LONG, AvroSchema.Type.STRING)
 
     override fun deserializeGeneric(decoder: Decoder): Instant {
         return Instant.parse(decoder.decodeString())

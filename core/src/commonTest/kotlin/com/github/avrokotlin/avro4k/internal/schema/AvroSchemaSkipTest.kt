@@ -18,9 +18,9 @@ import com.github.avrokotlin.avro4k.AvroSchema.StringSchema
 import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.LockableList
 import com.github.avrokotlin.avro4k.Name
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayDecoder
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryWriter
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryReader
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
@@ -48,20 +48,20 @@ class AvroSchemaSkipTest {
 
     private fun assertSkips(
         schema: AvroSchema,
-        write: AvroBinaryEncoder.() -> Unit,
+        write: AvroBinaryWriter.() -> Unit,
     ) {
         val encoder =
-            ByteArrayEncoder().apply {
+            ByteArrayBinaryWriter().apply {
                 write()
                 writeLong(SENTINEL)
             }
-        val decoder = ByteArrayDecoder(encoder.toByteArray())
+        val decoder = ByteArrayBinaryReader(encoder.toByteArray())
         decoder.skip(schema)
         decoder.readLong() shouldBe SENTINEL
         decoder.isExhausted shouldBe true
     }
 
-    private fun bytesOf(write: AvroBinaryEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+    private fun bytesOf(write: AvroBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 
     @Test
     fun `skips every primitive type`() {
@@ -134,7 +134,7 @@ class AvroSchemaSkipTest {
 
     @Test
     fun `skips nested records - arrays and maps written as single blocks`() {
-        val writeInner: AvroBinaryEncoder.(String, Long) -> Unit = { s, l ->
+        val writeInner: AvroBinaryWriter.(String, Long) -> Unit = { s, l ->
             writeString(s)
             writeLong(l)
         }
@@ -312,8 +312,8 @@ class AvroSchemaSkipTest {
 
     @Test
     fun `a union branch index out of range fails`() {
-        val input = ByteArrayEncoder().apply { writeIndex(2) }.toByteArray()
-        shouldThrow<AvroMalformedDataException> { ByteArrayDecoder(input).skip(UnionSchema(NullSchema(), IntSchema())) }
+        val input = ByteArrayBinaryWriter().apply { writeIndex(2) }.toByteArray()
+        shouldThrow<AvroMalformedDataException> { ByteArrayBinaryReader(input).skip(UnionSchema(NullSchema(), IntSchema())) }
             .message shouldBe "Malformed data: union index 2 out of range [0, 2) for union[null, int]"
     }
 

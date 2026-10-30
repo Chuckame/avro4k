@@ -1,10 +1,10 @@
-package com.github.avrokotlin.avro4k.internal.decoder.direct
+package com.github.avrokotlin.avro4k.internal.decoder
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.schema.elementType
-import com.github.avrokotlin.avro4k.internal.schema.valueType
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryReader
+import com.github.avrokotlin.avro4k.internal.schema.PlainSchemas
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
@@ -25,10 +25,10 @@ internal const val MAX_PRESIZED_BLOCK_ITEMS: Int = 1024
  * The items of one array block, already read and checked by the decoder that begins it. That decoder keeps this one and
  * hands it each next block it begins, of this array or of another, through [reset].
  */
-internal class ArrayBlockDirectDecoder(
+internal class ArrayBlockDecoder(
     avro: Avro,
-    binaryDecoder: AvroBinaryDecoder,
-) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
+    binaryReader: AvroBinaryReader,
+) : AbstractAvroBinaryDecoder(avro, binaryReader) {
     /** The writer schema of the items, read once per block rather than per item. */
     private var elementType: AvroSchema = NO_ELEMENT_SCHEMA
     private var blockSize = 0
@@ -42,19 +42,6 @@ internal class ArrayBlockDirectDecoder(
     /** Whether a block is begun on this decoder and not ended yet. */
     val inUse: Boolean
         get() = nextItemIndex >= 0
-
-    /** Begins decoding a block of [blockSize] items of [arraySchema], from its first item. */
-    fun reset(
-        arraySchema: AvroSchema,
-        blockSize: Int,
-    ): ArrayBlockDirectDecoder {
-        elementType = arraySchema.elementType
-        this.blockSize = blockSize
-        currentAvroSchema = NO_ELEMENT_SCHEMA
-        beginReuse()
-        nextItemIndex = 0
-        return this
-    }
 
     override fun endStructure(descriptor: SerialDescriptor) {
         nextItemIndex = NOT_IN_USE
@@ -76,16 +63,29 @@ internal class ArrayBlockDirectDecoder(
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         return if (nextItemIndex < blockSize) nextItemIndex++ else CompositeDecoder.DECODE_DONE
     }
+
+    /** Begins decoding a block of [blockSize] items of [arraySchema], from its first item. */
+    fun reset(
+        arraySchema: AvroSchema.ArraySchema,
+        blockSize: Int,
+    ): ArrayBlockDecoder {
+        elementType = arraySchema.elementSchema
+        this.blockSize = blockSize
+        currentAvroSchema = NO_ELEMENT_SCHEMA
+        beginReuse()
+        nextItemIndex = 0
+        return this
+    }
 }
 
 /**
  * The entries of one map block, already read and checked by the decoder that begins it. That decoder keeps this one and
  * hands it each next block it begins, of this map or of another, through [reset].
  */
-internal class MapBlockDirectDecoder(
+internal class MapBlockDecoder(
     avro: Avro,
-    binaryDecoder: AvroBinaryDecoder,
-) : AbstractAvroDirectDecoder(avro, binaryDecoder) {
+    binaryReader: AvroBinaryReader,
+) : AbstractAvroBinaryDecoder(avro, binaryReader) {
     /** The writer schema of the values, read once per block rather than per entry. */
     private var valueType: AvroSchema = NO_ELEMENT_SCHEMA
     private var blockSize = 0
@@ -99,20 +99,6 @@ internal class MapBlockDirectDecoder(
      * blocks, which only [beginElement] sees.
      */
     private var pendingValueIndex = -1
-
-    /** Begins decoding a block of [blockSize] entries of [mapSchema], from its first key. */
-    fun reset(
-        mapSchema: AvroSchema,
-        blockSize: Int,
-    ): MapBlockDirectDecoder {
-        valueType = mapSchema.valueType
-        this.blockSize = blockSize
-        currentAvroSchema = NO_ELEMENT_SCHEMA
-        pendingValueIndex = -1
-        beginReuse()
-        decodedEntries = 0
-        return this
-    }
 
     /** Whether a block is begun on this decoder and not ended yet. */
     val inUse: Boolean
@@ -130,7 +116,7 @@ internal class MapBlockDirectDecoder(
     ) {
         // reset the current writer schema in of the element is a union (as a union is resolved)
         if (index % 2 == 0) {
-            currentAvroSchema = KEY_SCHEMA
+            currentAvroSchema = PlainSchemas.STRING
             pendingValueIndex = index + 1
         } else {
             currentAvroSchema = valueType
@@ -151,7 +137,17 @@ internal class MapBlockDirectDecoder(
         return 2 * decodedEntries++
     }
 
-    companion object {
-        private val KEY_SCHEMA = AvroSchema.StringSchema()
+    /** Begins decoding a block of [blockSize] entries of [mapSchema], from its first key. */
+    fun reset(
+        mapSchema: AvroSchema.MapSchema,
+        blockSize: Int,
+    ): MapBlockDecoder {
+        valueType = mapSchema.valueSchema
+        this.blockSize = blockSize
+        currentAvroSchema = NO_ELEMENT_SCHEMA
+        pendingValueIndex = -1
+        beginReuse()
+        decodedEntries = 0
+        return this
     }
 }

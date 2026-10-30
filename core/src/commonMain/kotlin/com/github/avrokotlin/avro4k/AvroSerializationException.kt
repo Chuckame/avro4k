@@ -1,6 +1,11 @@
 package com.github.avrokotlin.avro4k
 
+import com.github.avrokotlin.avro4k.internal.nameForMessages
+import com.github.avrokotlin.avro4k.internal.schema.toSchemaJsonString
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.descriptors.SerialKind
+import kotlinx.serialization.encoding.Decoder
+import kotlin.reflect.KClass
 
 // Explicit secondary constructors rather than default arguments: a default argument adds a synthetic constructor to
 // the public binary API.
@@ -48,6 +53,49 @@ public open class AvroSchemaParseException(message: String?, cause: Throwable?) 
 @ExperimentalAvro4kApi
 public open class AvroSchemaMismatchException(message: String?, cause: Throwable?) : AvroSerializationException(message, cause) {
     public constructor(message: String?) : this(message, null)
+}
+
+/** A decoded value of an unexpected type for [ExpectedType]. */
+context(_: Decoder)
+internal inline fun <reified ExpectedType> AvroSchemaMismatchException(
+    value: Any?,
+    firstExpectedType: KClass<*>,
+    vararg expectedTypes: KClass<*>,
+): AvroSchemaMismatchException = decodedValueMismatch(value, ExpectedType::class.nameForMessages, firstExpectedType, expectedTypes)
+
+/** A decoded value of an unexpected type for a value of [expectedKind]. */
+context(_: Decoder)
+internal fun AvroSchemaMismatchException(
+    value: Any?,
+    expectedKind: SerialKind,
+    firstExpectedType: KClass<*>,
+    vararg expectedTypes: KClass<*>,
+): AvroSchemaMismatchException = decodedValueMismatch(value, expectedKind.toString(), firstExpectedType, expectedTypes)
+
+internal fun decodedValueMismatch(
+    value: Any?,
+    expected: String,
+    firstExpectedType: KClass<*>,
+    expectedTypes: Array<out KClass<*>>,
+): AvroSchemaMismatchException {
+    val allExpectedTypes = (listOf(firstExpectedType) + expectedTypes).joinToString { it.nameForMessages }
+    return if (value == null) {
+        AvroSchemaMismatchException("Decoded null value for $expected kind, expected one of [$allExpectedTypes]")
+    } else {
+        AvroSchemaMismatchException("Decoded value '$value' of type ${value::class.nameForMessages} for $expected kind, expected one of [$allExpectedTypes]")
+    }
+}
+
+/** The writer schema is none of the types a value of [actualType] can be decoded from. */
+internal fun AvroDecoder.AvroSchemaMismatchException(
+    actualType: String,
+    firstExpectedType: AvroSchema.Type,
+    vararg expectedTypes: AvroSchema.Type,
+): AvroSchemaMismatchException {
+    val allExpectedTypes = listOf(firstExpectedType) + expectedTypes
+    return AvroSchemaMismatchException(
+        "For $actualType, expected type one of $allExpectedTypes, but had writer schema ${currentWriterSchema.toSchemaJsonString()}"
+    )
 }
 
 /** The decoded input is not a valid Avro encoding of the writer schema: truncated, corrupted, or out of the encoding's bounds. */

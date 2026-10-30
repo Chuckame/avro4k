@@ -8,7 +8,7 @@ import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.InternalAvro4kApi
 import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
 import com.github.avrokotlin.avro4k.internal.schema.asSchemaList
-import com.github.avrokotlin.avro4k.internal.schema.fields
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.isNullable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -176,7 +176,7 @@ internal class RecordResolver(
     ): Array<DecodingStep> = workflow.missingElements ?: computeMissingElementSteps(classDescriptor).also { workflow.missingElements = it }
 
     private fun computeMissingElementSteps(classDescriptor: SerialDescriptor): Array<DecodingStep> {
-        val readerFields = avro.avroSchema(classDescriptor).fields
+        val readerFields = avro.avroSchema(classDescriptor).asType<AvroSchema.RecordSchema>().fields
         return Array(classDescriptor.elementsCount) { elementIndex ->
             resolveMissingElement(classDescriptor, elementIndex, readerFields[elementIndex])
         }
@@ -224,7 +224,7 @@ internal class RecordResolver(
         if (visitedElements.any { !it }) {
             // TODO we should not need to resolve the whole record's schema, but just extract the fields names, aliases and their order.
             //  However, the schema resolution also handle the union schema ordering based on the default value, which we also need here.
-            val readerFields = avro.avroSchema(classDescriptor).fields
+            val readerFields = avro.avroSchema(classDescriptor).asType<AvroSchema.RecordSchema>().fields
 
             // iterate over remaining elements in the class descriptor that are not in the writer schema
             // so it needs to set default values or skip them if they are optional
@@ -457,7 +457,7 @@ public class SerializationWorkflow internal constructor(
     public val encoding: EncodingWorkflow,
     /**
      * The writer schema of each field, by element index, when the record decodes exactly as written, field i into
-     * element i with nothing skipped or defaulted; otherwise null. The direct decoder then decodes the record's elements
+     * element i with nothing skipped or defaulted; otherwise null. The binary decoder then decodes the record's elements
      * in order, without its per-field decoding steps.
      */
     internal val exactFieldSchemas: Array<AvroSchema>?,

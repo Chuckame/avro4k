@@ -1,12 +1,11 @@
-package com.github.avrokotlin.avro4k.internal.encoder.direct
+package com.github.avrokotlin.avro4k.internal.encoder
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchema.RecordSchema
 import com.github.avrokotlin.avro4k.MissingFieldsEncodingException
 import com.github.avrokotlin.avro4k.internal.EncodingWorkflow
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryEncoder
-import com.github.avrokotlin.avro4k.internal.encoder.ReorderingCompositeEncoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryWriter
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeEncoder
 
@@ -15,7 +14,7 @@ internal fun reorderingRecordEncoder(
     schema: RecordSchema,
     encodingWorkflow: EncodingWorkflow.NonContiguous,
     avro: Avro,
-    binaryEncoder: AvroBinaryEncoder,
+    binaryWriter: AvroBinaryWriter,
 ): CompositeEncoder =
     ReorderingCompositeEncoder(
         schema.fields.size,
@@ -23,7 +22,7 @@ internal fun reorderingRecordEncoder(
             encodingWorkflow.descriptorToWriterFieldIndex,
             schema,
             avro,
-            binaryEncoder
+            binaryWriter
         )
     ) { _, index ->
         encodingWorkflow.descriptorToWriterFieldIndex[index]
@@ -39,9 +38,9 @@ private class RecordNonContiguousEncoder(
     private val descriptorToWriterFieldIndex: IntArray,
     private val schema: RecordSchema,
     avro: Avro,
-    binaryEncoder: AvroBinaryEncoder,
-) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
-    override lateinit var currentAvroSchema: AvroSchema
+    binaryWriter: AvroBinaryWriter,
+) : AbstractAvroBinaryEncoder(avro, binaryWriter) {
+    override lateinit var currentWriterSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
@@ -52,7 +51,7 @@ private class RecordNonContiguousEncoder(
             return false
         }
         super.encodeElement(descriptor, index)
-        currentAvroSchema = schema.fields[writerFieldIndex].schema
+        currentWriterSchema = schema.fields[writerFieldIndex].schema
         return true
     }
 }
@@ -67,8 +66,8 @@ internal class RecordContiguousSkippingEncoder(
     resolvedDescriptor: SerialDescriptor,
     skippedElements: BooleanArray,
     avro: Avro,
-    binaryEncoder: AvroBinaryEncoder,
-) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
+    binaryWriter: AvroBinaryWriter,
+) : AbstractAvroBinaryEncoder(avro, binaryWriter) {
     var schema: RecordSchema = schema
         private set
     var resolvedDescriptor: SerialDescriptor = resolvedDescriptor
@@ -79,7 +78,7 @@ internal class RecordContiguousSkippingEncoder(
 
     /** The schema of the field being encoded: none until [encodeElement] begins one, as on a new encoder. */
     private var fieldSchema: AvroSchema? = null
-    override var currentAvroSchema: AvroSchema
+    override var currentWriterSchema: AvroSchema
         get() = fieldSchema ?: throw noElementBegunError()
         set(value) {
             fieldSchema = value
@@ -121,8 +120,8 @@ internal class RecordContiguousExactEncoder(
     schema: RecordSchema,
     resolvedDescriptor: SerialDescriptor,
     avro: Avro,
-    binaryEncoder: AvroBinaryEncoder,
-) : AbstractAvroDirectEncoder(avro, binaryEncoder) {
+    binaryWriter: AvroBinaryWriter,
+) : AbstractAvroBinaryEncoder(avro, binaryWriter) {
     var schema: RecordSchema = schema
         private set
     var resolvedDescriptor: SerialDescriptor = resolvedDescriptor
@@ -130,7 +129,7 @@ internal class RecordContiguousExactEncoder(
 
     /** The schema of the field being encoded: none until [encodeElement] begins one, as on a new encoder. */
     private var fieldSchema: AvroSchema? = null
-    override var currentAvroSchema: AvroSchema
+    override var currentWriterSchema: AvroSchema
         get() = fieldSchema ?: throw noElementBegunError()
         set(value) {
             fieldSchema = value

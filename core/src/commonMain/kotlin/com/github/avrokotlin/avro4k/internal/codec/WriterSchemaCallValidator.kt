@@ -12,11 +12,10 @@ import com.github.avrokotlin.avro4k.AvroSchema.UnionSchema
 import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.AvroValidationException
 import com.github.avrokotlin.avro4k.internal.schema.fullNameForMessages
-import com.github.avrokotlin.avro4k.internal.schema.getName
 
 /**
  * Checks the codec calls made to write or read **one datum** against its writer schema, one call at a time: the state
- * machine shared by [ValidatingAvroBinaryEncoder] and [ValidatingAvroBinaryDecoder].
+ * machine shared by [ValidatingAvroBinaryWriter] and [ValidatingAvroBinaryReader].
  *
  * The state is an explicit stack of what is still expected, the next expectation on top:
  * - a value of a given schema. A record needs no call of its own: when it reaches the top it is replaced by its fields,
@@ -433,7 +432,7 @@ internal class WriterSchemaCallValidator(
             Type.ENUM -> "an index of enum '${schema.fullName}'"
             Type.ARRAY -> "the start of an array"
             Type.MAP -> "the start of a map"
-            else -> "a value of type ${schema.type.getName()}"
+            else -> "a value of type ${schema.type.typeName}"
         }
 
     /**

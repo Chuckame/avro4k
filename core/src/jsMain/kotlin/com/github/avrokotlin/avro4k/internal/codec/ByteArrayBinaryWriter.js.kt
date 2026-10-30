@@ -2,9 +2,9 @@ package com.github.avrokotlin.avro4k.internal.codec
 
 // Kotlin/JS emulates a `Long` with an object of two 32-bit halves, each shift, mask or comparison on it a call that
 // allocates a new one. The halves are taken once, and the zig-zag is done on them as `Int`s.
-internal actual class ByteArrayEncoder actual constructor(
+internal actual class ByteArrayBinaryWriter actual constructor(
     writeFullChunk: ((chunk: ByteArray, length: Int) -> Unit)?,
-) : ChunkedByteArrayEncoder(writeFullChunk) {
+) : ChunkedByteArrayBinaryWriter(writeFullChunk) {
     actual override fun writeLong(value: Long) {
         val low = value.toInt()
         val high = (value ushr 32).toInt()

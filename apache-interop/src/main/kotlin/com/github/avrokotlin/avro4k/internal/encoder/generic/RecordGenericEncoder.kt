@@ -97,11 +97,11 @@ private abstract class AbstractRecordGenericEncoder(
 
     private var currentFieldIndex = -1
 
-    override lateinit var currentAvroSchema: AvroSchema
+    override lateinit var currentWriterSchema: AvroSchema
 
     protected fun setWriterField(writerFieldIndex: Int) {
         currentFieldIndex = writerFieldIndex
-        currentAvroSchema = schema.fields[writerFieldIndex].schema
+        currentWriterSchema = schema.fields[writerFieldIndex].schema
     }
 
     override fun endStructure(descriptor: SerialDescriptor) {

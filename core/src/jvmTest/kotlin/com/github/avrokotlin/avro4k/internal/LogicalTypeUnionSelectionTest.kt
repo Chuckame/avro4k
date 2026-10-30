@@ -1,6 +1,7 @@
 package com.github.avrokotlin.avro4k.internal
 
 import com.github.avrokotlin.avro4k.Avro
+import com.github.avrokotlin.avro4k.ResolvedSchema
 import com.github.avrokotlin.avro4k.encodeWith
 import com.github.avrokotlin.avro4k.internal.schema.hasValidLogicalType
 import com.github.avrokotlin.avro4k.internal.schema.knownLogicalTypeName
@@ -67,7 +68,7 @@ internal class LogicalTypeUnionSelectionTest : StringSpec({
         for (json in schemas) {
             val apache = Schema.Parser().parse(json)
             withClue(json) {
-                apache.toAvro4k().hasValidLogicalType() shouldBe (LogicalTypes.fromSchemaIgnoreInvalid(apache) != null)
+                (apache.toAvro4k() as ResolvedSchema).hasValidLogicalType() shouldBe (LogicalTypes.fromSchemaIgnoreInvalid(apache) != null)
                 // the name the serializers compare, as Apache's getLogicalType() of a parsed schema gives it
                 apache.toAvro4k().knownLogicalTypeName shouldBe LogicalTypes.fromSchemaIgnoreInvalid(apache)?.name
             }
@@ -75,8 +76,8 @@ internal class LogicalTypeUnionSelectionTest : StringSpec({
     }
 
     "a logical type avro4k resolves by name, unknown to Apache, stays valid" {
-        Schema.Parser().parse("""{"type":"int","logicalType":"char"}""").toAvro4k().hasValidLogicalType() shouldBe true
-        Schema.create(Schema.Type.INT).toAvro4k().hasValidLogicalType() shouldBe true
+        Schema.Parser().parse("""{"type":"int","logicalType":"char"}""").toAvro4k().let { it as ResolvedSchema }.hasValidLogicalType() shouldBe true
+        Schema.create(Schema.Type.INT).toAvro4k().let { it as ResolvedSchema }.hasValidLogicalType() shouldBe true
     }
 
     "a logical type unknown to Apache is no known logical type, as Apache's getLogicalType() of a parsed schema" {

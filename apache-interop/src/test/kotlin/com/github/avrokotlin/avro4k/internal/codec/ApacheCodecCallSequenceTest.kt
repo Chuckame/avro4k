@@ -481,6 +481,6 @@ private val EXPECTED_ENCODE_STRINGS: List<String> =
 private val EXPECTED_DECODE_STRINGS: List<String> =
     listOf(
         "readString(Utf8:false)=abc",
-        "readString(Utf8:false)=z",
+        "readString()=z",
         "readString(Utf8:false)=defg"
     )

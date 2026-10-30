@@ -1,11 +1,10 @@
-package com.github.avrokotlin.avro4k.internal.decoder.direct
+package com.github.avrokotlin.avro4k.internal.decoder
 
 import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryDecoder
-import com.github.avrokotlin.avro4k.internal.decoder.AbstractPolymorphicDecoder
+import com.github.avrokotlin.avro4k.internal.codec.AvroBinaryReader
+import com.github.avrokotlin.avro4k.internal.schema.asType
 import com.github.avrokotlin.avro4k.internal.schema.isUnion
-import com.github.avrokotlin.avro4k.internal.schema.types
 import com.github.avrokotlin.avro4k.internal.unionIndexOutOfRangeError
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
@@ -23,7 +22,7 @@ internal class PolymorphicDecoder(
     avro: Avro,
     descriptor: SerialDescriptor,
     schema: AvroSchema,
-    private val binaryDecoder: AvroBinaryDecoder,
+    private val binaryReader: AvroBinaryReader,
 ) : AbstractPolymorphicDecoder(avro, descriptor, schema) {
     /**
      * Whether a value is begun on this decoder and not ended yet: from its creation or [reset] to its [endStructure].
@@ -34,22 +33,12 @@ internal class PolymorphicDecoder(
         private set
 
     /** Created for the first value, then handed each next one. */
-    private var valueDecoder: AvroValueDirectDecoder? = null
+    private var valueDecoder: AvroValueDecoder? = null
 
     /*
-     * The serial names this decoder found, up to four, each with the descriptor and the writer schema branch it was
-     * found for. A list of values of a few subclasses, or a record's polymorphic fields, then find their serial name with
-     * two identity comparisons per entry, without the resolver's lookup of the descriptor's names and the name maps.
-     *
-     * Compared by identity: a descriptor or a branch equal to a remembered one but another instance is looked up, as a
-     * new decoder would. The serial name only depends on the descriptor and the branch (the [Avro] instance is the same
-     * for the whole call), so a remembered one is the name the lookup would find.
-     *
-     * Once the four are taken, each next name found replaces the last one: the first three stay, so values cycling
-     * through more than four subclasses still find most of their names here, where replacing the oldest would find none.
-     *
-     * Per-call state, as the decoder itself: nothing is shared between calls. Fields rather than arrays, which would
-     * cost three more objects per decoder.
+     * The last serial names found, by (descriptor, writer branch) compared by identity: a list of values of a few
+     * subclasses then skips the resolver's name lookup. Four is not a limit on the union: a fifth subclass is looked up
+     * as usual and takes the last slot, so the first three stay. Fields rather than arrays: no extra object per decoder.
      */
     private var descriptor0: SerialDescriptor? = null
     private var branch0: AvroSchema? = null
@@ -63,14 +52,6 @@ internal class PolymorphicDecoder(
     private var descriptor3: SerialDescriptor? = null
     private var branch3: AvroSchema? = null
     private var serialName3: String? = null
-
-    override fun reset(
-        descriptor: SerialDescriptor,
-        schema: AvroSchema,
-    ) {
-        super.reset(descriptor, schema)
-        inUse = true
-    }
 
     override fun endStructure(descriptor: SerialDescriptor) {
         inUse = false
@@ -141,14 +122,22 @@ internal class PolymorphicDecoder(
     }
 
     private fun readBranch(union: AvroSchema): AvroSchema {
-        val branches = union.types
-        val index = binaryDecoder.readIndex()
+        val branches = union.asType<AvroSchema.UnionSchema>().types
+        val index = binaryReader.readIndex()
         if (index < 0 || index >= branches.size) throw unionIndexOutOfRangeError(index, union)
         return branches[index]
     }
 
     override fun newDecoder(chosenSchema: AvroSchema): Decoder {
         return valueDecoder?.reset(chosenSchema)
-            ?: AvroValueDirectDecoder(chosenSchema, avro, binaryDecoder).also { valueDecoder = it }
+            ?: AvroValueDecoder(chosenSchema, avro, binaryReader).also { valueDecoder = it }
+    }
+
+    override fun reset(
+        descriptor: SerialDescriptor,
+        schema: AvroSchema,
+    ) {
+        super.reset(descriptor, schema)
+        inUse = true
     }
 }

@@ -148,13 +148,13 @@ internal fun DecodedNullError(
 
 internal fun Decoder.IllegalIndexedAccessError() = UnsupportedOperationException("${this::class.nameForMessages} does not support indexed access")
 
-internal inline fun <reified ExpectedType> BadDecodedValueError(
+internal inline fun <reified ExpectedType> AvroSchemaMismatchException(
     value: Any?,
     firstExpectedType: KClass<*>,
     vararg expectedTypes: KClass<*>,
 ): AvroSchemaMismatchException = badDecodedValueError(value, ExpectedType::class.nameForMessages, firstExpectedType, expectedTypes)
 
-internal fun BadDecodedValueError(
+internal fun AvroSchemaMismatchException(
     value: Any?,
     expectedKind: SerialKind,
     firstExpectedType: KClass<*>,

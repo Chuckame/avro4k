@@ -6,7 +6,7 @@ import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.AvroSerializationException
 import com.github.avrokotlin.avro4k.ResolvedSchema
-import com.github.avrokotlin.avro4k.internal.BadDecodedValueError
+import com.github.avrokotlin.avro4k.internal.AvroSchemaMismatchException
 import com.github.avrokotlin.avro4k.internal.enumDefaultIndex
 import com.github.avrokotlin.avro4k.internal.interceptedDeserializer
 import com.github.avrokotlin.avro4k.internal.toByteExact
@@ -112,7 +112,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                             avro = avro
                         )
 
-                    else -> throw BadDecodedValueError(value, StructureKind.LIST, GenericArray::class, Collection::class, ByteBuffer::class)
+                    else -> throw AvroSchemaMismatchException(value, StructureKind.LIST, GenericArray::class, Collection::class, ByteBuffer::class)
                 }
 
             StructureKind.MAP ->
@@ -127,13 +127,13 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                     // a record decoded as a map of its fields, as the binary decoder does (e.g. by AnySerializer)
                     is IndexedRecord -> RecordAsMapGenericDecoder(value, avro)
 
-                    else -> throw BadDecodedValueError(value, StructureKind.MAP, Map::class)
+                    else -> throw AvroSchemaMismatchException(value, StructureKind.MAP, Map::class)
                 }
 
             StructureKind.CLASS, StructureKind.OBJECT ->
                 when (val value = decodeGenericValue()) {
                     is IndexedRecord -> RecordGenericDecoder(value, descriptor, avro)
-                    else -> throw BadDecodedValueError(value, descriptor.kind, IndexedRecord::class)
+                    else -> throw AvroSchemaMismatchException(value, descriptor.kind, IndexedRecord::class)
                 }
 
             is PolymorphicKind ->
@@ -150,7 +150,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
         return when (val value = decodeGenericValue()) {
             is Boolean -> value
             is CharSequence -> value.toString().toBoolean()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.BOOLEAN, Boolean::class, Int::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.BOOLEAN, Boolean::class, Int::class, CharSequence::class)
         }
     }
 
@@ -160,7 +160,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             is Long -> value.toByteExact()
             is BigDecimal -> value.toByteExact()
             is CharSequence -> value.toString().toByte()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.BYTE, Int::class, Long::class, BigDecimal::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.BYTE, Int::class, Long::class, BigDecimal::class, CharSequence::class)
         }
     }
 
@@ -170,7 +170,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             is Long -> value.toShortExact()
             is BigDecimal -> value.toShortExact()
             is CharSequence -> value.toString().toShort()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.SHORT, Int::class, Long::class, BigDecimal::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.SHORT, Int::class, Long::class, BigDecimal::class, CharSequence::class)
         }
     }
 
@@ -180,7 +180,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             is Long -> value.toIntExact()
             is BigDecimal -> value.toIntExact()
             is CharSequence -> value.toString().toInt()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.INT, Int::class, Long::class, BigDecimal::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.INT, Int::class, Long::class, BigDecimal::class, CharSequence::class)
         }
     }
 
@@ -190,7 +190,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             is Int -> value.toLong()
             is BigDecimal -> value.toLongExact()
             is CharSequence -> value.toString().toLong()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.LONG, Int::class, Long::class, BigDecimal::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.LONG, Int::class, Long::class, BigDecimal::class, CharSequence::class)
         }
     }
 
@@ -200,7 +200,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             is Double -> value.toFloatExact()
             is BigDecimal -> value.toFloatExact()
             is CharSequence -> value.toString().toFloat()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.FLOAT, Float::class, Double::class, BigDecimal::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.FLOAT, Float::class, Double::class, BigDecimal::class, CharSequence::class)
         }
     }
 
@@ -210,7 +210,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             is Float -> value.toDouble()
             is BigDecimal -> value.toDoubleExact()
             is CharSequence -> value.toString().toDouble()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.DOUBLE, Float::class, Double::class, BigDecimal::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.DOUBLE, Float::class, Double::class, BigDecimal::class, CharSequence::class)
         }
     }
 
@@ -218,7 +218,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
         return when (val value = decodeGenericValue()) {
             is Int -> value.toChar()
             is CharSequence -> value.single()
-            else -> throw BadDecodedValueError(value, PrimitiveKind.CHAR, Int::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.CHAR, Int::class, CharSequence::class)
         }
     }
 
@@ -233,7 +233,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             // an enum symbol, as the binary decoder reads an enum as a string
             is GenericEnumSymbol<*> -> value.toString()
 
-            else -> throw BadDecodedValueError(value, PrimitiveKind.STRING, CharSequence::class, ByteArray::class, GenericFixed::class, GenericEnumSymbol::class)
+            else -> throw AvroSchemaMismatchException(value, PrimitiveKind.STRING, CharSequence::class, ByteArray::class, GenericFixed::class, GenericEnumSymbol::class)
         }
     }
 
@@ -245,7 +245,7 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
                     ?: throw AvroSchemaMismatchException("Unknown enum symbol '$value' for Enum '${enumDescriptor.serialName}'")
             }
 
-            else -> throw BadDecodedValueError(value, SerialKind.ENUM, GenericEnumSymbol::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException(value, SerialKind.ENUM, GenericEnumSymbol::class, CharSequence::class)
         }
     }
 
@@ -255,14 +255,14 @@ internal abstract class AbstractAvroGenericDecoder : AbstractDecoder(), AvroDeco
             is ByteBuffer -> value.array()
             is GenericFixed -> value.bytes()
             is CharSequence -> value.toString().toByteArray()
-            else -> throw BadDecodedValueError<ByteArray>(value, ByteArray::class, GenericFixed::class, CharSequence::class)
+            else -> throw AvroSchemaMismatchException<ByteArray>(value, ByteArray::class, GenericFixed::class, CharSequence::class)
         }
     }
 
     override fun decodeFixed(): ByteArray {
         return when (val value = decodeGenericValue()) {
             is GenericFixed -> value.bytes()
-            else -> throw BadDecodedValueError<GenericFixed>(value, GenericFixed::class)
+            else -> throw AvroSchemaMismatchException<GenericFixed>(value, GenericFixed::class)
         }
     }
 }

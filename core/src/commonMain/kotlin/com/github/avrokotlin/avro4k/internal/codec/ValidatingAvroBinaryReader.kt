@@ -10,7 +10,7 @@ import com.github.avrokotlin.avro4k.AvroSchema.Type
  * forwarded; a read enum or union index, or a block's item count, is checked once read, and throws a
  * [com.github.avrokotlin.avro4k.AvroMalformedDataException] when the writer schema rules it out.
  *
- * Collections follow the block protocol of [AvroBinaryDecoder]: `readArrayStart()` then `arrayNext()` once each
+ * Collections follow the block protocol of [AvroBinaryReader]: `readArrayStart()` then `arrayNext()` once each
  * block's items are read, until a block of 0 items; or, to skip one, `skipArray()` until it returns 0, the items of each
  * non-empty block being skipped one by one in between (the same for maps, each entry being its string key then its
  * value). Every value call is forwarded unchanged, so the wrapped decoder sees exactly the calls it would see without
@@ -18,10 +18,10 @@ import com.github.avrokotlin.avro4k.AvroSchema.Type
  *
  * Created for each decoded value; call [checkDatumComplete] once the value is decoded.
  */
-internal class ValidatingAvroBinaryDecoder(
-    private val decoder: AvroBinaryDecoder,
+internal class ValidatingAvroBinaryReader(
+    private val decoder: AvroBinaryReader,
     writerSchema: AvroSchema,
-) : AvroBinaryDecoder() {
+) : AvroBinaryReader() {
     private val validator = WriterSchemaCallValidator(writerSchema, decoding = true)
 
     /** Checks that the whole datum was read. */

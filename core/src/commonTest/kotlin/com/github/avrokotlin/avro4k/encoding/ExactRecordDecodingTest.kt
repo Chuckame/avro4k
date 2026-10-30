@@ -7,7 +7,7 @@ import com.github.avrokotlin.avro4k.AvroDefault
 import com.github.avrokotlin.avro4k.AvroSchema
 import com.github.avrokotlin.avro4k.Name
 import com.github.avrokotlin.avro4k.internal.DecodingStep
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.internal.exactFieldSchemas
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
@@ -503,12 +503,12 @@ private fun record(
     vararg fields: Pair<String, AvroSchema>,
 ): AvroSchema.RecordSchema = AvroSchema.RecordSchema(Name(name), fields.map { AvroSchema.RecordSchema.Field(it.first, it.second) })
 
-private fun bytes(write: ByteArrayEncoder.() -> Unit): ByteArray = ByteArrayEncoder().apply { write() }.toByteArray()
+private fun bytes(write: ByteArrayBinaryWriter.() -> Unit): ByteArray = ByteArrayBinaryWriter().apply { write() }.toByteArray()
 
 /** Writes [items] as one array block, then the closing empty block. */
-private fun <I> ByteArrayEncoder.writeBlocks(
+private fun <I> ByteArrayBinaryWriter.writeBlocks(
     items: List<I>,
-    writeItem: ByteArrayEncoder.(I) -> Unit,
+    writeItem: ByteArrayBinaryWriter.(I) -> Unit,
 ) {
     writeLong(items.size.toLong())
     items.forEach { writeItem(it) }

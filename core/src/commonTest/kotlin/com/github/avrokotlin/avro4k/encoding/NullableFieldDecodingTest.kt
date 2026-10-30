@@ -4,7 +4,7 @@ import com.github.avrokotlin.avro4k.Avro
 import com.github.avrokotlin.avro4k.AvroDecoder
 import com.github.avrokotlin.avro4k.AvroMalformedDataException
 import com.github.avrokotlin.avro4k.AvroSchema
-import com.github.avrokotlin.avro4k.internal.codec.ByteArrayEncoder
+import com.github.avrokotlin.avro4k.internal.codec.ByteArrayBinaryWriter
 import com.github.avrokotlin.avro4k.schema
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
@@ -27,6 +27,7 @@ import kotlin.test.Test
  * type, in either order: null and non-null values, out-of-range branch indexes, and the paths that must keep decoding as
  * any other union (a branch already read, a nullable serializer, a non-union writer field, a non-nullable reader field).
  */
+@OptIn(ExperimentalSerializationApi::class)
 class NullableFieldDecodingTest {
     @Test
     fun `nullable fields written as null first unions decode nulls and values`() {
@@ -45,7 +46,7 @@ class NullableFieldDecodingTest {
             val name = if (writerSchema === nullFirst) "union[null, int]" else "union[int, null]"
             for (index in listOf(2, -1)) {
                 val bytes =
-                    ByteArrayEncoder().apply {
+                    ByteArrayBinaryWriter().apply {
                         writeInt(1)
                         writeIndex(index)
                         writeInt(5)

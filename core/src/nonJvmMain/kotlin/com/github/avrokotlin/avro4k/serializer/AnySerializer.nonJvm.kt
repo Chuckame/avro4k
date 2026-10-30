@@ -67,7 +67,7 @@ public actual open class AnySerializer actual constructor() : AbstractAnySeriali
         }
     }
 
-    @OptIn(InternalSerializationApi::class, ExperimentalSerializationApi::class)
+    @OptIn(InternalSerializationApi::class)
     @Suppress("UNCHECKED_CAST")
     private fun SerializersModule.inferSerializationStrategy(value: Any): SerializationStrategy<Any> {
         val type = value::class

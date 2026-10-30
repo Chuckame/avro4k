@@ -17,14 +17,14 @@ internal class ArrayGenericEncoder(
     private val values: Array<Any?> = Array(arraySize) { null }
     private var index = 0
 
-    override lateinit var currentAvroSchema: AvroSchema
+    override lateinit var currentWriterSchema: AvroSchema
 
     override fun encodeElement(
         descriptor: SerialDescriptor,
         index: Int,
     ): Boolean {
         super.encodeElement(descriptor, index)
-        currentAvroSchema = schema.elementType
+        currentWriterSchema = schema.elementType
         return true
     }
 

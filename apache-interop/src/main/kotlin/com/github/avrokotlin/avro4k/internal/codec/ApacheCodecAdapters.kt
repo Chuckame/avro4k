@@ -19,7 +19,7 @@ import java.nio.ByteBuffer
 @InternalAvro4kApi
 public class ApacheEncoderAdapter(
     private val encoder: org.apache.avro.io.Encoder,
-) : AvroBinaryEncoder() {
+) : AvroBinaryWriter() {
     override fun writeNull() {
         encoder.writeNull()
     }
@@ -95,7 +95,7 @@ public class ApacheEncoderAdapter(
 @InternalAvro4kApi
 public class ApacheDecoderAdapter(
     private val decoder: org.apache.avro.io.Decoder,
-) : AvroBinaryDecoder() {
+) : AvroBinaryReader() {
     override fun readNull() {
         reading { decoder.readNull() }
     }

@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Isolates the per-structure cost of records: the encoder/decoder object that
- * `AbstractAvroDirectDecoder.beginStructure` (and its encoder counterpart) allocates for every
+ * `AbstractAvroBinaryDecoder.beginStructure` (and its encoder counterpart) allocates for every
  * structure, and the `RecordResolver.resolveFields` lookup that runs once per record *instance*.
  *
  * Each level of the payload carries exactly one field, so the encoded payload is ~1 byte whatever

@@ -3,7 +3,7 @@ package com.github.avrokotlin.avro4k.internal.codec
 import com.github.avrokotlin.avro4k.AvroMalformedDataException
 
 /**
- * Reads Avro binary from an array with a plain position, whatever the input: [ByteArrayDecoder] reads a whole
+ * Reads Avro binary from an array with a plain position, whatever the input: [ByteArrayBinaryReader] reads a whole
  * [ByteArray], the JVM's stream decoder an array it refills from the stream.
  *
  * A read is an array access and a position update, as in Apache Avro's `BinaryDecoder`, whose varint shape is kept too:
@@ -15,14 +15,14 @@ import com.github.avrokotlin.avro4k.AvroMalformedDataException
  * of the input is an [com.github.avrokotlin.avro4k.internal.EOFException]. Every length prefix is checked by
  * [checkBinaryLength] before anything is allocated or skipped for it, and every returned array is a copy.
  */
-internal abstract class BufferedDecoder(
+internal abstract class BufferedBinaryReader(
     /** The array being read. Never written. */
     protected var bytes: ByteArray,
     /** The index of the next byte to read in [bytes]. */
     protected var position: Int,
     /** The index after the last byte of the input in [bytes]. */
     protected var limit: Int,
-) : AvroBinaryDecoder() {
+) : AvroBinaryReader() {
     /**
      * Makes [bytes] the next array of the input, [position] its first byte and [limit] the index after its last, every
      * byte of the current array having been read, or throws an EOFException at the end of the input.
@@ -42,10 +42,11 @@ internal abstract class BufferedDecoder(
         return nextByte() == 1.toByte()
     }
 
-    /** Apache Avro's shape: the whole int decoded here when 5 bytes are left, as `BinaryDecoder.readInt`. */
+    /** The whole varint decoded inline when 5 bytes are left, so that no read past the end needs checking. */
     final override fun readInt(): Int {
         val p = position
         if (limit - p >= MAX_VARINT_INT_BYTES) {
+            // fast-path: the maximum bytes that could hold a varint fit in the available buffer
             var len = 0
             val result = decodeVarInt { bytes[p + len++] }
             position = p + len
@@ -55,8 +56,9 @@ internal abstract class BufferedDecoder(
     }
 
     /**
-     * Apache Avro's shape: the first 4 bytes decoded here when 10 bytes are left, the 5th to 10th out of line, as
-     * `BinaryDecoder.readLong` and its `innerLongDecode`.
+     * Bytes 1 to 4 are decoded inline, in an `Int`, when 10 bytes are left; bytes 5 to 10 out of line. Most longs fit in 4
+     * bytes, and this keeps the method small enough for the JIT to inline it at its call sites. A one-byte inline path
+     * with everything else out of line was measured slower.
      */
     final override fun readLong(): Long {
         val p = position
@@ -195,6 +197,7 @@ internal abstract class BufferedDecoder(
     private inline fun decodeVarInt(readByte: () -> Byte): Int {
         val first = readByte().toInt()
         if (first >= 0) {
+            // fast-path: no more byte to read
             return decodeZigZag(first)
         }
         return decodeVarIntTail(first, readByte)
@@ -211,6 +214,7 @@ internal abstract class BufferedDecoder(
     private fun readIntLe(): Int {
         val p = position
         if (limit - p >= 4) {
+            // fast-path: the 4 bytes are available from the current buffer
             position = p + 4
             return (bytes[p].toInt() and 0xFF) or
                 ((bytes[p + 1].toInt() and 0xFF) shl 8) or
