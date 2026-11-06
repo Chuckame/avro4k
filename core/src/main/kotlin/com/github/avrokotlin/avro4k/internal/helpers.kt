@@ -68,7 +68,7 @@ internal fun Schema.nonFailingAliases(): Set<String> {
 }
 
 internal fun Schema.isFullNameOrAliasMatch(descriptor: SerialDescriptor): Boolean {
-    return isFullNameOrAliasMatch(descriptor.nonNullSerialName, descriptor::aliases)
+    return isFullNameOrAliasMatch(descriptor.nonNullSerialName, descriptor::matchingAliases)
 }
 
 internal fun Schema.isFullNameOrAliasMatch(
@@ -86,6 +86,18 @@ internal fun Schema.isFullNameMatch(fullNameToMatch: String): Boolean {
 public val SerialDescriptor.aliases: Set<String>
     get() =
         findAnnotation<AvroAlias>()?.value?.toSet() ?: emptySet()
+
+/**
+ * The [aliases] as written, plus the relative ones resolved in the type's namespace, the same way as [Schema.addAlias].
+ * The raw relative aliases are kept to still match writer schemas without namespace.
+ */
+internal val SerialDescriptor.matchingAliases: Set<String>
+    get() {
+        val aliases = aliases
+        val namespace = nonNullSerialName.substringBeforeLast('.', "")
+        if (aliases.isEmpty() || namespace.isEmpty()) return aliases
+        return aliases + aliases.filter { '.' !in it }.map { "$namespace.$it" }
+    }
 
 internal fun SerialDescriptor.getElementAliases(elementIndex: Int): Set<String> =
     findElementAnnotation<AvroAlias>(elementIndex)?.value?.toSet() ?: emptySet()

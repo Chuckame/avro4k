@@ -125,7 +125,26 @@ internal class EnumTest : StringSpec({
         AvroAssertions.assertThat(SomeEnum.A)
             .isEncodedAs(GenericData.EnumSymbol(writerSchema.types[2], "A"), writerSchema = writerSchema)
     }
+
+    "support decoding enum with a relative alias resolved in the reader namespace" {
+        AvroAssertions.assertThat(Color.RED)
+            .isEncodedAs(GenericData.EnumSymbol(Avro.schema<Color>(), "RED"))
+            .isDecodedAs(Colour.RED)
+    }
 }) {
+    @Serializable
+    @SerialName("probe.Color")
+    private enum class Color {
+        RED,
+    }
+
+    @Serializable
+    @SerialName("probe.Colour")
+    @AvroAlias("Color")
+    private enum class Colour {
+        RED,
+    }
+
     @Serializable
     @SerialName("EnumWrapper")
     private data class EnumV1WrapperRecord(

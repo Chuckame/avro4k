@@ -1,7 +1,7 @@
 package com.github.avrokotlin.avro4k
 
-import com.github.avrokotlin.avro4k.internal.aliases
 import com.github.avrokotlin.avro4k.internal.isNamedSchema
+import com.github.avrokotlin.avro4k.internal.matchingAliases
 import com.github.avrokotlin.avro4k.internal.nonFailingAliases
 import com.github.avrokotlin.avro4k.internal.nonNullSerialName
 import kotlinx.serialization.SerializationException
@@ -130,7 +130,7 @@ internal fun AvroEncoder.trySelectEnumSchemaForSymbol(symbol: String): Boolean {
 }
 
 internal fun AvroEncoder.trySelectNamedSchema(descriptor: SerialDescriptor): Boolean {
-    return trySelectNamedSchema(descriptor.nonNullSerialName, descriptor::aliases)
+    return trySelectNamedSchema(descriptor.nonNullSerialName, descriptor::matchingAliases)
 }
 
 @InternalAvro4kApi
